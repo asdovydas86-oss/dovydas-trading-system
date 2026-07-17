@@ -6,3 +6,12 @@ node_modules/
 # Machine-specific / local config — never commit
 .mcp.json
 .claude/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/

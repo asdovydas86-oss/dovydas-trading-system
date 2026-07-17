@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fmis"
+version = "0.0.1"
+description = "Financial Market Intelligence & Trading System — modular decision-support foundation."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "dovydas" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

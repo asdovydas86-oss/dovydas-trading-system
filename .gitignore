@@ -2,3 +2,7 @@
 node_modules/
 .DS_Store
 *.log
+
+# Machine-specific / local config — never commit
+.mcp.json
+.claude/

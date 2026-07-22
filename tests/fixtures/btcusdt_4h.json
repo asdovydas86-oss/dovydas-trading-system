@@ -1,0 +1,22 @@
+[
+  {"timestamp": "2024-01-01T00:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42000.0, "high": 42200.0, "low": 41950.0, "close": 42150.0, "volume": 1200.0, "is_closed": true},
+  {"timestamp": "2024-01-01T04:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42150.0, "high": 42400.0, "low": 42100.0, "close": 42320.0, "volume": 1350.0, "is_closed": true},
+  {"timestamp": "2024-01-01T08:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42320.0, "high": 42380.0, "low": 42050.0, "close": 42100.0, "volume": 1500.0, "is_closed": true},
+  {"timestamp": "2024-01-01T12:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42100.0, "high": 42160.0, "low": 41850.0, "close": 41900.0, "volume": 1420.0, "is_closed": true},
+  {"timestamp": "2024-01-01T16:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 41900.0, "high": 42120.0, "low": 41820.0, "close": 42050.0, "volume": 1310.0, "is_closed": true},
+  {"timestamp": "2024-01-01T20:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42050.0, "high": 42300.0, "low": 42000.0, "close": 42260.0, "volume": 1600.0, "is_closed": true},
+  {"timestamp": "2024-01-02T00:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42260.0, "high": 42560.0, "low": 42230.0, "close": 42500.0, "volume": 1750.0, "is_closed": true},
+  {"timestamp": "2024-01-02T04:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42500.0, "high": 42580.0, "low": 42380.0, "close": 42430.0, "volume": 1280.0, "is_closed": true},
+  {"timestamp": "2024-01-02T08:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42430.0, "high": 42680.0, "low": 42400.0, "close": 42600.0, "volume": 1490.0, "is_closed": true},
+  {"timestamp": "2024-01-02T12:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42600.0, "high": 42900.0, "low": 42560.0, "close": 42850.0, "volume": 1820.0, "is_closed": true},
+  {"timestamp": "2024-01-02T16:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42850.0, "high": 42920.0, "low": 42700.0, "close": 42780.0, "volume": 1360.0, "is_closed": true},
+  {"timestamp": "2024-01-02T20:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42780.0, "high": 42820.0, "low": 42500.0, "close": 42550.0, "volume": 1540.0, "is_closed": true},
+  {"timestamp": "2024-01-03T00:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42550.0, "high": 42720.0, "low": 42480.0, "close": 42650.0, "volume": 1220.0, "is_closed": true},
+  {"timestamp": "2024-01-03T04:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42650.0, "high": 42980.0, "low": 42620.0, "close": 42900.0, "volume": 1910.0, "is_closed": true},
+  {"timestamp": "2024-01-03T08:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42900.0, "high": 43200.0, "low": 42860.0, "close": 43120.0, "volume": 2050.0, "is_closed": true},
+  {"timestamp": "2024-01-03T12:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 43120.0, "high": 43180.0, "low": 42990.0, "close": 43050.0, "volume": 1330.0, "is_closed": true},
+  {"timestamp": "2024-01-03T16:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 43050.0, "high": 43090.0, "low": 42760.0, "close": 42800.0, "volume": 1600.0, "is_closed": true},
+  {"timestamp": "2024-01-03T20:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42800.0, "high": 43010.0, "low": 42750.0, "close": 42950.0, "volume": 1280.0, "is_closed": true},
+  {"timestamp": "2024-01-04T00:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 42950.0, "high": 43240.0, "low": 42910.0, "close": 43180.0, "volume": 1740.0, "is_closed": true},
+  {"timestamp": "2024-01-04T04:00:00+00:00", "symbol": "BTCUSDT", "timeframe": "4H", "open": 43180.0, "high": 43420.0, "low": 43140.0, "close": 43350.0, "volume": 1980.0, "is_closed": true}
+]

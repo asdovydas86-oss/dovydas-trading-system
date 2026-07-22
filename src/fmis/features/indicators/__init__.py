@@ -5,18 +5,23 @@ from a price series, with no interpretation. Category: ``FeatureCategory.INDICAT
 Interpretation (trend/momentum/volatility regimes) lives in the sibling category
 packages that consume these numbers.
 
-Planned features (NOT implemented yet — no calculations in this milestone):
-    TODO: EMA family (e.g. 20/50/200) -> value + slope
+Implemented:
+    - ExponentialMovingAverage (EMA): configurable period + source, SMA-seeded.
+
+Planned features (NOT implemented yet):
+    TODO: EMA slope / distance helpers
     TODO: RSI (+ RSI moving average)
     TODO: MACD -> line / signal / histogram
     TODO: ATR
     TODO: ADX (+ DI+/DI-)
     TODO: Bollinger Bands -> upper / middle / lower / width
     TODO: VWAP
-Each will implement the fmis.features.types.Feature protocol and return a
-FeatureResult; nothing here performs math yet.
+Each implements the fmis.features.types.Feature protocol and returns a
+FeatureResult.
 """
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from fmis.features.indicators.ema import ExponentialMovingAverage
+
+__all__ = ["ExponentialMovingAverage"]

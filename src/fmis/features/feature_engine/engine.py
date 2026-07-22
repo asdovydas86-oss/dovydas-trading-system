@@ -3,22 +3,22 @@
 The engine's job is coordination only: given a price series and a set of feature
 names, resolve their dependency order, run each feature once, and assemble the
 results into a single ``FeatureSet``. It performs **no indicator math itself** —
-all math lives in the individual ``Feature`` implementations added in later
-milestones.
+all math lives in the individual ``Feature`` implementations, discovered through
+the registry (the engine never imports a concrete feature).
 
-``compute`` is intentionally left unimplemented in this architecture milestone.
-The algorithm is specified in its docstring so the contract is fixed before any
-calculation is written.
+Only closed candles feed reproducible features, so the engine operates on
+``series.closed()`` and derives ``as_of`` from the last closed candle. Individual
+features also close their input defensively; the two guarantees are idempotent.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, Mapping
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from fmis.data import CandleSeries
 from fmis.features.registry import FeatureRegistry
-from fmis.features.types import FeatureSet
+from fmis.features.types import FeatureContext, FeatureResult, FeatureSet
 
 __all__ = ["FeatureEngine"]
 
@@ -42,22 +42,64 @@ class FeatureEngine:
     ) -> FeatureSet:
         """Build a FeatureSet for ``series``.
 
-        Planned algorithm (implemented in the Milestone C computation phase):
-            1. Select the target features: ``names`` if given, else all
-               registered features.
-            2. Expand and topologically sort them by ``dependencies`` so every
-               feature runs after the features it reads. Detect and reject
-               dependency cycles.
-            3. Build a FeatureContext (primary=series, computed={}, sources=...),
-               and run each feature in order, adding its FeatureResult to
-               ``computed`` so later features can read it.
-            4. Assemble a FeatureSet(symbol, timeframe, as_of=last closed candle
-               timestamp, features=computed).
-
-        Note: only closed candles feed reproducible features — the engine will
-        operate on ``series.closed()`` (see fmis.data.CandleSeries) so a still-
-        forming bar can never leak into a signal.
+        1. Operate on closed candles only (``series.closed()``).
+        2. Select target features: ``names`` if given, else every registered one.
+        3. Resolve dependency order (deps before dependents); reject unknown
+           features/dependencies and dependency cycles.
+        4. Run each feature once, threading already-computed results through the
+           FeatureContext so a feature can read its dependencies.
+        5. Assemble the FeatureSet, stamped with the last closed candle's time.
         """
-        raise NotImplementedError(
-            "FeatureEngine.compute is defined in the Milestone C computation phase"
+        closed_series = series.closed()
+        if not closed_series.candles:
+            raise ValueError("cannot build a FeatureSet: series has no closed candles")
+
+        requested = (
+            list(names) if names is not None else [f.name for f in self._registry.all()]
         )
+        order = self._resolve_order(requested)
+
+        aux = dict(sources) if sources else {}
+        computed: dict[str, FeatureResult] = {}
+        for name in order:
+            feature = self._registry.get(name)
+            context = FeatureContext(
+                primary=closed_series, computed=computed, sources=aux
+            )
+            computed[name] = feature.compute(context)
+
+        return FeatureSet(
+            symbol=closed_series.symbol,
+            timeframe=closed_series.timeframe,
+            as_of=closed_series.candles[-1].timestamp,
+            features=computed,
+        )
+
+    def _resolve_order(self, requested: Sequence[str]) -> list[str]:
+        """Depth-first topological sort. Deterministic in ``requested`` order.
+
+        Raises ValueError on an unknown feature/dependency or a dependency cycle.
+        """
+        order: list[str] = []
+        state: dict[str, str] = {}  # name -> "visiting" | "done"
+
+        def visit(name: str, path: list[str]) -> None:
+            if not self._registry.has(name):
+                trail = " -> ".join([*path, name])
+                raise ValueError(f"unknown feature {name!r} (required via: {trail})")
+            marker = state.get(name)
+            if marker == "done":
+                return
+            if marker == "visiting":
+                trail = " -> ".join([*path, name])
+                raise ValueError(f"dependency cycle detected: {trail}")
+
+            state[name] = "visiting"
+            for dep in self._registry.get(name).dependencies:
+                visit(dep, [*path, name])
+            state[name] = "done"
+            order.append(name)
+
+        for name in requested:
+            visit(name, [])
+        return order

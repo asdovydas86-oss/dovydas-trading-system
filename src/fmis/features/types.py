@@ -34,6 +34,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from types import MappingProxyType
 from typing import Any, Protocol, Union, runtime_checkable
 
 from fmis.data import CandleSeries
@@ -139,6 +140,15 @@ class FeatureResult:
     category: FeatureCategory
     value: FeatureValue
     metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Store metadata as a read-only, defensively-copied mapping so a computed
+        # result is truly immutable: neither the caller's original dict nor the
+        # stored mapping can be mutated after construction.
+        if not isinstance(self.metadata, MappingProxyType):
+            object.__setattr__(
+                self, "metadata", MappingProxyType(dict(self.metadata))
+            )
 
 
 @dataclass(frozen=True, slots=True)

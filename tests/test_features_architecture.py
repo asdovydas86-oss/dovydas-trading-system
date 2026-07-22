@@ -75,6 +75,19 @@ def test_feature_result_is_immutable() -> None:
         result.value = 5.0  # type: ignore[misc]
 
 
+def test_feature_result_metadata_is_read_only() -> None:
+    result = FeatureResult("x", FeatureCategory.INDICATOR, 1.0, {"period": 3})
+    with pytest.raises(TypeError):
+        result.metadata["period"] = 99  # type: ignore[index]
+
+
+def test_feature_result_copies_metadata_defensively() -> None:
+    original = {"period": 3}
+    result = FeatureResult("x", FeatureCategory.INDICATOR, 1.0, original)
+    original["period"] = 99  # mutating the source must not leak into the result
+    assert result.metadata["period"] == 3
+
+
 def test_feature_context_defaults_are_empty() -> None:
     ctx = FeatureContext(primary=_empty_series())
     assert ctx.computed == {}
@@ -140,7 +153,9 @@ def test_engine_holds_its_registry() -> None:
     assert engine.registry is registry
 
 
-def test_engine_compute_is_not_implemented_yet() -> None:
+def test_engine_compute_requires_closed_candles() -> None:
+    # compute() is implemented as of the EMA vertical slice; with no closed
+    # candles there is nothing to stamp a FeatureSet with, so it raises.
     engine = FeatureEngine(FeatureRegistry())
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError, match="no closed candles"):
         engine.compute(_empty_series())

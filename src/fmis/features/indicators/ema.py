@@ -24,6 +24,7 @@ Only closed candles are used, so a still-forming bar can never change the value
 
 from __future__ import annotations
 
+from fmis.features.indicators.sources import VALID_SOURCES
 from fmis.features.types import (
     BaseFeature,
     FeatureCategory,
@@ -32,8 +33,6 @@ from fmis.features.types import (
 )
 
 __all__ = ["ExponentialMovingAverage"]
-
-_VALID_SOURCES = ("open", "high", "low", "close")
 
 
 class ExponentialMovingAverage(BaseFeature):
@@ -52,8 +51,8 @@ class ExponentialMovingAverage(BaseFeature):
             raise TypeError(f"period must be an int, got {type(period).__name__}")
         if period < 1:
             raise ValueError(f"period must be a positive integer, got {period}")
-        if source not in _VALID_SOURCES:
-            raise ValueError(f"source must be one of {_VALID_SOURCES}, got {source!r}")
+        if source not in VALID_SOURCES:
+            raise ValueError(f"source must be one of {VALID_SOURCES}, got {source!r}")
 
         self._period = period
         self._source = source

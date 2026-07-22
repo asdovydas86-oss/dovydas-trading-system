@@ -24,6 +24,7 @@ Only closed candles are used, so a still-forming bar can never change the value
 
 from __future__ import annotations
 
+from fmis.features.indicators.ema_math import ema_series
 from fmis.features.indicators.sources import VALID_SOURCES
 from fmis.features.types import (
     BaseFeature,
@@ -97,9 +98,8 @@ class ExponentialMovingAverage(BaseFeature):
             )
 
         # Seed with the SMA of the first `period` values, then smooth the rest.
-        ema = sum(prices[: self._period]) / self._period
-        for price in prices[self._period :]:
-            ema = (price - ema) * multiplier + ema
+        # Delegates to the shared ema_series helper (single source of EMA math).
+        ema = ema_series(prices, self._period)[-1]
 
         return FeatureResult(
             name=self.name,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -239,31 +240,30 @@ def test_candle_and_observation_imports_unaffected() -> None:
 # --- timezone / instant equality policy --------------------------------------
 
 
-def test_same_instant_different_offset_intersects_using_first_series_object() -> None:
-    utc_10 = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
-    plus1_11 = datetime(2026, 1, 1, 11, 0, tzinfo=timezone(timedelta(hours=1)))
-    # utc_10 and plus1_11 are the SAME instant (09:00 UTC ... wait: 11:00+01:00 == 10:00 UTC)
-    assert utc_10 == plus1_11
+def test_same_instant_two_utc_representations_intersect() -> None:
+    # Migrated for the canonical UTC-only contract: the same instant expressed
+    # with two distinct zero-offset representations (timezone.utc vs ZoneInfo).
+    utc_tz = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
+    utc_zi = datetime(2026, 1, 1, 10, 0, tzinfo=ZoneInfo("UTC"))
+    assert utc_tz == utc_zi  # same instant, different tzinfo objects
 
-    a = ObservationSeries("A", "u", "1D", (utc_10,), (1.0,))
-    b = ObservationSeries("B", "u", "1D", (plus1_11,), (2.0,))
+    a = ObservationSeries("A", "u", "1D", (utc_tz,), (1.0,))
+    b = ObservationSeries("B", "u", "1D", (utc_zi,), (2.0,))
     result = align_intersection((a, b))
 
     assert result.report.aligned_observation_count == 1
     # Canonical rule: aligned timestamps use the FIRST input's object, for all series.
-    assert result.series[0].timestamps[0] is utc_10
-    assert result.series[1].timestamps[0] is utc_10
+    assert result.series[0].timestamps[0] is utc_tz
+    assert result.series[1].timestamps[0] is utc_tz
     assert result.series[0].values == (1.0,)
     assert result.series[1].values == (2.0,)
 
 
-def test_different_instants_with_similar_wallclock_do_not_intersect() -> None:
-    utc_10 = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
-    plus1_10 = datetime(2026, 1, 1, 10, 0, tzinfo=timezone(timedelta(hours=1)))
-    # 10:00+01:00 == 09:00 UTC, a different instant from 10:00 UTC.
-    assert utc_10 != plus1_10
-
-    a = ObservationSeries("A", "u", "1D", (utc_10,), (1.0,))
-    b = ObservationSeries("B", "u", "1D", (plus1_10,), (2.0,))
-    result = align_intersection((a, b))
-    assert result.report.aligned_observation_count == 0
+def test_non_utc_observation_series_rejected_by_contract() -> None:
+    # Migrated: the old "same wall-clock, different offset -> different instant"
+    # scenario is unreachable under the UTC-only contract, because a non-UTC
+    # ObservationSeries cannot be constructed. (Genuinely different instants not
+    # intersecting is covered by test_no_common_timestamps.)
+    plus_one = datetime(2026, 1, 1, 10, 0, tzinfo=timezone(timedelta(hours=1)))
+    with pytest.raises(ValueError, match="must represent UTC"):
+        ObservationSeries("A", "u", "1D", (plus_one,), (1.0,))

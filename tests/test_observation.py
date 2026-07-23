@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -135,6 +136,45 @@ def test_naive_timestamp_rejected() -> None:
     naive = (datetime(2024, 1, 1), _BASE + timedelta(days=1))
     with pytest.raises(ValueError, match="timezone-aware"):
         make_series(timestamps=naive, values=(1.0, 2.0))
+
+
+@pytest.mark.parametrize(
+    "tz",
+    [
+        timezone.utc,
+        timezone(timedelta(0)),
+        ZoneInfo("UTC"),
+        ZoneInfo("Etc/UTC"),
+        ZoneInfo("GMT"),
+    ],
+)
+def test_utc_representations_accepted(tz: object) -> None:
+    ts = datetime(2024, 1, 1, tzinfo=tz)  # type: ignore[arg-type]
+    series = ObservationSeries(
+        series_id="X", unit="u", frequency="1D", timestamps=(ts,), values=(1.0,)
+    )
+    assert series.timestamps == (ts,)
+
+
+@pytest.mark.parametrize("zone", ["Europe/Stockholm", "America/New_York"])
+def test_non_utc_zoneinfo_rejected(zone: str) -> None:
+    ts = datetime(2024, 1, 1, tzinfo=ZoneInfo(zone))
+    with pytest.raises(ValueError, match="must represent UTC"):
+        make_series(timestamps=(ts,), values=(1.0,))
+
+
+@pytest.mark.parametrize("month", [1, 7])  # winter (GMT, +0) and summer (BST, +1)
+def test_regional_zero_offset_zone_rejected_both_seasons(month: int) -> None:
+    # Europe/London is +00:00 in winter but must still be rejected as a DST zone.
+    ts = datetime(2024, month, 15, tzinfo=ZoneInfo("Europe/London"))
+    with pytest.raises(ValueError, match="must represent UTC"):
+        make_series(timestamps=(ts,), values=(1.0,))
+
+
+def test_fixed_nonzero_offset_rejected() -> None:
+    ts = datetime(2024, 1, 1, tzinfo=timezone(timedelta(hours=1)))
+    with pytest.raises(ValueError, match="must represent UTC"):
+        make_series(timestamps=(ts,), values=(1.0,))
 
 
 # --- value validation --------------------------------------------------------

@@ -10,9 +10,11 @@ alignment, resampling, interpolation, forward-filling, indicators, relative-valu
 math, serialization, or provider logic — those belong to later milestones.
 
 Conventions mirror the OHLCV contract in ``fmis.data.models`` (frozen slotted
-dataclass, tuple-normalized immutable state, timezone-aware strictly-increasing
-timestamps, no silent sorting/dedup/coercion). Two deliberate differences, driven
-by the domain rather than preference:
+dataclass, tuple-normalized immutable state, UTC strictly-increasing timestamps,
+no silent sorting/dedup/coercion). Timestamps must *represent UTC* (timezone-aware
+with a zero UTC offset), per the canonical-time contract in ``_timeutils``. Two
+deliberate differences from the OHLCV contract, driven by the domain rather than
+preference:
 
   * Values MAY be negative. Observations such as real yields, net flows, or
     z-scores are legitimately negative, unlike prices/volume. Values are only
@@ -32,17 +34,9 @@ import math
 from dataclasses import dataclass
 from datetime import datetime
 
+from fmis.data._timeutils import validate_utc_timestamp
+
 __all__ = ["ObservationSeries"]
-
-
-def _is_timezone_aware(ts: datetime) -> bool:
-    """Return True only if `ts` carries a concrete UTC offset.
-
-    Mirrors the identical predicate in ``fmis.data.models``; duplicated as a
-    trivial pure helper to keep this module additive (no import of a sibling's
-    private name, no refactor of the OHLCV contract).
-    """
-    return ts.tzinfo is not None and ts.tzinfo.utcoffset(ts) is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,9 +46,9 @@ class ObservationSeries:
     ``series_id`` is the stable identity of the metric (the analogue of a
     candle series' symbol+timeframe). ``unit`` and ``frequency`` are descriptive
     metadata. ``timestamps`` and ``values`` are parallel, equal-length, and
-    normalized to immutable tuples; timestamps must be timezone-aware and
-    strictly increasing (no duplicates, no backward steps). An empty series
-    (no observations) is valid.
+    normalized to immutable tuples; timestamps must represent UTC (timezone-aware,
+    zero UTC offset) and be strictly increasing (no duplicates, no backward
+    steps). An empty series (no observations) is valid.
     """
 
     series_id: str
@@ -98,8 +92,7 @@ class ObservationSeries:
         for index, ts in enumerate(self.timestamps):
             if not isinstance(ts, datetime):
                 raise TypeError(f"timestamp at index {index} must be a datetime")
-            if not _is_timezone_aware(ts):
-                raise ValueError(f"timestamp at index {index} must be timezone-aware")
+            validate_utc_timestamp(ts, label=f"timestamp at index {index}")
             if previous is not None and ts <= previous:
                 raise ValueError("timestamps must be strictly increasing")
             previous = ts

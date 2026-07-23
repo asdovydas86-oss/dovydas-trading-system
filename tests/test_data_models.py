@@ -6,6 +6,7 @@ import json
 import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -120,6 +121,43 @@ def test_naive_timestamp_rejected() -> None:
 def test_non_datetime_timestamp_rejected() -> None:
     with pytest.raises(TypeError, match="must be a datetime"):
         make_candle(ts="2024-01-01")  # type: ignore[arg-type]
+
+
+# --- Candle: canonical UTC timestamp contract --------------------------------
+
+
+@pytest.mark.parametrize(
+    "tz",
+    [
+        timezone.utc,
+        timezone(timedelta(0)),
+        ZoneInfo("UTC"),
+        ZoneInfo("Etc/UTC"),
+        ZoneInfo("GMT"),
+    ],
+)
+def test_utc_representations_accepted(tz: object) -> None:
+    make_candle(ts=datetime(2024, 1, 1, tzinfo=tz))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("zone", ["Europe/Stockholm", "America/New_York"])
+def test_non_utc_zoneinfo_rejected(zone: str) -> None:
+    with pytest.raises(ValueError, match="must represent UTC"):
+        make_candle(ts=datetime(2024, 1, 1, tzinfo=ZoneInfo(zone)))
+
+
+@pytest.mark.parametrize("month", [1, 7])  # winter (GMT, +0) and summer (BST, +1)
+def test_regional_zero_offset_zone_rejected_both_seasons(month: int) -> None:
+    # Europe/London is +00:00 in winter but must still be rejected: it is a DST
+    # zone, not a permanent UTC zone (this is the loophole being closed).
+    ts = datetime(2024, month, 15, tzinfo=ZoneInfo("Europe/London"))
+    with pytest.raises(ValueError, match="must represent UTC"):
+        make_candle(ts=ts)
+
+
+def test_fixed_nonzero_offset_rejected() -> None:
+    with pytest.raises(ValueError, match="must represent UTC"):
+        make_candle(ts=datetime(2024, 1, 1, tzinfo=timezone(timedelta(hours=1))))
 
 
 # --- CandleSeries: valid -----------------------------------------------------

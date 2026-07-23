@@ -18,14 +18,11 @@ import math
 from dataclasses import dataclass
 from datetime import datetime
 
+from fmis.data._timeutils import validate_utc_timestamp
+
 __all__ = ["Candle", "CandleSeries"]
 
 _PRICE_FIELDS = ("open", "high", "low", "close", "volume")
-
-
-def _is_timezone_aware(ts: datetime) -> bool:
-    """Return True only if `ts` carries a concrete UTC offset."""
-    return ts.tzinfo is not None and ts.tzinfo.utcoffset(ts) is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,8 +53,7 @@ class Candle:
 
         if not isinstance(self.timestamp, datetime):
             raise TypeError("timestamp must be a datetime")
-        if not _is_timezone_aware(self.timestamp):
-            raise ValueError("timestamp must be timezone-aware")
+        validate_utc_timestamp(self.timestamp)
 
         for name in _PRICE_FIELDS:
             value = getattr(self, name)

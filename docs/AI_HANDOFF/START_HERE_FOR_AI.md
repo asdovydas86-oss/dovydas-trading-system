@@ -23,14 +23,25 @@ short-term trading are separate domains.
 
 ## What has already been implemented (as of this document)
 
-- **Canonical data models:** `Candle`, `CandleSeries` (frozen, validated, closed-candle aware).
+- **Canonical data models:** `Candle`, `CandleSeries` (frozen, validated, closed-candle aware) and
+  `ObservationSeries` (non-OHLC timestamped numeric series).
+- **Canonical time contract:** every canonical timestamp must use a *permanent* zero-offset timezone —
+  validated, never converted. Read [../adr/ADR-0001-canonical-utc-timestamps.md](../adr/ADR-0001-canonical-utc-timestamps.md)
+  before touching anything that handles a timestamp.
+- **Alignment:** `align_intersection` — **strict timestamp intersection only**, with an immutable
+  `AlignmentReport`. No interpolation, forward-fill, resampling, or timezone conversion exists anywhere,
+  and none may be added without an explicit, named, documented policy.
 - **Deterministic Feature Engine:** `FeatureEngine`, `FeatureRegistry`, `FeatureResult`,
   `FeatureContext`, `FeatureSet`, `Feature` protocol, `BaseFeature`.
 - **Tier-1 indicators:** EMA, ATR, RSI, MACD, plus shared kernels `sources.py` (OHLC vocabulary) and
   `ema_math.py` (EMA math).
 - **Tier-2 packages** (`trend`, `momentum`, `volatility`, `volume`, `market_structure`,
   `support_resistance`, `pattern_detection`): **placeholders only — no calculation code.**
-- **Tests:** 147 passing.
+- **Tests:** 218 passing.
+
+**Known gap you must not work around:** there is no `CandleSeries → ObservationSeries` reduction, so the
+candle pipeline and the observation pipeline are not connected (scheduled for Milestone I-E). If you need
+one, build the helper in `fmis.data` as part of that milestone — do **not** convert inline at a call site.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.
@@ -45,6 +56,11 @@ module exists.
 - **Architecture & boundaries:** [../ARCHITECTURE_AND_ROADMAP_V1.md](../ARCHITECTURE_AND_ROADMAP_V1.md)
   — authoritative for module boundaries, dependency direction, the Relative Value Engine spec, the
   roadmap, and the decision records (D1–D11).
+- **Architecture review:** [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_2026-07-24.md)
+  — amends the above where code and document diverged (§5). Read its findings **R1–R14** before starting
+  any new milestone; two of them (R1, R2) block the Relative Value Engine.
+- **Decisions:** [../adr/](../adr/README.md) — one decision per file, with the alternatives that were
+  rejected and why.
 - **Vision & principles:** [../../PROJECT_SPECIFICATION_V1.md](../../PROJECT_SPECIFICATION_V1.md) and
   [../../PROJECT_VISION_ADDENDUM_V1.md](../../PROJECT_VISION_ADDENDUM_V1.md).
 - **Current snapshot:** [CURRENT_STATE.md](CURRENT_STATE.md).

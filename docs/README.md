@@ -33,6 +33,9 @@ README summarizes and points, it does not restate them.
 |---|---|---|
 | [README.md](README.md) | This entry point | Navigation |
 | [ARCHITECTURE_AND_ROADMAP_V1.md](ARCHITECTURE_AND_ROADMAP_V1.md) | Target architecture, module boundaries, dependency rules, Relative Value Engine spec, roadmap, decisions | **Authoritative — architecture** |
+| [ARCHITECTURE_REVIEW_2026-07-24.md](ARCHITECTURE_REVIEW_2026-07-24.md) | Full architectural verification at commit `5e7e3d5`: findings R1–R14, divergences from the architecture doc, readiness verdict | **Authoritative — amends the architecture doc §5** |
+| [adr/](adr/README.md) | Architecture Decision Records — one decision per file, with alternatives and consequences | **Authoritative — decisions** |
+| [RVE_DESIGN_V1.md](RVE_DESIGN_V1.md) | Relative Value Engine technical design (Milestones J/K/L): contracts, public API, interactions, decisions RV-1…RV-11 | Design proposal — not authorization to implement |
 | [REPOSITORY_MAP.md](REPOSITORY_MAP.md) | What each directory is for, and its allowed/forbidden dependencies | Reference — current repo |
 | [AI_HANDOFF/START_HERE_FOR_AI.md](AI_HANDOFF/START_HERE_FOR_AI.md) | Onboarding + non-negotiable rules for AI agents | Reference — workflow |
 | [AI_HANDOFF/CURRENT_STATE.md](AI_HANDOFF/CURRENT_STATE.md) | Snapshot of the repository today (updated every milestone) | **Reference — current state** |
@@ -70,10 +73,12 @@ snapshot updated after every milestone. Roadmap milestones (H onward) are specif
 document.
 
 **Architecture Decision Records (ADR) philosophy.** Significant architectural choices are recorded with
-their alternatives and trade-offs so future readers understand *why*, not just *what*. Today these live
-as the decision table in
-[ARCHITECTURE_AND_ROADMAP_V1.md §12](ARCHITECTURE_AND_ROADMAP_V1.md) (decisions D1–D11). A dedicated
-per-decision ADR directory is a **Planned** future refinement; until then, §12 is the ADR of record.
+their alternatives and trade-offs so future readers understand *why*, not just *what*. These live in two
+places, both authoritative: the decision table in
+[ARCHITECTURE_AND_ROADMAP_V1.md §12](ARCHITECTURE_AND_ROADMAP_V1.md) (decisions D1–D11), and the
+[adr/](adr/README.md) directory for decisions that need more than a table row. Nothing in §12 was
+migrated retroactively; new significant decisions are written as ADRs. See
+[adr/README.md](adr/README.md) for the conventions.
 
 **Testing philosophy.** Every deterministic calculation is verified against **independently derived**
 expected values — hand calculations, arithmetic means, or exact rational arithmetic (`fractions`) —

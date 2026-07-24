@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (147 tests) + fixtures
+├── tests/                  pytest suite (218 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -42,15 +42,31 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 ## `src/fmis/data/` — canonical market-data models
 
 - **Purpose:** the domain **kernel** — the canonical, validated, immutable representation of market data.
-- **Responsibilities today:** `Candle` and `CandleSeries` (frozen dataclasses; non-negative validated
-  OHLCV; timezone-aware, strictly increasing timestamps; `closed()` to drop the forming bar).
-- **Allowed dependencies:** standard library only.
-- **Forbidden dependencies:** **imports nothing internal** — this is verified and must stay true. It must
-  never import `fmis.features`, provider adapters, or anything downstream. Provider-specific types
-  (e.g. TradingView shapes) must never become canonical models here.
-- **Where canonical models belong:** here. **Planned (Future milestone I):** an immutable
-  `ObservationSeries` (non-OHLC time series for macro/index/derived data) is to be added *additively* in
-  this directory, because it is a canonical market-data model. See architecture doc §4.3 and §10.
+- **Responsibilities today:**
+  - `models.py` — `Candle` and `CandleSeries` (frozen dataclasses; non-negative validated OHLCV;
+    strictly increasing canonical-UTC timestamps; `closed()` to drop the forming bar).
+  - `observation.py` — `ObservationSeries`, the canonical **non-OHLC** numeric series (macro, on-chain,
+    derivatives, sentiment, breadth, benchmark levels). Parallel `timestamps`/`values` tuples; values may
+    be negative but never `bool`; empty series are valid.
+  - `_timeutils.py` — `validate_utc_timestamp`, the system-wide canonical time contract: a canonical
+    timestamp must use a **permanent** zero-offset timezone, validated and **never converted**. See
+    [ADR-0001](adr/ADR-0001-canonical-utc-timestamps.md).
+  - `alignment.py` — `align_intersection` plus `AlignmentResult` / `AlignmentReport` /
+    `SeriesAlignmentStats`: **strict timestamp intersection only**. No interpolation, forward-fill,
+    resampling, nearest-match, tolerance, or timezone conversion — ever.
+- **Allowed dependencies:** standard library only, plus other modules **inside** `fmis.data`.
+- **Forbidden dependencies:** **imports nothing from outside `fmis.data`** — this is verified and must
+  stay true. (Intra-package imports are expected and fine; the invariant is about the package boundary.)
+  It must never import `fmis.features`, provider adapters, or anything downstream. Provider-specific
+  types (e.g. TradingView shapes) must never become canonical models here.
+- **Decided boundary (pending code move):** `alignment.py` is a *policy/service*, not a model, and will
+  move to a dedicated **`src/fmis/alignment/`** package
+  ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md); code move is Milestone I-E).
+  Until then it stays here and is re-exported from `fmis.data` — but do **not** add a *second* temporal
+  policy (forward-fill, resampling, as-of join) to this package; the next policy waits for the new package.
+- **Known gap (Milestone I-E):** there is no `CandleSeries → ObservationSeries` reduction helper yet, so
+  the candle pipeline and the observation pipeline are not connected (review finding R1). The helper
+  belongs here when built.
 
 ## `src/fmis/features/` — deterministic Feature Engine
 
@@ -115,7 +131,7 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **147 tests** across 8 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **218 tests** across 10 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset).
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.
@@ -125,12 +141,14 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 ## `docs/`
 
-- **Purpose:** all project documentation (flat directory; `AI_HANDOFF/` is the one subdirectory, for
-  agent-facing docs).
-- **Responsibilities:** entry point, repository map, architecture, current-state snapshot, historical
-  audits, setup.
+- **Purpose:** all project documentation. Two subdirectories: `AI_HANDOFF/` (agent-facing docs) and
+  `adr/` (Architecture Decision Records); everything else is flat.
+- **Responsibilities:** entry point, repository map, architecture, decision records, review records,
+  current-state snapshot, historical audits, setup.
 - **Convention:** authoritative documents use `UPPERCASE_SNAKE_V*.md` and are versioned rather than
-  overwritten; navigation/reference docs use plain names.
+  overwritten; navigation/reference docs use plain names; ADRs use `adr/ADR-NNNN-kebab-title.md` and are
+  never renumbered or deleted (a superseded ADR is marked, not removed); review records are dated
+  (`ARCHITECTURE_REVIEW_YYYY-MM-DD.md`).
 
 ## `prompts/`, `scripts/`, `config/`
 
@@ -150,8 +168,8 @@ These do **not** exist yet. Locations are proposals from the architecture docume
 
 | Future module | Planned location (proposal) | Belongs separate from Feature Engine because |
 |---|---|---|
-| **Relative Value Engine** | new top-level analytical module | measures relationships between *two or more* series; has no single symbol, so it cannot fit `FeatureSet`'s identity |
-| **Alignment service** (Milestone I) | e.g. `src/fmis/alignment/` | alignment is a policy/service, not a model |
+| **Relative Value Engine** | `src/fmis/relative_value/` — a top-level sibling of `data` and `features`; **neither engine imports the other** (design: [RVE_DESIGN_V1.md](RVE_DESIGN_V1.md)) | measures relationships between *two or more* series; has no single symbol, so it cannot fit `FeatureSet`'s identity |
+| **Alignment service** | Built at `src/fmis/data/alignment.py`; **moving** to `src/fmis/alignment/` in Milestone I-E ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)) | alignment is a temporal-comparison policy/service, not a model |
 | **Composite Feature Layer** | the existing Tier-2 placeholder packages under `features/` | single-instrument; fits the Feature Engine — stays inside it |
 | **Market Regime Engine** | new module | consumes facts; must not embed strategy decisions |
 | Strategy / Risk / Portfolio / AI / Execution | separate modules, downstream | see architecture doc §4 — most are Deferred |

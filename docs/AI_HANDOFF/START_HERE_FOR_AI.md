@@ -28,20 +28,20 @@ short-term trading are separate domains.
 - **Canonical time contract:** every canonical timestamp must use a *permanent* zero-offset timezone —
   validated, never converted. Read [../adr/ADR-0001-canonical-utc-timestamps.md](../adr/ADR-0001-canonical-utc-timestamps.md)
   before touching anything that handles a timestamp.
-- **Alignment:** `align_intersection` — **strict timestamp intersection only**, with an immutable
-  `AlignmentReport`. No interpolation, forward-fill, resampling, or timezone conversion exists anywhere,
-  and none may be added without an explicit, named, documented policy.
+- **Observation reduction:** `candle_series_to_observations(series, field, *, series_id=None)` +
+  `CandleField` enum (`fmis.data`) — a pure, closed-candles-only bridge from a candle field to an
+  `ObservationSeries`. The field is **required** (no default); pass a `CandleField`, never a raw string.
+- **Alignment (`fmis.alignment`):** `align_intersection` — **strict timestamp intersection only**, with an
+  immutable `AlignmentReport`. It is a **policy layer, separate from `fmis.data`** (ADR-0002). No
+  interpolation, forward-fill, resampling, or timezone conversion exists anywhere, and none may be added
+  without an explicit, named, documented policy (a new module in `fmis.alignment`, never in `fmis.data`).
 - **Deterministic Feature Engine:** `FeatureEngine`, `FeatureRegistry`, `FeatureResult`,
   `FeatureContext`, `FeatureSet`, `Feature` protocol, `BaseFeature`.
 - **Tier-1 indicators:** EMA, ATR, RSI, MACD, plus shared kernels `sources.py` (OHLC vocabulary) and
   `ema_math.py` (EMA math).
 - **Tier-2 packages** (`trend`, `momentum`, `volatility`, `volume`, `market_structure`,
   `support_resistance`, `pattern_detection`): **placeholders only — no calculation code.**
-- **Tests:** 218 passing.
-
-**Known gap you must not work around:** there is no `CandleSeries → ObservationSeries` reduction, so the
-candle pipeline and the observation pipeline are not connected (scheduled for Milestone I-E). If you need
-one, build the helper in `fmis.data` as part of that milestone — do **not** convert inline at a call site.
+- **Tests:** 247 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

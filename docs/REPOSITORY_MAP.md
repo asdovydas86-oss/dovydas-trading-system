@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (218 tests) + fixtures
+├── tests/                  pytest suite (247 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -51,22 +51,36 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   - `_timeutils.py` — `validate_utc_timestamp`, the system-wide canonical time contract: a canonical
     timestamp must use a **permanent** zero-offset timezone, validated and **never converted**. See
     [ADR-0001](adr/ADR-0001-canonical-utc-timestamps.md).
-  - `alignment.py` — `align_intersection` plus `AlignmentResult` / `AlignmentReport` /
-    `SeriesAlignmentStats`: **strict timestamp intersection only**. No interpolation, forward-fill,
-    resampling, nearest-match, tolerance, or timezone conversion — ever.
+  - `reduction.py` — `candle_series_to_observations(series, field, *, series_id=None)` plus the
+    `CandleField` enum: a **pure** transform from one explicitly-chosen candle field to an
+    `ObservationSeries`, over **closed candles only**. No default field (the enum is required); no
+    alignment, fill, resampling, or unit/timezone conversion. This is the bridge from the candle pipeline
+    into the observation/alignment pipeline (review finding R1).
 - **Allowed dependencies:** standard library only, plus other modules **inside** `fmis.data`.
 - **Forbidden dependencies:** **imports nothing from outside `fmis.data`** — this is verified and must
   stay true. (Intra-package imports are expected and fine; the invariant is about the package boundary.)
-  It must never import `fmis.features`, provider adapters, or anything downstream. Provider-specific
-  types (e.g. TradingView shapes) must never become canonical models here.
-- **Decided boundary (pending code move):** `alignment.py` is a *policy/service*, not a model, and will
-  move to a dedicated **`src/fmis/alignment/`** package
-  ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md); code move is Milestone I-E).
-  Until then it stays here and is re-exported from `fmis.data` — but do **not** add a *second* temporal
-  policy (forward-fill, resampling, as-of join) to this package; the next policy waits for the new package.
-- **Known gap (Milestone I-E):** there is no `CandleSeries → ObservationSeries` reduction helper yet, so
-  the candle pipeline and the observation pipeline are not connected (review finding R1). The helper
-  belongs here when built.
+  It must never import `fmis.features`, `fmis.alignment`, provider adapters, or anything downstream.
+  Provider-specific types (e.g. TradingView shapes) must never become canonical models here.
+- **Boundary note:** alignment is **no longer here.** It moved to the sibling package `fmis.alignment`
+  (see below and [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)), and
+  `fmis.data` deliberately does **not** re-export it — this keeps the package a pure canonical kernel and
+  stops downstream layers importing alignment transitively.
+
+## `src/fmis/alignment/` — temporal-comparison policy layer
+
+- **Purpose:** answer *how two or more canonical series are made comparable in time* — a **policy**
+  concern, deliberately separate from the canonical models ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)).
+- **Responsibilities today:** `intersection.py` — `align_intersection` plus `AlignmentResult` /
+  `AlignmentReport` / `SeriesAlignmentStats`: **strict timestamp intersection only**. No interpolation,
+  forward-fill, resampling, nearest-match, tolerance, or timezone conversion — ever. Public path:
+  `fmis.alignment.align_intersection`.
+- **Allowed dependencies:** `fmis.data` (the canonical models it aligns); standard library.
+- **Forbidden dependencies:** anything downstream (`fmis.features`, strategy, RVE, execution). Canonical
+  models never import alignment.
+- **Where a new policy belongs:** a new module here (e.g. `asof.py`, `resample.py`) as a sibling of
+  `intersection.py` — never inside `fmis.data`. Each future policy must be explicit, named, and reported,
+  and must never silently invent data. Availability-aware/as-of policies additionally depend on the
+  availability-time model gated by [ADR-0003](adr/ADR-0003-availability-time-boundary.md).
 
 ## `src/fmis/features/` — deterministic Feature Engine
 
@@ -131,7 +145,7 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **218 tests** across 10 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **247 tests** across 11 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset).
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.
@@ -169,7 +183,7 @@ These do **not** exist yet. Locations are proposals from the architecture docume
 | Future module | Planned location (proposal) | Belongs separate from Feature Engine because |
 |---|---|---|
 | **Relative Value Engine** | `src/fmis/relative_value/` — a top-level sibling of `data` and `features`; **neither engine imports the other** (design: [RVE_DESIGN_V1.md](RVE_DESIGN_V1.md)) | measures relationships between *two or more* series; has no single symbol, so it cannot fit `FeatureSet`'s identity |
-| **Alignment service** | Built at `src/fmis/data/alignment.py`; **moving** to `src/fmis/alignment/` in Milestone I-E ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)) | alignment is a temporal-comparison policy/service, not a model |
+| ~~**Alignment service**~~ | **Done** — now `src/fmis/alignment/` ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)) | alignment is a temporal-comparison policy/service, not a model |
 | **Composite Feature Layer** | the existing Tier-2 placeholder packages under `features/` | single-instrument; fits the Feature Engine — stays inside it |
 | **Market Regime Engine** | new module | consumes facts; must not embed strategy decisions |
 | Strategy / Risk / Portfolio / AI / Execution | separate modules, downstream | see architecture doc §4 — most are Deferred |

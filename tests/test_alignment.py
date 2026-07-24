@@ -1,4 +1,4 @@
-"""Tests for the strict-intersection alignment service (fmis.data.alignment)."""
+"""Tests for the strict-intersection alignment service (fmis.alignment)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from fmis.data import ObservationSeries
-from fmis.data.alignment import (
+from fmis.alignment.intersection import (
     AlignmentReport,
     AlignmentResult,
     SeriesAlignmentStats,
     align_intersection,
 )
+from fmis.data import ObservationSeries
 
 _BASE = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
@@ -219,7 +219,8 @@ def test_duplicate_series_id_rejected() -> None:
 
 
 def test_public_import_path() -> None:
-    from fmis.data import (
+    # Alignment is a policy layer, exported from the fmis.alignment package.
+    from fmis.alignment import (
         AlignmentReport as R,
         AlignmentResult as Res,
         SeriesAlignmentStats as S,
@@ -228,6 +229,20 @@ def test_public_import_path() -> None:
 
     assert fn is align_intersection
     assert R is AlignmentReport and Res is AlignmentResult and S is SeriesAlignmentStats
+
+
+def test_alignment_not_reexported_from_data() -> None:
+    # Boundary guard (ADR-0002): the canonical data package must NOT re-export
+    # alignment — it is a policy, not a canonical model.
+    import fmis.data
+
+    for name in (
+        "align_intersection",
+        "AlignmentResult",
+        "AlignmentReport",
+        "SeriesAlignmentStats",
+    ):
+        assert not hasattr(fmis.data, name), f"fmis.data must not re-export {name}"
 
 
 def test_candle_and_observation_imports_unaffected() -> None:
@@ -267,3 +282,51 @@ def test_non_utc_observation_series_rejected_by_contract() -> None:
     plus_one = datetime(2026, 1, 1, 10, 0, tzinfo=timezone(timedelta(hours=1)))
     with pytest.raises(ValueError, match="must represent UTC"):
         ObservationSeries("A", "u", "1D", (plus_one,), (1.0,))
+
+
+# --- mixed trading calendars (crypto 7-day vs equity 5-day) -------------------
+
+
+def test_mixed_crypto_equity_calendar_drops_weekends_exactly() -> None:
+    # Realistic calendar mismatch: a crypto series trades every day; an equity
+    # series trades weekdays only. Over the same two-week span, strict
+    # intersection must keep exactly the weekdays common to both and count the
+    # weekend days as dropped from the crypto side — never silently absorbed.
+    #
+    # _BASE (2024-01-01) is a Monday; equity days are derived from the crypto
+    # days by filtering out Saturdays/Sundays, so the test does not hard-code the
+    # calendar and stays correct if _BASE ever changes.
+    crypto_offsets = list(range(14))  # 2 full weeks, every day
+    equity_offsets = [d for d in crypto_offsets if _day(d).weekday() < 5]
+    weekend_offsets = [d for d in crypto_offsets if _day(d).weekday() >= 5]
+
+    assert len(equity_offsets) == 10  # 2 weeks * 5 weekdays
+    assert len(weekend_offsets) == 4  # 2 weeks * 2 weekend days
+
+    crypto = obs("BTCUSD", crypto_offsets, [float(d) for d in crypto_offsets])
+    equity = obs("SPX", equity_offsets, [float(d) for d in equity_offsets])
+
+    result = align_intersection((crypto, equity))
+    report = result.report
+
+    # Intersection is exactly the weekdays.
+    assert report.aligned_observation_count == 10
+    aligned_days = result.series[0].timestamps
+    assert list(aligned_days) == [_day(d) for d in equity_offsets]
+    assert all(ts.weekday() < 5 for ts in aligned_days)  # no Sat/Sun survives
+
+    crypto_stats, equity_stats = report.series_stats
+    # Crypto loses exactly the 4 weekend days it holds and the equity series does not.
+    assert crypto_stats.series_id == "BTCUSD"
+    assert crypto_stats.original_count == 14
+    assert crypto_stats.aligned_count == 10
+    assert crypto_stats.dropped_count == 4
+    # Equity loses nothing: all its weekdays are present in the crypto series.
+    assert equity_stats.series_id == "SPX"
+    assert equity_stats.original_count == 10
+    assert equity_stats.aligned_count == 10
+    assert equity_stats.dropped_count == 0
+
+    # Values follow the surviving timestamps, not positions.
+    assert result.series[0].values == tuple(float(d) for d in equity_offsets)
+    assert result.series[1].values == tuple(float(d) for d in equity_offsets)

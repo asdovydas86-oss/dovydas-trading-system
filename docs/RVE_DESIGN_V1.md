@@ -9,11 +9,11 @@ deliberately rather than discovered.
 **Governed by:** [ARCHITECTURE_AND_ROADMAP_V1.md](ARCHITECTURE_AND_ROADMAP_V1.md) §7 (RVE specification)
 and decisions D1–D10. This document refines that specification into concrete contracts; where it makes a
 new choice, the choice is numbered `RV-n` and justified in §12.
-**Prerequisites:** both are now decided and folded into **Milestone I-E — Observation Reduction &
-Alignment Boundary** (implementation under a separate prompt), which must land first — **R1** (the
-`CandleSeries → ObservationSeries` reduction, without which the RVE has no input) and **R2** (alignment
-moves to `fmis.alignment`, [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md), so
-the RVE imports it from its permanent home).
+**Prerequisites:** both are now **satisfied by Milestone I-E** — **R1** (the
+`candle_series_to_observations` reduction in `fmis.data`, the RVE's price input) and **R2** (alignment now
+lives in `fmis.alignment`, [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md), so
+the RVE imports `fmis.alignment.align_intersection` from its permanent home). The RVE (Milestone J) is
+therefore unblocked.
 
 ---
 
@@ -484,18 +484,14 @@ code under test.
 
 # 14. Implementation readiness
 
-**The design is complete enough to implement Milestone J.** It is blocked on **Milestone I-E**, which
-carries both prerequisites (now decided):
+**The design is complete enough to implement Milestone J, and both prerequisites are now met by Milestone
+I-E:**
 
-1. **R1** — the `CandleSeries → ObservationSeries` reduction must exist, or the RVE has no input.
-2. **R2** — the alignment service moves to `fmis.alignment`
-   ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)), so the RVE imports it from
-   its permanent home.
+1. **R1** — `candle_series_to_observations` exists in `fmis.data` (the RVE's price input). ✅
+2. **R2** — the alignment service is now `fmis.alignment.align_intersection`
+   ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)). ✅
 
-Sequence: land Milestone I-E (alignment move + reduction helper + mixed-calendar test + docstring fix),
-then begin Milestone J against the contracts above.
-
-**No RVE code should be written until Milestone I-E lands.** Separately, the release-date form of the
+Milestone J may now begin against the contracts above. Separately, the release-date form of the
 no-look-ahead guarantee is gated on the availability-time model
 ([ADR-0003](adr/ADR-0003-availability-time-boundary.md)); v1 supports only the injected-`as_of`
 truncation form (§11).

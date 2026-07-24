@@ -1,5 +1,12 @@
 """Strict timestamp-intersection alignment for ObservationSeries.
 
+The first — and currently only — temporal-comparison policy in the
+``fmis.alignment`` layer. Alignment is a *policy* concern (how two or more
+canonical series are made comparable in time), deliberately separated from the
+canonical data models in ``fmis.data`` (what a series *is*). Future siblings of
+this policy (as-of joins, resampling, availability-aware, calendar-aware) will
+live beside it here. See ADR-0002.
+
 Additive, deterministic, and free of pandas / NumPy. Given two or more
 ``ObservationSeries``, this computes the exact set of instants present in *every*
 input and returns new aligned series restricted to those instants, together with
@@ -8,29 +15,29 @@ a transparent diagnostic report.
 Scope — strict intersection ONLY. There is deliberately no interpolation,
 forward/backward fill, resampling, nearest-match, tolerance, timezone conversion,
 frequency conversion, or any numeric calculation. The service relies on the
-canonical guarantees ``ObservationSeries`` already enforces (timezone-aware,
+canonical guarantees ``ObservationSeries`` already enforces (canonical-UTC,
 strictly increasing, duplicate-free timestamps; equal-length timestamps/values),
 so it does not revalidate input-series internals — it only constructs new,
 independently-validated aligned series.
 
-Timestamp / timezone equality policy:
-    Python aware-datetime equality compares absolute *instants*, and equal
-    instants hash equally. So ``2026-01-01T10:00+00:00`` and
-    ``2026-01-01T11:00+01:00`` are the same instant and DO intersect. A stored
-    timezone offset is never converted or rewritten. When an instant is common to
-    all inputs, the aligned output uses the timestamp OBJECT from the *first*
-    input series as the single canonical representation of that instant — for
-    every aligned series. Genuinely different instants expressed with fixed
-    offsets never intersect merely because their wall-clock fields look similar.
+Timestamp / instant-equality policy:
+    Every ``ObservationSeries`` timestamp is already a canonical, permanent
+    zero-offset UTC instant (enforced at construction — see ADR-0001 and
+    ``fmis.data._timeutils``). Two timestamps are therefore "the same" exactly
+    when they denote the same absolute instant, and Python's aware-datetime
+    equality and hashing give exactly that, with no timezone conversion needed
+    here. One instant may still be written with two distinct zero-offset
+    representations (``timezone.utc`` vs ``ZoneInfo("UTC")``); those compare and
+    hash equal and so intersect correctly. When an instant is common to all
+    inputs, the aligned output uses the timestamp OBJECT from the *first* input
+    series as the single canonical representation of that instant, for every
+    aligned series.
 
-    Caveat (inherited Python behavior, not re-implemented here): for UTC and
-    fixed-offset timestamps — the canonical form in this system, and the only
-    form the tests exercise — equality and hashing are exact absolute-instant
-    semantics. For DST-aware zones (``zoneinfo``) during an ambiguous "fall-back"
-    hour, Python's own ``fold`` handling can make two same-wall-clock values that
-    are actually different instants compare (and hash) equal. This service
-    performs no timezone conversion, so callers should supply UTC-normalized
-    timestamps (already the system convention) to stay clear of that edge case.
+    Because the canonical-UTC contract makes fixed non-zero offsets and DST-aware
+    (``zoneinfo``) zones unrepresentable in an ``ObservationSeries``, the DST
+    "fall-back" ``fold`` ambiguity that would otherwise threaten set/dict-based
+    intersection cannot arise here — it is structurally excluded upstream, not
+    merely avoided by convention.
 """
 
 from __future__ import annotations

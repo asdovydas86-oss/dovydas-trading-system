@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (247 tests) + fixtures
+├── tests/                  pytest suite (315 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -82,6 +82,29 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   and must never silently invent data. Availability-aware/as-of policies additionally depend on the
   availability-time model gated by [ADR-0003](adr/ADR-0003-availability-time-boundary.md).
 
+## `src/fmis/relative_value/` — Relative Value Engine (v1a)
+
+- **Purpose:** deterministic, **fact-only** measurement of relationships between two or more already-aligned
+  series (and per-series summaries) — the question the single-instrument Feature Engine cannot express.
+- **Responsibilities today (v1a):** five scalar metrics in `metrics.py` — `period_return`,
+  `relative_return`, `realized_volatility`, `volatility_ratio`, `pearson_correlation` — over **simple**
+  returns, **unannualized**, **no rolling windows**; and `models.py` — `RelativeValueResult`
+  (`status` OK/UNDEFINED + `reason` + immutable provenance metadata), `MetricStatus`, `UndefinedReason`,
+  and the `RelativeValueError`/`NotAlignedError`/`InsufficientObservationsError` hierarchy. Contracts:
+  [ADR-0004](adr/ADR-0004-rve-v1a-return-and-result-policy.md).
+- **Allowed dependencies:** `fmis.data` (canonical `ObservationSeries`); standard library only.
+- **Forbidden dependencies:** **must not import `fmis.features`**; **must not call `fmis.alignment`
+  internally** (alignment is an explicit upstream policy the caller performs); no pandas/numpy/scipy; no
+  provider/API/TradingView/AI/adapter code.
+- **Hard rules:** never aligns/intersects/fills/resamples/drops (pairwise metrics require identical
+  `timestamps` + equal length, else `NotAlignedError`); never infers frequency from `series_id`/`frequency`
+  strings; never annualizes; emits **no** LONG/SHORT/score/ranking/confidence/label/recommendation, in
+  values or metadata.
+- **Where a new metric belongs:** a new pure function in `metrics.py` returning a `RelativeValueResult`,
+  with hand-derived tests on both warm-up boundaries. Deferred (each its own milestone): price ratio,
+  arithmetic spread, beta, rolling/annualized variants — see
+  [ADR-0004](adr/ADR-0004-rve-v1a-return-and-result-policy.md) §5.
+
 ## `src/fmis/features/` — deterministic Feature Engine
 
 - **Purpose:** compute single-instrument, single-timeframe deterministic technical features and assemble
@@ -145,7 +168,7 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **247 tests** across 11 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **315 tests** across 13 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset).
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.
@@ -182,7 +205,7 @@ These do **not** exist yet. Locations are proposals from the architecture docume
 
 | Future module | Planned location (proposal) | Belongs separate from Feature Engine because |
 |---|---|---|
-| **Relative Value Engine** | `src/fmis/relative_value/` — a top-level sibling of `data` and `features`; **neither engine imports the other** (design: [RVE_DESIGN_V1.md](RVE_DESIGN_V1.md)) | measures relationships between *two or more* series; has no single symbol, so it cannot fit `FeatureSet`'s identity |
+| ~~**Relative Value Engine**~~ | **Built (v1a)** — `src/fmis/relative_value/` (see its section above); neither engine imports the other | measures relationships between *two or more* series; has no single symbol, so it cannot fit `FeatureSet`'s identity |
 | ~~**Alignment service**~~ | **Done** — now `src/fmis/alignment/` ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)) | alignment is a temporal-comparison policy/service, not a model |
 | **Composite Feature Layer** | the existing Tier-2 placeholder packages under `features/` | single-instrument; fits the Feature Engine — stays inside it |
 | **Market Regime Engine** | new module | consumes facts; must not embed strategy decisions |

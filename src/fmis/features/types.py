@@ -180,6 +180,12 @@ class FeatureSet:
     (1W/1D/4H) is composed one layer up by combining several FeatureSets, keeping
     this object simple and each feature's meaning unambiguous.
 
+    ``features`` is defensively copied into a read-only mapping for the same
+    reason ``FeatureResult.metadata`` is: an assembled set of results must not
+    drift after construction, and the builder's working dict must not stay
+    connected to it. Insertion order (the engine's dependency-resolved order) is
+    preserved, and equality still compares by content.
+
     Accessors below are plain container lookups, not calculations.
     """
 
@@ -187,6 +193,13 @@ class FeatureSet:
     timeframe: str
     as_of: datetime  # timestamp of the last (closed) candle the set describes
     features: Mapping[str, FeatureResult] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Same defensive-copy convention as FeatureResult.metadata above.
+        if not isinstance(self.features, MappingProxyType):
+            object.__setattr__(
+                self, "features", MappingProxyType(dict(self.features))
+            )
 
     def get(self, name: str) -> FeatureResult | None:
         """Return the named result, or None if absent."""

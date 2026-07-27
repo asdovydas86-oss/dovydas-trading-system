@@ -4,27 +4,25 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone P — Binance provider adapter (2026-07-28).
-**Latest commit at time of writing:** `37f0dea` — merge of `feat/ingestion-boundary-v1` into `main`
-(the Milestone P commit is created by this milestone; update this line to its hash after commit).
+**Last updated for:** Milestone Q — Market Analysis Pipeline v1 (2026-07-28).
+**Latest commit at time of writing:** `26f4c0f` — merge of `feat/binance-provider-adapter` into `main`
+(the Milestone Q commit is created by this milestone; update this line to its hash after commit).
 
 ---
 
 ## Current milestone
 
-- **P — Binance provider adapter** (implementation): new `fmis.providers` package with `binance.py`, the
-  first module allowed to hold transport and provider-specific knowledge. `fetch_klines(symbol, interval,
-  ...)` fetches public spot klines (`GET /api/v3/klines`, **no API key**), parses Binance's
-  string-encoded prices, maps them into the canonical `CANDLE_FIELDS` shape, and decodes through
-  `fmis.ingest` into a `CandleSeries`. Transport and clock are **injected**, so the test suite is
-  network-free and deterministic. Contracts fixed in
-  [ADR-0006](../adr/ADR-0006-provider-adapter-contract.md).
+- **Q — Market Analysis Pipeline v1** (implementation): new `fmis.pipeline` application layer — the top
+  of the dependency graph and the only layer that knows about more than one engine.
+  `analyze_symbol(symbol, interval, ...)` composes provider → ingestion → closed-candle selection →
+  Feature Engine → (optional) reduction + alignment + RVE, returning an immutable `AnalysisSnapshot`.
+  **No calculation is defined there** — a test asserts the module holds one arithmetic operator (an
+  excluded-candle count) and that its RVE outputs equal calling the RVE directly. Contracts fixed in
+  [ADR-0007](../adr/ADR-0007-application-layer-boundary.md).
 
-  This completes the first real end-to-end path — **public provider → adapter → strict ingestion →
-  canonical `CandleSeries`** — and closes architecture limitation §2.9(4) in practice, not just in
-  principle.
+  This is the first whole-system answer: a real symbol in, a structured reproducible snapshot out.
 
-- **Previous:** O — Ingestion boundary (`fmis.ingest`), merged into `main` via `37f0dea`.
+- **Previous:** P — Binance provider adapter (`fmis.providers`), merged into `main` via `26f4c0f`.
 
 ## Completed milestones
 
@@ -48,17 +46,19 @@ Reconstructed from git history (`git log --oneline`):
 | Observation reduction & alignment boundary (I-E) | `f1a0d58` | `fmis.alignment` package + `candle_series_to_observations` + mixed-calendar test |
 | RVE v1a metrics (J v1a) | `6700e92`, reviewed in `23e4bd5`, merged `fb90014` | `fmis.relative_value` — 5 scalar metrics + result model; see [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) |
 | Ingestion boundary (O) | `b2ab82a`, merged `37f0dea` | `fmis.ingest` — strict record → canonical decoding; see [ADR-0005](../adr/ADR-0005-ingestion-boundary-strictness.md) |
-| Binance adapter (P) | _this commit_ | `fmis.providers.binance` — public klines → canonical series; see [ADR-0006](../adr/ADR-0006-provider-adapter-contract.md) |
+| Binance adapter (P) | `4f7017c`, merged `26f4c0f` | `fmis.providers.binance` — public klines → canonical series; see [ADR-0006](../adr/ADR-0006-provider-adapter-contract.md) |
+| Market Analysis Pipeline v1 (Q) | _this commit_ | `fmis.pipeline` — end-to-end orchestration → `AnalysisSnapshot`; see [ADR-0007](../adr/ADR-0007-application-layer-boundary.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**485 passing** (`uv run pytest`, ~0.13 s). Per module:
+**543 passing** (`uv run pytest`, ~0.17 s). Per module:
 
 | Module | Tests |
 |---|---|
 | `tests/test_providers_binance.py` | 98 |
+| `tests/test_pipeline_market_analysis.py` | 51 |
 | `tests/test_ingest_candles.py` | 72 |
 | `tests/test_data_models.py` | 50 |
 | `tests/test_relative_value_metrics.py` | 49 |
@@ -70,10 +70,10 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_rsi.py` | 22 |
 | `tests/test_relative_value_models.py` | 19 |
 | `tests/test_atr.py` | 15 |
-| `tests/test_features_architecture.py` | 12 |
+| `tests/test_features_architecture.py` | 19 |
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **485** |
+| **Total** | **543** |
 
 ## Implemented indicators (Tier-1)
 
@@ -94,6 +94,11 @@ R5 — relevant to future backtesting).
   *canonical series alignment* (multi-series, strict intersection), **now connected** by the
   `candle_series_to_observations` reduction (a candle field → `ObservationSeries`).
 - **Canonical models:** `Candle`, `CandleSeries`, `ObservationSeries` (`src/fmis/data/`).
+- **Application layer (`fmis.pipeline`):** `analyze_symbol` — the end-to-end workflow. Closed candles
+  unconditionally (`DataWindow` reports fetched/closed/excluded); warm-up is a result, insufficient data
+  raises `InsufficientDataError`; a failed benchmark fails the whole call; downstream errors propagate
+  unwrapped. Orchestration only — no formula is defined there
+  ([ADR-0007](../adr/ADR-0007-application-layer-boundary.md)).
 - **Provider adapter (`fmis.providers.binance`):** `fetch_klines` — public Binance spot klines, no API
   key, `urllib` only. Parses provider string prices, maps to `CANDLE_FIELDS`, decodes via `fmis.ingest`.
   Injected transport and clock; explicit `BinanceError` hierarchy; a provider error never becomes an
@@ -125,7 +130,8 @@ R5 — relevant to future backtesting).
   review finding R12); `fmis.alignment` imports only `fmis.data`; `fmis.relative_value` imports only
   `fmis.data` (never `fmis.features`, never `fmis.alignment`); `fmis.ingest` imports only `fmis.data`
   (never anything downstream, and never the private `_timeutils`); `fmis.providers` imports only
-  `fmis.ingest` + `fmis.data` and never constructs `Candle` directly; shared kernels (`sources.py`,
+  `fmis.ingest` + `fmis.data` and never constructs `Candle` directly; `fmis.pipeline` sits on top and
+  **no engine imports it** (test-enforced); shared kernels (`sources.py`,
   `ema_math.py`, `_timeutils.py`) import nothing internal.
 - **Zero runtime dependencies.**
 
@@ -142,6 +148,10 @@ src/fmis/
 ├── alignment/
 │   ├── __init__.py                 policy-layer surface (re-exports intersection)
 │   └── intersection.py             align_intersection, AlignmentResult/Report, SeriesAlignmentStats
+├── pipeline/
+│   ├── __init__.py                 application-layer rules + public surface
+│   └── market_analysis.py          analyze_symbol, AnalysisSnapshot, DataWindow,
+│                                   RelativeValueSection, default_features
 ├── providers/
 │   ├── __init__.py                 adapter-layer rules (no re-exports)
 │   └── binance.py                  fetch_klines, map_kline, build_klines_url,
@@ -187,19 +197,17 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-Not yet chosen. With real data now reaching canonical models, the strongest candidates are:
+Not yet chosen. With a working end-to-end path, the strongest candidates are:
 
-- **A runnable entry point** (§2.9(8)) — a thin CLI or runner that fetches a symbol, computes features
-  and RVE metrics, and prints the facts. It is what turns a library into something that produces market
-  analysis, and it needs no new analytical capability.
-- **Milestone J v1b** — the deferred RVE metrics (price ratio, arithmetic spread once unit fidelity is
-  settled, then beta). See [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) §5.
-- **Milestone M** — first Tier-2 composite feature in an existing placeholder package.
+- **A thin CLI / entry point** (§2.9(8)) — the last structural gap. `analyze_symbol` now returns a stable
+  result shape, so a renderer can sit on top without freezing an immature contract.
+- **Milestone M** — first Tier-2 composite feature in an existing placeholder package; it would flow into
+  a snapshot with no pipeline change.
+- **Milestone J v1b** — deferred RVE metrics (price ratio, spread once unit fidelity is settled, beta).
+  See [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) §5.
 
-**Known follow-ups from Milestone P** (each small, none blocking): no auto-pagination, so long histories
-need repeated calls; `timeframe` labels are provider-native (`"4h"`, not `"4H"`) until a canonical
-timeframe vocabulary is decided; the forming/closed decision depends on host clock accuracy
-([ADR-0006](../adr/ADR-0006-provider-adapter-contract.md) §3, §6, §7).
+**Known follow-ups from Milestone Q** (each small, none blocking): single timeframe per call (no
+1W/1D/4H composition); one benchmark; close-price comparison only.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting

@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (485 tests) + fixtures
+├── tests/                  pytest suite (533 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -65,6 +65,42 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   (see below and [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)), and
   `fmis.data` deliberately does **not** re-export it — this keeps the package a pure canonical kernel and
   stops downstream layers importing alignment transitively.
+
+## `src/fmis/pipeline/` — application layer (Market Analysis Pipeline v1)
+
+- **Purpose:** the **top** of the dependency graph and the only layer allowed to know about more than one
+  engine. It composes provider → ingestion → features → alignment → RVE into one structured answer.
+  Contracts: [ADR-0007](adr/ADR-0007-application-layer-boundary.md).
+- **Responsibilities today:** `market_analysis.py` — `analyze_symbol(...)` returning an immutable
+  `AnalysisSnapshot` (`DataWindow`, `FeatureSet`, optional `RelativeValueSection`), `default_features()`,
+  and the `PipelineError`/`InsufficientDataError` hierarchy.
+- **Allowed dependencies:** every engine (`fmis.providers`, `fmis.ingest`, `fmis.data`, `fmis.features`,
+  `fmis.alignment`, `fmis.relative_value`); standard library.
+- **Forbidden dependencies:** **no engine may import `fmis.pipeline`** — a test walks all of `src/fmis`
+  outside this package and asserts nothing references it. No private modules of any engine.
+- **Hard rules:** **orchestration only** — no formula may be defined here; a test asserts the module
+  contains exactly one arithmetic operator (an excluded-candle count) and imports no `math`/`statistics`,
+  and another asserts its RVE outputs equal calling the RVE directly. Closed candles **unconditionally**.
+  Warm-up is a result; insufficient data raises. Nothing partial: a failed benchmark fails the call.
+  Downstream errors propagate unwrapped. Fact-only — no direction, score, confidence, or recommendation.
+- **Where a new workflow belongs:** a new function (or module) here — never a generic stage/registry
+  framework, and never a calculation. A new indicator goes in `fmis.features`; a new metric in
+  `fmis.relative_value`.
+
+### Usage
+
+```python
+from fmis.pipeline import analyze_symbol
+
+# 1. BTCUSDT technical snapshot
+snap = analyze_symbol("BTCUSDT", "4h", limit=200)
+snap.as_of, snap.window.closed_count, snap.features.get("rsi_close_14").value
+
+# 2. BTCUSDT compared with ETHUSDT
+cmp = analyze_symbol("BTCUSDT", "1d", limit=90, benchmark_symbol="ETHUSDT")
+cmp.relative_value.metrics["pearson_correlation"].value
+cmp.relative_value.alignment.aligned_observation_count
+```
 
 ## `src/fmis/providers/` — provider adapters
 
@@ -214,7 +250,7 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **485 tests** across 15 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **533 tests** across 16 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

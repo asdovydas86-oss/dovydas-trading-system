@@ -31,6 +31,20 @@ short-term trading are separate domains.
 - **Observation reduction:** `candle_series_to_observations(series, field, *, series_id=None)` +
   `CandleField` enum (`fmis.data`) — a pure, closed-candles-only bridge from a candle field to an
   `ObservationSeries`. The field is **required** (no default); pass a `CandleField`, never a raw string.
+- **Application layer (`fmis.pipeline`):** `analyze_symbol("BTCUSDT", "4h", limit=200)` — the end-to-end
+  workflow, and the **only** layer that may know about more than one engine. No engine may import it, and
+  **no formula may be defined in it** (test-enforced). Closed candles unconditionally; warm-up is a
+  result, insufficient data raises; a failed benchmark fails the whole call; downstream errors propagate
+  unwrapped. Rules in
+  [../adr/ADR-0007-application-layer-boundary.md](../adr/ADR-0007-application-layer-boundary.md).
+
+  ```python
+  from fmis.pipeline import analyze_symbol
+
+  snap = analyze_symbol("BTCUSDT", "4h", limit=200)              # technical snapshot
+  cmp = analyze_symbol("BTCUSDT", "1d", limit=90,                # vs a benchmark
+                       benchmark_symbol="ETHUSDT")
+  ```
 - **Provider adapter (`fmis.providers.binance`):** `fetch_klines("BTCUSDT", "4h", limit=200)` — public
   Binance spot klines, **no API key**, `urllib` only. It parses the provider's string prices (the
   ingestion boundary rejects those on purpose) and decodes through `fmis.ingest`; it never constructs
@@ -61,7 +75,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 485 passing.
+- **Tests:** 533 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

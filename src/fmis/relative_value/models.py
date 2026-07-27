@@ -108,7 +108,9 @@ class RelativeValueResult:
             raise ValueError("status must be a MetricStatus")
 
         if self.status is MetricStatus.OK:
-            # bool is a subclass of int/float-adjacent; reject it explicitly.
+            # bool subclasses int, never float, so the float check below already
+            # rejects it; the explicit guard mirrors ObservationSeries and keeps
+            # True/False from ever reading as a numeric result.
             if isinstance(self.value, bool) or not isinstance(self.value, float):
                 raise ValueError("OK result requires a float value")
             if not math.isfinite(self.value):

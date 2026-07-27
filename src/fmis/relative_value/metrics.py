@@ -50,11 +50,13 @@ __all__ = [
 # ------------------------------------------------------------------ helpers ---
 
 
-def _require_series(obj: object, param: str) -> None:
+def _require_series(obj: object, param: str) -> ObservationSeries:
+    """Validate that ``obj`` is an ObservationSeries and return it narrowed."""
     if not isinstance(obj, ObservationSeries):
         raise TypeError(
             f"{param} must be an ObservationSeries, got {type(obj).__name__}"
         )
+    return obj
 
 
 def _require_aligned(left: object, right: object) -> None:
@@ -62,10 +64,8 @@ def _require_aligned(left: object, right: object) -> None:
 
     Never aligns; a mismatch is a caller error raised as ``NotAlignedError``.
     """
-    _require_series(left, "left")
-    _require_series(right, "right")
-    assert isinstance(left, ObservationSeries)  # for type-checkers
-    assert isinstance(right, ObservationSeries)
+    left = _require_series(left, "left")
+    right = _require_series(right, "right")
     if len(left.timestamps) != len(right.timestamps):
         raise NotAlignedError(
             "left and right must have equal length "
@@ -82,9 +82,10 @@ def _require_aligned(left: object, right: object) -> None:
 def _simple_returns(values: Sequence[float]) -> list[float] | None:
     """Simple returns ``r_t = v_t / v_{t-1} - 1``.
 
-    Returns ``None`` if any prior value is zero (a zero denominator makes the
-    return sequence undefined); the caller maps that to an UNDEFINED result.
-    Length of the result is ``len(values) - 1``.
+    Returns ``None`` if any value used as a denominator is zero — that is, any
+    value except the last, since ``v_{-1}`` is never a denominator. A zero
+    denominator makes the whole return sequence undefined; the caller maps that
+    to an UNDEFINED result. Length of the result is ``len(values) - 1``.
     """
     out: list[float] = []
     for prev, cur in zip(values, values[1:]):
@@ -189,12 +190,12 @@ def relative_return(
         span=_span(left),
     )
 
-    lf, ll = left.values[0], left.values[-1]
-    rf, rl = right.values[0], right.values[-1]
-    if lf == 0 or rf == 0:
+    left_first, left_last = left.values[0], left.values[-1]
+    right_first, right_last = right.values[0], right.values[-1]
+    if left_first == 0 or right_first == 0:
         return RelativeValueResult.undefined(name, UndefinedReason.ZERO_DENOMINATOR, md)
-    growth_left = ll / lf          # == 1 + R_left
-    growth_right = rl / rf         # == 1 + R_right
+    growth_left = left_last / left_first     # == 1 + R_left
+    growth_right = right_last / right_first  # == 1 + R_right
     if growth_right == 0:
         return RelativeValueResult.undefined(name, UndefinedReason.ZERO_DENOMINATOR, md)
     value = growth_left / growth_right - 1.0
@@ -207,8 +208,9 @@ def realized_volatility(series: ObservationSeries) -> RelativeValueResult:
     """Sample standard deviation (Bessel, N-1) of simple returns. No annualization.
 
     Min price observations: 3 (so at least 2 returns). Undefined:
-    ``ZERO_DENOMINATOR`` if any interior price is 0; ``NON_FINITE_RESULT`` if
-    non-finite. A constant series yields ``0.0`` (a defined, OK result).
+    ``ZERO_DENOMINATOR`` if any price except the last is 0 (it would be a zero
+    return denominator); ``NON_FINITE_RESULT`` if non-finite. A constant series
+    yields ``0.0`` (a defined, OK result).
     """
     name = "realized_volatility"
     _require_series(series, "series")
@@ -217,14 +219,18 @@ def realized_volatility(series: ObservationSeries) -> RelativeValueResult:
         raise InsufficientObservationsError(metric=name, required=3, actual=n)
 
     returns = _simple_returns(series.values)
-    m = 0 if returns is None else len(returns)
+    # 0 when the return sequence itself is undefined (zero denominator).
+    return_count = 0 if returns is None else len(returns)
     md = _base_metadata(
         name,
         series_ids=(series.series_id,),
         units=(series.unit,),
         observation_count=n,
         span=_span(series),
-        extra={"return_observation_count": m, "standard_deviation": "sample_bessel"},
+        extra={
+            "return_observation_count": return_count,
+            "standard_deviation": "sample_bessel",
+        },
     )
 
     if returns is None:
@@ -241,9 +247,9 @@ def volatility_ratio(
     """``vol(left) / vol(right)`` of simple-return sample stdevs. Min obs: 3.
 
     ``left`` is the subject, ``right`` the reference (denominator). Undefined:
-    ``ZERO_DENOMINATOR`` if either series has an interior zero price;
-    ``ZERO_REFERENCE_VOLATILITY`` if ``vol(right) == 0``; ``NON_FINITE_RESULT``
-    otherwise-non-finite.
+    ``ZERO_DENOMINATOR`` if either series has a zero price at any position
+    except the last; ``ZERO_REFERENCE_VOLATILITY`` if ``vol(right) == 0``;
+    ``NON_FINITE_RESULT`` otherwise-non-finite.
     """
     name = "volatility_ratio"
     _require_aligned(left, right)
@@ -253,14 +259,18 @@ def volatility_ratio(
 
     ret_left = _simple_returns(left.values)
     ret_right = _simple_returns(right.values)
-    m = 0 if ret_left is None else len(ret_left)
+    # 0 when the return sequence itself is undefined (zero denominator).
+    return_count = 0 if ret_left is None else len(ret_left)
     md = _base_metadata(
         name,
         series_ids=(left.series_id, right.series_id),
         units=(left.unit, right.unit),
         observation_count=n,
         span=_span(left),
-        extra={"return_observation_count": m, "standard_deviation": "sample_bessel"},
+        extra={
+            "return_observation_count": return_count,
+            "standard_deviation": "sample_bessel",
+        },
     )
 
     if ret_left is None or ret_right is None:
@@ -284,9 +294,10 @@ def pearson_correlation(
 
     The value is symmetric in the two series, but the supplied ``left``/``right``
     order is preserved in metadata. Undefined: ``ZERO_DENOMINATOR`` if either
-    series has an interior zero price; ``ZERO_VARIANCE`` if either return series
-    is constant; ``NON_FINITE_RESULT`` otherwise-non-finite. The value is clamped
-    to ``[-1, 1]`` to absorb floating-point drift.
+    series has a zero price at any position except the last; ``ZERO_VARIANCE``
+    if either return series is constant; ``NON_FINITE_RESULT``
+    otherwise-non-finite. The value is clamped to ``[-1, 1]`` to absorb
+    floating-point drift.
     """
     name = "pearson_correlation"
     _require_aligned(left, right)
@@ -294,29 +305,33 @@ def pearson_correlation(
     if n < 3:
         raise InsufficientObservationsError(metric=name, required=3, actual=n)
 
-    a = _simple_returns(left.values)
-    b = _simple_returns(right.values)
-    m = 0 if a is None else len(a)
+    ret_left = _simple_returns(left.values)
+    ret_right = _simple_returns(right.values)
+    # 0 when the return sequence itself is undefined (zero denominator).
+    return_count = 0 if ret_left is None else len(ret_left)
     md = _base_metadata(
         name,
         series_ids=(left.series_id, right.series_id),
         units=(left.unit, right.unit),
         observation_count=n,
         span=_span(left),
-        extra={"return_observation_count": m, "symmetric": True},
+        extra={"return_observation_count": return_count, "symmetric": True},
     )
 
-    if a is None or b is None:
+    if ret_left is None or ret_right is None:
         return RelativeValueResult.undefined(name, UndefinedReason.ZERO_DENOMINATOR, md)
 
-    mean_a = math.fsum(a) / m
-    mean_b = math.fsum(b) / m
-    sxx = math.fsum((x - mean_a) ** 2 for x in a)
-    syy = math.fsum((y - mean_b) ** 2 for y in b)
-    if sxx == 0 or syy == 0:
+    mean_left = math.fsum(ret_left) / return_count
+    mean_right = math.fsum(ret_right) / return_count
+    # Centered sums of squares (left, right) and of cross-products.
+    ss_left = math.fsum((x - mean_left) ** 2 for x in ret_left)
+    ss_right = math.fsum((y - mean_right) ** 2 for y in ret_right)
+    if ss_left == 0 or ss_right == 0:
         return RelativeValueResult.undefined(name, UndefinedReason.ZERO_VARIANCE, md)
-    sxy = math.fsum((x - mean_a) * (y - mean_b) for x, y in zip(a, b))
-    value = sxy / math.sqrt(sxx * syy)
+    ss_cross = math.fsum(
+        (x - mean_left) * (y - mean_right) for x, y in zip(ret_left, ret_right)
+    )
+    value = ss_cross / math.sqrt(ss_left * ss_right)
     if not math.isfinite(value):
         return RelativeValueResult.undefined(name, UndefinedReason.NON_FINITE_RESULT, md)
     # Correlation is mathematically bounded; clamp fp drift into [-1, 1].

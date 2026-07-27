@@ -31,6 +31,13 @@ short-term trading are separate domains.
 - **Observation reduction:** `candle_series_to_observations(series, field, *, series_id=None)` +
   `CandleField` enum (`fmis.data`) — a pure, closed-candles-only bridge from a candle field to an
   `ObservationSeries`. The field is **required** (no default); pass a `CandleField`, never a raw string.
+- **Ingestion boundary (`fmis.ingest`):** `decode_candle`, `decode_candle_series`,
+  `decode_candle_series_from_json` — the only supported way for outside data to become a canonical
+  `CandleSeries`. **Strict:** nothing is coerced, repaired, sorted, deduplicated, or filtered; missing
+  **and** unexpected fields both raise; errors carry the record index. It is a **decoder, not a provider
+  adapter** — no transport, network, or credentials belong here. Domain invariants stay in
+  `Candle`/`CandleSeries` and must never be re-implemented. Rules in
+  [../adr/ADR-0005-ingestion-boundary-strictness.md](../adr/ADR-0005-ingestion-boundary-strictness.md).
 - **Alignment (`fmis.alignment`):** `align_intersection` — **strict timestamp intersection only**, with an
   immutable `AlignmentReport`. It is a **policy layer, separate from `fmis.data`** (ADR-0002). No
   interpolation, forward-fill, resampling, or timezone conversion exists anywhere, and none may be added
@@ -47,7 +54,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 315 passing.
+- **Tests:** 387 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

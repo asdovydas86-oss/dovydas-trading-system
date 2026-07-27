@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (315 tests) + fixtures
+├── tests/                  pytest suite (387 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -65,6 +65,30 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   (see below and [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)), and
   `fmis.data` deliberately does **not** re-export it — this keeps the package a pure canonical kernel and
   stops downstream layers importing alignment transitively.
+
+## `src/fmis/ingest/` — ingestion boundary (v1: candles)
+
+- **Purpose:** the one place where data FMITS did not construct itself becomes a canonical model.
+  Upstream of it everything is untrusted; downstream of it everything is a validated `CandleSeries`.
+  Contracts: [ADR-0005](adr/ADR-0005-ingestion-boundary-strictness.md).
+- **Responsibilities today (v1):** `candles.py` — `decode_candle`, `decode_candle_series`,
+  `decode_candle_series_from_json`, the `CANDLE_FIELDS` canonical record shape, and the
+  `IngestError`/`RecordDecodeError`/`SeriesDecodeError` hierarchy. Validates **shape** (field presence and
+  type) and delegates every domain invariant to `Candle`/`CandleSeries`.
+- **Allowed dependencies:** `fmis.data` (the canonical models it builds); standard library only.
+- **Forbidden dependencies:** `fmis.features`, `fmis.alignment`, `fmis.relative_value`, and
+  `fmis.data._timeutils` (the UTC contract is enforced by `Candle`, never re-implemented here); no
+  pandas/numpy; no new runtime dependencies.
+- **Hard rules:** **decoder, not provider adapter** — no transport, network, credentials, retries,
+  pagination, rate limits, or provider-specific field names. Never coerces (numeric strings and `0`/`1`
+  booleans are rejected), never repairs, never sorts, deduplicates, filters, or forward-fills. Missing
+  **and** unexpected fields are both errors. Every error carries the record index, and the field where
+  attributable.
+- **Where new ingestion belongs:** a new module here (e.g. `observations.py`) as a sibling of
+  `candles.py`. `ObservationSeries` decoding is deliberately **not** implemented yet — its real sources
+  are macro/revised/vintage series, gated by [ADR-0003](adr/ADR-0003-availability-time-boundary.md).
+  A provider adapter (transport + renaming into `CANDLE_FIELDS`) belongs in its own future package, not
+  here.
 
 ## `src/fmis/alignment/` — temporal-comparison policy layer
 
@@ -168,10 +192,14 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **315 tests** across 13 modules, plus `tests/fixtures/` (a small
-  committed OHLCV dataset).
+- **Purpose:** the correctness contract. **387 tests** across 14 modules, plus `tests/fixtures/` (a small
+  committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.
+- **Import-boundary tests:** tests that assert what a *cold* `import fmis.<pkg>` pulls in must take the
+  `fresh_fmis_imports` fixture (`conftest.py`) rather than clearing `sys.modules` inline. The fixture
+  restores the original module objects afterwards; without that restore, later tests comparing class
+  identity against a module-level import fail or pass purely according to alphabetical file ordering.
 - **Allowed dependencies:** `pytest` (the only dev dependency), the `fmis` package, standard library.
 - **Forbidden dependencies:** network access; nondeterministic inputs; deriving expected values by
   calling the implementation under test.
@@ -209,6 +237,7 @@ These do **not** exist yet. Locations are proposals from the architecture docume
 | ~~**Alignment service**~~ | **Done** — now `src/fmis/alignment/` ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)) | alignment is a temporal-comparison policy/service, not a model |
 | **Composite Feature Layer** | the existing Tier-2 placeholder packages under `features/` | single-instrument; fits the Feature Engine — stays inside it |
 | **Market Regime Engine** | new module | consumes facts; must not embed strategy decisions |
+| **Provider adapters** | own future package; must rename payloads into `CANDLE_FIELDS` and call `fmis.ingest` | transport/credentials/retries/provider quirks must never reach the canonical layer ([ADR-0005](adr/ADR-0005-ingestion-boundary-strictness.md)) |
 | Strategy / Risk / Portfolio / AI / Execution | separate modules, downstream | see architecture doc §4 — most are Deferred |
 
 Full boundaries, inputs/outputs, and status for every module are in

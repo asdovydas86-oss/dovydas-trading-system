@@ -117,6 +117,95 @@ def test_feature_set_get_has_and_by_category() -> None:
     assert len(fs.by_category(FeatureCategory.VOLUME)) == 0
 
 
+# --- FeatureSet.features immutability ----------------------------------------
+
+
+def _feature_set(features: dict[str, FeatureResult]) -> FeatureSet:
+    return FeatureSet(
+        symbol="BTCUSDT",
+        timeframe="4H",
+        as_of=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        features=features,
+    )
+
+
+def test_feature_set_features_is_read_only() -> None:
+    fs = _feature_set({"ema": _result("ema", FeatureCategory.INDICATOR)})
+    with pytest.raises(TypeError):
+        # type: ignore[index]
+        fs.features["rsi"] = _result("rsi", FeatureCategory.INDICATOR)
+    with pytest.raises(TypeError):
+        del fs.features["ema"]  # type: ignore[attr-defined]
+
+
+def test_feature_set_features_is_defensively_copied() -> None:
+    original = {"ema": _result("ema", FeatureCategory.INDICATOR)}
+    fs = _feature_set(original)
+
+    original["rsi"] = _result("rsi", FeatureCategory.INDICATOR)
+    del original["ema"]
+
+    assert fs.has("ema")
+    assert not fs.has("rsi")
+    assert len(fs.features) == 1
+
+
+def test_feature_set_preserves_insertion_order() -> None:
+    names = ["macd", "ema", "atr", "rsi"]  # deliberately not alphabetical
+    fs = _feature_set({n: _result(n, FeatureCategory.INDICATOR) for n in names})
+    assert list(fs.features) == names
+
+
+def test_feature_set_equality_is_by_content() -> None:
+    def build() -> FeatureSet:
+        return _feature_set({"ema": _result("ema", FeatureCategory.INDICATOR)})
+
+    assert build() == build()
+    assert build() != _feature_set(
+        {"rsi": _result("rsi", FeatureCategory.INDICATOR)}
+    )
+
+
+def test_feature_set_preserves_result_identity() -> None:
+    # A shallow defensive copy: the mapping is new, the results are the same objects.
+    result = _result("ema", FeatureCategory.INDICATOR)
+    assert _feature_set({"ema": result}).get("ema") is result
+
+
+def test_feature_set_accepts_an_existing_proxy_unchanged() -> None:
+    from types import MappingProxyType
+
+    proxy = MappingProxyType({"ema": _result("ema", FeatureCategory.INDICATOR)})
+    assert _feature_set(proxy).features is proxy  # type: ignore[arg-type]
+
+
+def test_engine_output_features_are_read_only() -> None:
+    registry = FeatureRegistry()
+    registry.register(DummyFeature())
+    series = CandleSeries(
+        symbol="BTCUSDT",
+        timeframe="4H",
+        candles=(
+            Candle(
+                timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+                symbol="BTCUSDT",
+                timeframe="4H",
+                open=100.0, high=110.0, low=90.0, close=105.0, volume=1.0,
+                is_closed=True,
+            ),
+        ),
+    )
+    feature_set = FeatureEngine(registry).compute(series)
+
+    # Unchanged engine behaviour...
+    assert feature_set.get("dummy").value == 1.0
+    assert feature_set.as_of == datetime(2024, 1, 1, tzinfo=timezone.utc)
+    # ...and the assembled mapping cannot be edited afterwards.
+    with pytest.raises(TypeError):
+        # type: ignore[index]
+        feature_set.features["injected"] = _result("x", FeatureCategory.TREND)
+
+
 # --- registry ----------------------------------------------------------------
 
 

@@ -497,6 +497,26 @@ def test_relative_value_metrics_mapping_is_read_only() -> None:
         snapshot.relative_value.metrics["relative_return"] = None  # type: ignore[index]
 
 
+def test_snapshot_feature_mapping_is_read_only() -> None:
+    # AnalysisSnapshot claims defensively protected results; the FeatureSet it
+    # carries must honour that too.
+    snapshot = analyse({"BTCUSDT": klines(ramp(40))})
+    with pytest.raises(TypeError):
+        snapshot.features.features["injected"] = None  # type: ignore[index]
+
+
+def test_snapshot_feature_mapping_order_is_deterministic() -> None:
+    payload = {"BTCUSDT": klines(ramp(40))}
+    first = analyse(payload)
+    second = analyse(payload)
+    assert list(first.features.features) == list(second.features.features)
+
+
+def test_feature_sets_compare_equal_across_identical_runs() -> None:
+    payload = {"BTCUSDT": klines(ramp(40))}
+    assert analyse(payload).features == analyse(payload).features
+
+
 def test_window_is_frozen() -> None:
     snapshot = analyse({"BTCUSDT": klines(ramp(20))})
     with pytest.raises(AttributeError):

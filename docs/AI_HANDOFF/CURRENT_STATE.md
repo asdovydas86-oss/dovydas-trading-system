@@ -53,12 +53,12 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**533 passing** (`uv run pytest`, ~0.17 s). Per module:
+**543 passing** (`uv run pytest`, ~0.17 s). Per module:
 
 | Module | Tests |
 |---|---|
 | `tests/test_providers_binance.py` | 98 |
-| `tests/test_pipeline_market_analysis.py` | 48 |
+| `tests/test_pipeline_market_analysis.py` | 51 |
 | `tests/test_ingest_candles.py` | 72 |
 | `tests/test_data_models.py` | 50 |
 | `tests/test_relative_value_metrics.py` | 49 |
@@ -70,10 +70,10 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_rsi.py` | 22 |
 | `tests/test_relative_value_models.py` | 19 |
 | `tests/test_atr.py` | 15 |
-| `tests/test_features_architecture.py` | 12 |
+| `tests/test_features_architecture.py` | 19 |
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **533** |
+| **Total** | **543** |
 
 ## Implemented indicators (Tier-1)
 
@@ -207,9 +207,7 @@ Not yet chosen. With a working end-to-end path, the strongest candidates are:
   See [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) §5.
 
 **Known follow-ups from Milestone Q** (each small, none blocking): single timeframe per call (no
-1W/1D/4H composition); one benchmark; close-price comparison only; `FeatureSet.features` is a plain dict
-rather than a `MappingProxyType`, unlike every other result mapping in the repository — worth aligning
-when `fmis.features` is next touched.
+1W/1D/4H composition); one benchmark; close-price comparison only.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting

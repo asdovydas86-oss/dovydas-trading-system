@@ -4,20 +4,21 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone I-E — Observation Reduction & Alignment Boundary (2026-07-24).
-**Latest commit at time of writing:** `5e7e3d5` — `feat(data): enforce canonical UTC timestamps` (the I-E
-commit is created by this milestone; update this line to its hash after commit).
+**Last updated for:** Milestone J v1a — Deterministic Relative Value Metrics (2026-07-24).
+**Latest commit at time of writing:** `f1a0d58` — `feat(data): implement observation reduction and
+alignment boundary` (the J v1a commit is created by this milestone; update this line to its hash after
+commit).
 
 ---
 
 ## Current milestone
 
-- **I-E — Observation Reduction & Alignment Boundary** (implementation): moves alignment out of
-  `fmis.data` into the dedicated `fmis.alignment` policy package
-  ([ADR-0002](../adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)); adds the pure
-  `candle_series_to_observations` reduction (review finding R1); adds the crypto-vs-equity mixed-calendar
-  alignment test; corrects the stale alignment docstring (R9). Closes the last infrastructure gap before
-  the Relative Value Engine.
+- **J v1a — Deterministic Relative Value Metrics** (implementation): new `fmis.relative_value` package
+  with five scalar, deterministic, stdlib-only metrics — `period_return`, `relative_return`,
+  `realized_volatility`, `volatility_ratio`, `pearson_correlation` — over simple returns, unannualized,
+  no rolling windows, fact-only. Contracts fixed in
+  [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md). Alignment stays an explicit upstream
+  policy: the RVE never aligns.
 
 ## Completed milestones
 
@@ -38,28 +39,31 @@ Reconstructed from git history (`git log --oneline`):
 | Alignment (I-B) | `a110427` | strict-intersection alignment + report |
 | Canonical UTC (I-C) | `5e7e3d5` | permanent-zero-offset timestamp contract — see [ADR-0001](../adr/ADR-0001-canonical-utc-timestamps.md) |
 | Documentation finalization (I-D) | `16ef0dd` | architecture review, ADR-0001/0002/0003, RVE design |
-| Observation reduction & alignment boundary (I-E) | _this commit_ | `fmis.alignment` package + `candle_series_to_observations` + mixed-calendar test |
+| Observation reduction & alignment boundary (I-E) | `f1a0d58` | `fmis.alignment` package + `candle_series_to_observations` + mixed-calendar test |
+| RVE v1a metrics (J v1a) | _this commit_ | `fmis.relative_value` — 5 scalar metrics + result model; see [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**247 passing** (`uv run pytest`, ~0.08 s). Per module:
+**315 passing** (`uv run pytest`, ~0.08 s). Per module:
 
 | Module | Tests |
 |---|---|
 | `tests/test_data_models.py` | 50 |
+| `tests/test_relative_value_metrics.py` | 49 |
 | `tests/test_observation.py` | 39 |
 | `tests/test_reduction.py` | 27 |
 | `tests/test_ema.py` | 27 |
 | `tests/test_macd.py` | 24 |
 | `tests/test_alignment.py` | 24 |
 | `tests/test_rsi.py` | 22 |
+| `tests/test_relative_value_models.py` | 19 |
 | `tests/test_atr.py` | 15 |
 | `tests/test_features_architecture.py` | 12 |
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **247** |
+| **Total** | **315** |
 
 ## Implemented indicators (Tier-1)
 
@@ -88,11 +92,18 @@ R5 — relevant to future backtesting).
   only, with an immutable `AlignmentResult` / `AlignmentReport` / `SeriesAlignmentStats`. No interpolation,
   forward-fill, resampling, or timezone conversion anywhere. Separate from `fmis.data`
   ([ADR-0002](../adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)).
+- **Relative Value Engine (`fmis.relative_value`, v1a):** five scalar, deterministic, fact-only metrics —
+  `period_return`, `relative_return`, `realized_volatility`, `volatility_ratio`, `pearson_correlation` —
+  over **simple** returns, **unannualized**, no rolling windows. Each returns a `RelativeValueResult`
+  (`status` OK/UNDEFINED + `reason` + immutable provenance metadata). Consumes `ObservationSeries` only;
+  requires inputs already aligned (never aligns itself). Contracts:
+  [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
 - **Feature Engine:** `FeatureEngine` orchestration; registry-based discovery; topological dependency
   ordering; closed-candle enforcement; immutable `FeatureResult`/`FeatureSet`.
 - **Dependency graph:** clean, acyclic, one-directional; `fmis.data` imports nothing from outside
   `fmis.data` (and no longer re-exports alignment, so `fmis.features` no longer pulls it in transitively —
-  review finding R12); `fmis.alignment` imports only `fmis.data`; shared kernels (`sources.py`,
+  review finding R12); `fmis.alignment` imports only `fmis.data`; `fmis.relative_value` imports only
+  `fmis.data` (never `fmis.features`, never `fmis.alignment`); shared kernels (`sources.py`,
   `ema_math.py`, `_timeutils.py`) import nothing internal.
 - **Zero runtime dependencies.**
 
@@ -109,6 +120,11 @@ src/fmis/
 ├── alignment/
 │   ├── __init__.py                 policy-layer surface (re-exports intersection)
 │   └── intersection.py             align_intersection, AlignmentResult/Report, SeriesAlignmentStats
+├── relative_value/
+│   ├── __init__.py                 public surface (5 metrics + result model)
+│   ├── models.py                   RelativeValueResult, MetricStatus, UndefinedReason, errors
+│   └── metrics.py                  period_return, relative_return, realized_volatility,
+│                                   volatility_ratio, pearson_correlation
 └── features/
     ├── types.py                    FeatureValue, FeatureCategory, regime enums,
     │                               FeatureResult, FeatureContext, FeatureSet,
@@ -141,10 +157,11 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-**Milestone J — RVE v1a** (indexed performance, simple ratio, log ratio), designed in full in
-[../RVE_DESIGN_V1.md](../RVE_DESIGN_V1.md). Its two prerequisites (R1 reduction, R2 alignment boundary) are
-now satisfied by Milestone I-E, so it is unblocked. New package `fmis.relative_value/`, consuming
-`ObservationSeries` (via `candle_series_to_observations`) and `fmis.alignment.align_intersection`.
+**Milestone J v1b (candidate)** — extend `fmis.relative_value` with the deferred metrics once their
+prerequisites are settled: **price ratio** and **arithmetic spread** (series-valued; spread additionally
+needs unit fidelity so `unit="price"` can distinguish USD from index points), then **beta** and, later,
+rolling/annualized variants. Each is its own small, tested milestone with its own decision record; none is
+authorized yet. See [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) §5.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting
@@ -169,9 +186,10 @@ accepted before any macroeconomic, fundamental-release, revised, or vintage-data
 
 ## Known future roadmap (from the architecture document)
 
-**Planned / near-term:** J/K/L (Relative Value Engine v1: indexed
-performance & ratio → relative returns & rolling correlation → z-score & relative momentum) → M
-(Composite Feature foundation) → N (Market Regime foundation).
+**Planned / near-term:** J v1b (deferred RVE metrics — ratio/spread/beta, then rolling/annualized, each
+gated per [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) §5) → M (Composite Feature
+foundation) → N (Market Regime foundation). *Note: the architecture doc's original J/K/L split
+(indexed/ratio → correlation → z-score) is superseded by the v1a/v1b scoping in ADR-0004.*
 
 **Deferred:** provider adapters (incl. TradingView ingestion), macro/news/on-chain/derivatives
 intelligence, ETF-flow / insider / China / IPO engines, Daily Brief & Opportunity Scanner, persistence,

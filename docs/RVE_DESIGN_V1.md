@@ -11,9 +11,18 @@ and decisions D1–D10. This document refines that specification into concrete c
 new choice, the choice is numbered `RV-n` and justified in §12.
 **Prerequisites:** both are now **satisfied by Milestone I-E** — **R1** (the
 `candle_series_to_observations` reduction in `fmis.data`, the RVE's price input) and **R2** (alignment now
-lives in `fmis.alignment`, [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md), so
-the RVE imports `fmis.alignment.align_intersection` from its permanent home). The RVE (Milestone J) is
-therefore unblocked.
+lives in `fmis.alignment`, [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)). The
+**caller** aligns upstream via `fmis.alignment.align_intersection` and passes the aligned
+`ObservationSeries` to the RVE; the RVE itself does **not** import `fmis.alignment`.
+
+> **Implementation status (v1a — Milestone J, shipped):** the built v1a **refines this design**; where
+> they differ, [ADR-0004](adr/ADR-0004-rve-v1a-return-and-result-policy.md) is authoritative. Key
+> refinements: **simple** returns (not the log-return lean of RV-6); a `RelativeValueResult` with explicit
+> `status`/`reason` (not bare `value=None`, §5.2); **five scalar metrics only** (`period_return`,
+> `relative_return`, `realized_volatility`, `volatility_ratio`, `pearson_correlation`) with pure functions
+> in `metrics.py` (no `RelationshipDefinition`/`Transform`/engine class yet); **price ratio, spread, and
+> beta deferred**; the RVE never imports `fmis.alignment` (the caller aligns upstream). The narrative below
+> is the fuller forward-looking design; read it through that lens.
 
 ---
 
@@ -453,7 +462,7 @@ code under test.
 | RV-3 | The engine calls the alignment service itself | Require callers to pre-align | One correct sequence, once. A caller that forgets to align would produce a plausible, wrong number with no trace. |
 | RV-4 | `as_of` is **injected**, never read from the clock | Default to `datetime.now(UTC)` | Reproducibility is the project's core property: the same inputs must always give the same output. A wall-clock default would make every result non-reproducible and every backtest non-repeatable. |
 | RV-5 | Staleness is reported by the RVE, not by alignment | Put it in `AlignmentReport` | Staleness needs an evaluation instant; alignment has none and must not acquire one. (Review finding R6.) |
-| RV-6 | **Log returns** are the default convention for correlation and volatility; simple returns are an explicit override | Simple returns as default; no default | Resolves open question §13.2. Log returns are additive across time and symmetric, and they compose with the log-ratio algebra the RVE is built on: `ln(A/B) = ln A − ln B`. Both remain available; one is documented as the default. |
+| RV-6 | ~~**Log returns** are the default~~ → **superseded for v1a by [ADR-0004](adr/ADR-0004-rve-v1a-return-and-result-policy.md): simple returns only.** | Simple returns as default; no default | Original lean: log returns are additive and compose with the deferred log-ratio algebra. v1a has no log-ratio algebra to exploit, so **simple** returns were chosen (intuitive; no silent log variant). A log-return variant is deferred, additive future work. |
 | RV-7 | **No annualization** in v1 | Annualize with 365 (crypto) or 252 (equity) | Resolves open question §13.3 for v1: the volatility *ratio* `σ_A/σ_B` is scale-free, so a common annualization factor cancels exactly. Annualization only becomes necessary if absolute volatility is ever reported — and then the crypto-vs-equity day-count conflict must be settled explicitly, not inherited. |
 | RV-8 | Metrics below the statistical floor are **computed and flagged** (`low_sample`), not refused | Refuse below a minimum; ignore the issue | Resolves open question §13.6. Refusing hides information; returning bare overstates it. Flagging keeps the RVE fact-only and hands the judgement to the layer allowed to judge. |
 | RV-9 | Relationship definitions are **frozen dataclasses in code** for v1; the declarative file format is deferred | Build the TOML/JSON loader now (open question §13.1) | A configuration loader with zero users freezes a format before its requirements are known. The frozen object is the contract; a loader is a thin future addition that constructs it. Defer the format choice to the first real definition file. |

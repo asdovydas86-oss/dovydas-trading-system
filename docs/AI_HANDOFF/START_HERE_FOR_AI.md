@@ -41,7 +41,13 @@ short-term trading are separate domains.
   `ema_math.py` (EMA math).
 - **Tier-2 packages** (`trend`, `momentum`, `volatility`, `volume`, `market_structure`,
   `support_resistance`, `pattern_detection`): **placeholders only — no calculation code.**
-- **Tests:** 247 passing.
+- **Relative Value Engine (`fmis.relative_value`, v1a):** five scalar, fact-only metrics —
+  `period_return`, `relative_return`, `realized_volatility`, `volatility_ratio`, `pearson_correlation` —
+  over **simple** returns, **unannualized**, no rolling windows. Returns a `RelativeValueResult`
+  (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
+  and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
+  It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
+- **Tests:** 315 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

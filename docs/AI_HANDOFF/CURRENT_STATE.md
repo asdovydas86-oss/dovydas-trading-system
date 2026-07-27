@@ -4,21 +4,26 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone J v1a — Deterministic Relative Value Metrics (2026-07-24).
-**Latest commit at time of writing:** `f1a0d58` — `feat(data): implement observation reduction and
-alignment boundary` (the J v1a commit is created by this milestone; update this line to its hash after
-commit).
+**Last updated for:** Milestone O — Ingestion boundary (2026-07-28).
+**Latest commit at time of writing:** `fb90014` — merge of `feat/relative-value-engine-v1a` into `main`
+(the Milestone O commit is created by this milestone; update this line to its hash after commit).
 
 ---
 
 ## Current milestone
 
-- **J v1a — Deterministic Relative Value Metrics** (implementation): new `fmis.relative_value` package
-  with five scalar, deterministic, stdlib-only metrics — `period_return`, `relative_return`,
-  `realized_volatility`, `volatility_ratio`, `pearson_correlation` — over simple returns, unannualized,
-  no rolling windows, fact-only. Contracts fixed in
-  [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md). Alignment stays an explicit upstream
-  policy: the RVE never aligns.
+- **O — Ingestion boundary** (implementation): new `fmis.ingest` package that decodes untrusted external
+  records into canonical models — `decode_candle`, `decode_candle_series`,
+  `decode_candle_series_from_json`, the `CANDLE_FIELDS` record shape, and the
+  `IngestError`/`RecordDecodeError`/`SeriesDecodeError` hierarchy. Strict by contract: no coercion,
+  repair, sorting, deduplication, or filtering; missing **and** unexpected fields both raise; every error
+  carries the record index. Domain invariants stay with `Candle`/`CandleSeries` and are not
+  re-implemented. A **decoder, not a provider adapter** — no transport, network, or credentials.
+  Contracts fixed in [ADR-0005](../adr/ADR-0005-ingestion-boundary-strictness.md). This closes
+  architecture limitation §2.9(4) ("no data ingestion").
+
+- **Previous:** J v1a — Deterministic Relative Value Metrics (`fmis.relative_value`), merged into `main`
+  via `fb90014` after a production-readiness review.
 
 ## Completed milestones
 
@@ -40,16 +45,18 @@ Reconstructed from git history (`git log --oneline`):
 | Canonical UTC (I-C) | `5e7e3d5` | permanent-zero-offset timestamp contract — see [ADR-0001](../adr/ADR-0001-canonical-utc-timestamps.md) |
 | Documentation finalization (I-D) | `16ef0dd` | architecture review, ADR-0001/0002/0003, RVE design |
 | Observation reduction & alignment boundary (I-E) | `f1a0d58` | `fmis.alignment` package + `candle_series_to_observations` + mixed-calendar test |
-| RVE v1a metrics (J v1a) | _this commit_ | `fmis.relative_value` — 5 scalar metrics + result model; see [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) |
+| RVE v1a metrics (J v1a) | `6700e92`, reviewed in `23e4bd5`, merged `fb90014` | `fmis.relative_value` — 5 scalar metrics + result model; see [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) |
+| Ingestion boundary (O) | _this commit_ | `fmis.ingest` — strict record → canonical decoding; see [ADR-0005](../adr/ADR-0005-ingestion-boundary-strictness.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**315 passing** (`uv run pytest`, ~0.08 s). Per module:
+**387 passing** (`uv run pytest`, ~0.13 s). Per module:
 
 | Module | Tests |
 |---|---|
+| `tests/test_ingest_candles.py` | 72 |
 | `tests/test_data_models.py` | 50 |
 | `tests/test_relative_value_metrics.py` | 49 |
 | `tests/test_observation.py` | 39 |
@@ -63,7 +70,7 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_features_architecture.py` | 12 |
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **315** |
+| **Total** | **387** |
 
 ## Implemented indicators (Tier-1)
 
@@ -84,6 +91,11 @@ R5 — relevant to future backtesting).
   *canonical series alignment* (multi-series, strict intersection), **now connected** by the
   `candle_series_to_observations` reduction (a candle field → `ObservationSeries`).
 - **Canonical models:** `Candle`, `CandleSeries`, `ObservationSeries` (`src/fmis/data/`).
+- **Ingestion boundary (`fmis.ingest`, v1):** `decode_candle` / `decode_candle_series` /
+  `decode_candle_series_from_json` turn untrusted records into canonical candles. Strict: no coercion,
+  repair, sorting, dedup, or filtering; missing **and** unexpected fields raise; errors carry the record
+  index. Domain invariants stay in `Candle`/`CandleSeries`. A decoder, **not** a provider adapter — no
+  transport, network, or credentials ([ADR-0005](../adr/ADR-0005-ingestion-boundary-strictness.md)).
 - **Canonical time contract:** every canonical model timestamp must use a *permanent* zero-offset
   timezone; validated, never converted ([ADR-0001](../adr/ADR-0001-canonical-utc-timestamps.md)).
 - **Observation reduction:** `candle_series_to_observations(series, field, *, series_id=None)` +
@@ -103,7 +115,8 @@ R5 — relevant to future backtesting).
 - **Dependency graph:** clean, acyclic, one-directional; `fmis.data` imports nothing from outside
   `fmis.data` (and no longer re-exports alignment, so `fmis.features` no longer pulls it in transitively —
   review finding R12); `fmis.alignment` imports only `fmis.data`; `fmis.relative_value` imports only
-  `fmis.data` (never `fmis.features`, never `fmis.alignment`); shared kernels (`sources.py`,
+  `fmis.data` (never `fmis.features`, never `fmis.alignment`); `fmis.ingest` imports only `fmis.data`
+  (never anything downstream, and never the private `_timeutils`); shared kernels (`sources.py`,
   `ema_math.py`, `_timeutils.py`) import nothing internal.
 - **Zero runtime dependencies.**
 
@@ -120,6 +133,10 @@ src/fmis/
 ├── alignment/
 │   ├── __init__.py                 policy-layer surface (re-exports intersection)
 │   └── intersection.py             align_intersection, AlignmentResult/Report, SeriesAlignmentStats
+├── ingest/
+│   ├── __init__.py                 public surface (decoders + error hierarchy)
+│   └── candles.py                  decode_candle, decode_candle_series,
+│                                   decode_candle_series_from_json, CANDLE_FIELDS
 ├── relative_value/
 │   ├── __init__.py                 public surface (5 metrics + result model)
 │   ├── models.py                   RelativeValueResult, MetricStatus, UndefinedReason, errors
@@ -157,7 +174,14 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-**Milestone J v1b (candidate)** — extend `fmis.relative_value` with the deferred metrics once their
+**Milestone P (candidate) — first provider adapter.** With a strict decoder in place, the remaining gap
+to real analysis is fetching: an adapter that pulls OHLCV from one concrete source, renames its payload
+into `CANDLE_FIELDS`, and calls `fmis.ingest`. It is the first module allowed to hold transport,
+credentials, and provider quirks, so it needs its own decision record covering dependency policy (the
+project is currently at zero runtime dependencies), retry/rate-limit behaviour, and how a partial or
+failed fetch is reported. Not authorized yet.
+
+**Milestone J v1b (also a candidate)** — extend `fmis.relative_value` with the deferred metrics once their
 prerequisites are settled: **price ratio** and **arithmetic spread** (series-valued; spread additionally
 needs unit fidelity so `unit="price"` can distinguish USD from index points), then **beta** and, later,
 rolling/annualized variants. Each is its own small, tested milestone with its own decision record; none is

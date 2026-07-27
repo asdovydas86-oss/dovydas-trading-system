@@ -425,10 +425,8 @@ def test_import_boundary_source_level() -> None:
         assert not forbidden.startswith("fmis.alignment"), forbidden
 
 
-def test_import_does_not_load_features_or_alignment() -> None:
+def test_import_does_not_load_features_or_alignment(fresh_fmis_imports: None) -> None:
     # A fresh import of the RVE must not pull in fmis.features or fmis.alignment.
-    for m in [m for m in sys.modules if m.startswith("fmis")]:
-        del sys.modules[m]
     import fmis.relative_value  # noqa: F401
     assert not any(m.startswith("fmis.features") for m in sys.modules)
     assert not any(m.startswith("fmis.alignment") for m in sys.modules)

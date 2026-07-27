@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (387 tests) + fixtures
+├── tests/                  pytest suite (485 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -65,6 +65,28 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   (see below and [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)), and
   `fmis.data` deliberately does **not** re-export it — this keeps the package a pure canonical kernel and
   stops downstream layers importing alignment transitively.
+
+## `src/fmis/providers/` — provider adapters
+
+- **Purpose:** the only layer that knows an external API's shape. An adapter fetches from one concrete
+  provider, parses its payload into the canonical `CANDLE_FIELDS` record shape, and hands it to
+  `fmis.ingest`. Contracts: [ADR-0006](adr/ADR-0006-provider-adapter-contract.md).
+- **Responsibilities today:** `binance.py` — public spot klines (`GET /api/v3/klines`, **no API key**):
+  `fetch_klines`, `map_kline`, `build_klines_url`, `urlopen_transport`, the `HttpResponse`/`Transport`
+  types, and the `BinanceError` hierarchy (`BinanceRequestError`, `BinanceTransportError`,
+  `BinanceAPIError`, `BinanceResponseError`).
+- **Allowed dependencies:** `fmis.ingest`, `fmis.data` (types only); standard library — `urllib`, so the
+  zero-runtime-dependency invariant holds.
+- **Forbidden dependencies:** `fmis.features`, `fmis.alignment`, `fmis.relative_value`; any third-party
+  HTTP library. An adapter must **not** construct `Candle` directly — canonical validation is reached
+  only through `fmis.ingest`, and a test enforces this.
+- **Hard rules:** public market data only — no authentication, private/account/order endpoints,
+  websockets, trading, caching, persistence, scheduling, or retries. Transport is an **injected
+  callable** returning `(status, body)` and never raising on HTTP status, so tests never touch the
+  network. Provider errors raise explicitly and are **never** turned into an empty series. Forming
+  candles are flagged via an injectable clock, returned rather than dropped.
+- **Where a new adapter belongs:** a new module here as a sibling of `binance.py`, following ADR-0006.
+  There is deliberately **no** generic provider Protocol until a second adapter proves the shape.
 
 ## `src/fmis/ingest/` — ingestion boundary (v1: candles)
 
@@ -192,7 +214,7 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **387 tests** across 14 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **485 tests** across 15 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.
@@ -201,8 +223,9 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   restores the original module objects afterwards; without that restore, later tests comparing class
   identity against a module-level import fail or pass purely according to alphabetical file ordering.
 - **Allowed dependencies:** `pytest` (the only dev dependency), the `fmis` package, standard library.
-- **Forbidden dependencies:** network access; nondeterministic inputs; deriving expected values by
-  calling the implementation under test.
+- **Forbidden dependencies:** network access (provider adapters are tested with an injected transport,
+  never a live endpoint); nondeterministic inputs (an injected clock, never wall-clock time); deriving
+  expected values by calling the implementation under test.
 
 ## `docs/`
 
@@ -237,7 +260,7 @@ These do **not** exist yet. Locations are proposals from the architecture docume
 | ~~**Alignment service**~~ | **Done** — now `src/fmis/alignment/` ([ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)) | alignment is a temporal-comparison policy/service, not a model |
 | **Composite Feature Layer** | the existing Tier-2 placeholder packages under `features/` | single-instrument; fits the Feature Engine — stays inside it |
 | **Market Regime Engine** | new module | consumes facts; must not embed strategy decisions |
-| **Provider adapters** | own future package; must rename payloads into `CANDLE_FIELDS` and call `fmis.ingest` | transport/credentials/retries/provider quirks must never reach the canonical layer ([ADR-0005](adr/ADR-0005-ingestion-boundary-strictness.md)) |
+| ~~**Provider adapters**~~ | **Built** — `src/fmis/providers/` (Binance public klines); see its section above | transport/provider quirks must never reach the canonical layer ([ADR-0006](adr/ADR-0006-provider-adapter-contract.md)) |
 | Strategy / Risk / Portfolio / AI / Execution | separate modules, downstream | see architecture doc §4 — most are Deferred |
 
 Full boundaries, inputs/outputs, and status for every module are in

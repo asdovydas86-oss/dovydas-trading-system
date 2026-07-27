@@ -31,6 +31,13 @@ short-term trading are separate domains.
 - **Observation reduction:** `candle_series_to_observations(series, field, *, series_id=None)` +
   `CandleField` enum (`fmis.data`) — a pure, closed-candles-only bridge from a candle field to an
   `ObservationSeries`. The field is **required** (no default); pass a `CandleField`, never a raw string.
+- **Provider adapter (`fmis.providers.binance`):** `fetch_klines("BTCUSDT", "4h", limit=200)` — public
+  Binance spot klines, **no API key**, `urllib` only. It parses the provider's string prices (the
+  ingestion boundary rejects those on purpose) and decodes through `fmis.ingest`; it never constructs
+  `Candle` directly. Transport and clock are **injected**, so tests never touch the network or
+  wall-clock. Provider errors raise via the `BinanceError` hierarchy and are never turned into an empty
+  series. Public data only — no auth, private endpoints, websockets, trading, or retries. Rules in
+  [../adr/ADR-0006-provider-adapter-contract.md](../adr/ADR-0006-provider-adapter-contract.md).
 - **Ingestion boundary (`fmis.ingest`):** `decode_candle`, `decode_candle_series`,
   `decode_candle_series_from_json` — the only supported way for outside data to become a canonical
   `CandleSeries`. **Strict:** nothing is coerced, repaired, sorted, deduplicated, or filtered; missing
@@ -54,7 +61,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 387 passing.
+- **Tests:** 485 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

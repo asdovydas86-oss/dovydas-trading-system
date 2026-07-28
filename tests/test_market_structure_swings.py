@@ -571,9 +571,14 @@ def test_property_flat_regions_never_produce_adjacent_duplicate_swings(
 
 def test_no_structure_interpretation_vocabulary_in_code() -> None:
     forbidden = (
-        "bos", "choch", "trend", "higher", "lower", "support", "resistance",
+        # Note: bare "higher"/"lower" are the legitimate SwingRelation member
+        # names since ADR-0013. What stays forbidden is fusing them with the
+        # swing type into a composite label, which is interpretation.
+        "bos", "choch", "trend", "support", "resistance",
         "liquidity", "breakout", "bullish", "bearish", "buy", "sell", "signal",
         "strength", "confidence", "score",
+        "hh", "hl", "lh", "ll", "higherhigh", "lowerlow",
+        "higher_high", "higher_low", "lower_high", "lower_low",
     )
     for py in sorted(PACKAGE_DIR.glob("*.py")):
         tree = ast.parse(py.read_text())
@@ -597,8 +602,9 @@ def test_no_structure_interpretation_vocabulary_in_code() -> None:
 
 def test_public_api_is_exactly_the_declared_surface() -> None:
     assert set(ms.__all__) == {
-        "SwingType", "SwingPoint", "detect_swings", "required_candles",
-        "DEFAULT_LEFT_BARS", "DEFAULT_RIGHT_BARS",
+        "SwingType", "SwingPoint", "SwingRelation", "SwingComparison",
+        "detect_swings", "compare_swings", "compare_swing_sequence",
+        "required_candles", "DEFAULT_LEFT_BARS", "DEFAULT_RIGHT_BARS",
     }
     for name in ms.__all__:
         assert hasattr(ms, name)
@@ -625,6 +631,7 @@ def test_imports_only_the_canonical_data_models() -> None:
     assert _internal_imports() <= {
         "fmis.data",
         "fmis.market_structure.models",
+        "fmis.market_structure.relationships",
         "fmis.market_structure.swings",
     }
 

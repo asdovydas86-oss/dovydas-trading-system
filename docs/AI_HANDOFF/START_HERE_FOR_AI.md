@@ -46,8 +46,15 @@ short-term trading are separate domains.
   candles have closed, which is what makes it **non-repainting** — never emit a provisional swing.
   Comparison is **strict on the left, `>=` on the right**, so a plateau gives one point (its first bar)
   while separated equal highs stay two. `SwingPoint.index` indexes `series.closed().candles`. **No
-  interpretation here** — BOS, CHoCH, HH/HL, trend, S/R and liquidity are all later milestones. Rules in
+  interpretation here** — BOS, CHoCH, trend, S/R and liquidity are all later milestones. Rules in
   [../adr/ADR-0012-market-structure-foundation.md](../adr/ADR-0012-market-structure-foundation.md).
+
+  `compare_swings` / `compare_swing_sequence` then compare each swing against the previous swing **of the
+  same type** into a numeric `SwingRelation` (HIGHER/LOWER/EQUAL — never bullish/bearish). Price
+  comparison is **exact**: never add an epsilon, because no tick-size abstraction exists to calibrate one.
+  Input order is validated, **never sorted**. **Do not fuse `type` and `relation` into "higher high"** —
+  that naming is deliberately withheld. Rules in
+  [../adr/ADR-0013-swing-relationship-foundation.md](../adr/ADR-0013-swing-relationship-foundation.md).
 - **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` (ten subject areas) and the frozen slotted
   `EvidenceDescriptor` (`family`, `name`, `description`), plus an immutable catalog. **A calculated
   indicator is not automatically evidence** — a descriptor exists only for a concept the system genuinely
@@ -127,7 +134,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 1040 passing.
+- **Tests:** 1267 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

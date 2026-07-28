@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (1040 tests) + fixtures
+├── tests/                  pytest suite (1267 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -95,9 +95,12 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 - **Purpose:** deterministic swing detection — *located facts* about where local extremes occurred.
   Contracts: [ADR-0012](adr/ADR-0012-market-structure-foundation.md).
-- **Responsibilities today:** `models.py` — `SwingType` (HIGH/LOW) and the frozen, slotted, hashable
-  `SwingPoint` (`index`, `timestamp`, `price`, `type`); `swings.py` — `detect_swings`,
-  `required_candles`, and the `DEFAULT_LEFT_BARS`/`DEFAULT_RIGHT_BARS` defaults.
+- **Responsibilities today:** `models.py` — `SwingType` (HIGH/LOW), the frozen/slotted/hashable
+  `SwingPoint` (`index`, `timestamp`, `price`, `type`), `SwingRelation` (HIGHER/LOWER/EQUAL) and the
+  frozen/slotted/hashable `SwingComparison` (`previous`, `current`, `relation`); `swings.py` —
+  `detect_swings`, `required_candles`, `DEFAULT_LEFT_BARS`/`DEFAULT_RIGHT_BARS`; `relationships.py` —
+  `compare_swings` and `compare_swing_sequence`. Contracts for comparison:
+  [ADR-0013](adr/ADR-0013-swing-relationship-foundation.md).
 - **Allowed dependencies:** `fmis.data` (the canonical `CandleSeries`); standard library only.
 - **Forbidden dependencies:** `fmis.decision_support`, `fmis.evidence`, `fmis.providers`,
   `fmis.pipeline`, `fmis.features`, `fmis.trading_context`, and anything AI / execution / portfolio.
@@ -110,6 +113,14 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   resistance, or liquidity, and `SwingPoint` carries no direction, strength, or confidence.
 - **Index semantics:** `SwingPoint.index` is a position in `series.closed().candles`, never in the raw
   series.
+- **Comparison rules (ADR-0013):** swings are compared **same-type only** (a high to the previous high);
+  `SwingRelation` is numeric (HIGHER/LOWER/EQUAL) and carries no market meaning; price comparison is
+  **exact**, with no epsilon — the repository has no tick-size or price-precision abstraction to justify
+  one. Input order is validated, never sorted. The ordering contract is globally non-decreasing by index
+  and **strict within each type**, deliberately not globally strict, because an outside candle yields a
+  HIGH and a LOW at one index and global strictness would break composition with `detect_swings`.
+- **HH/HL/LH/LL naming is withheld on purpose.** `type` and `relation` stay two separate facts so the
+  layer that eventually names them does so as an explicit decision.
 - **Where structural *interpretation* belongs:** `fmis.features.market_structure` (Tier-2), which
   consumes these points and expresses a result as a `FeatureValue`. Detection is here because a tuple of
   `SwingPoint` objects is not a `FeatureValue`.
@@ -390,7 +401,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **1040 tests** across 21 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **1267 tests** across 22 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

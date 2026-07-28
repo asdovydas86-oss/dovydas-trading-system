@@ -7,8 +7,13 @@ no direction, no trend, no strength, and no confidence.
 A `SwingComparison` adds exactly one more fact — how one swing's price stands
 against the previous swing *of the same kind* — expressed as a `SwingRelation`
 of HIGHER, LOWER or EQUAL. That is arithmetic about two numbers, not a reading
-of the market: break of structure, trend, and support levels all require further
-decisions this layer deliberately does not make.
+of the market.
+
+A `StructuralSwing` adds a **name** for that pairing and nothing else: a
+`SwingType` and a `SwingRelation` together are what a chartist calls a higher
+high or a lower low. Naming a fact is not interpreting it — break of structure,
+trend, and support levels all require further decisions this layer deliberately
+does not make.
 
 ``index`` is a position into the **closed** candles of the series it was derived
 from (`CandleSeries.closed().candles`), not into the raw series. Detection
@@ -20,11 +25,20 @@ whether the last bar had closed.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from types import MappingProxyType
 
-__all__ = ["SwingType", "SwingPoint", "SwingRelation", "SwingComparison"]
+__all__ = [
+    "SwingType",
+    "SwingPoint",
+    "SwingRelation",
+    "SwingComparison",
+    "StructuralSwingLabel",
+    "StructuralSwing",
+]
 
 
 class SwingType(str, Enum):
@@ -203,4 +217,108 @@ class SwingComparison:
                 f"relation {self.relation.value!r} does not match the prices "
                 f"({self.previous.price} -> {self.current.price}); "
                 f"expected {expected.value!r}"
+            )
+
+
+class StructuralSwingLabel(str, Enum):
+    """The conventional name for one `SwingType` + `SwingRelation` pairing.
+
+    Six members, exhausting the two swing types against the three relations.
+    Each is a **name for an established fact**, not a reading of it:
+    `HIGHER_HIGH` says the current swing is a high whose price is numerically
+    above the previous high. It does not say the market is trending up, that a
+    breakout occurred, that structure broke, or that anything should be traded —
+    and `LOWER_LOW` is correspondingly not a short signal.
+
+    Names are written in full. `HH`, `LH`, `EH`, `HL`, `LL`, `EL` are common
+    shorthand and may appear in prose, but abbreviations make the wrong thing
+    easy: `LH` and `HL` differ by one transposition and mean opposite things,
+    which is a poor property for an identifier that will appear in conditionals.
+
+    `EQUAL_HIGH` and `EQUAL_LOW` are first-class members, never folded into the
+    others. A retest at exactly the previous level is its own structural fact,
+    and calling it "double top", "resistance", or "liquidity" would be an
+    interpretation belonging to a later layer.
+
+    Deliberately absent: BULLISH, BEARISH, CONTINUATION, REVERSAL, BREAK, BOS,
+    CHOCH, LONG, SHORT, BUY, SELL, STRONG, WEAK, CONFIRMED, INVALID.
+    """
+
+    HIGHER_HIGH = "higher_high"
+    LOWER_HIGH = "lower_high"
+    EQUAL_HIGH = "equal_high"
+    HIGHER_LOW = "higher_low"
+    LOWER_LOW = "lower_low"
+    EQUAL_LOW = "equal_low"
+
+
+#: The one authoritative mapping from (swing type, relation) to its name.
+#: Exhaustive over both enums by construction; an immutable mapping so the
+#: vocabulary cannot be re-pointed at runtime.
+_LABEL_BY_TYPE_AND_RELATION: Mapping[
+    tuple[SwingType, SwingRelation], StructuralSwingLabel
+] = MappingProxyType(
+    {
+        (SwingType.HIGH, SwingRelation.HIGHER): StructuralSwingLabel.HIGHER_HIGH,
+        (SwingType.HIGH, SwingRelation.LOWER): StructuralSwingLabel.LOWER_HIGH,
+        (SwingType.HIGH, SwingRelation.EQUAL): StructuralSwingLabel.EQUAL_HIGH,
+        (SwingType.LOW, SwingRelation.HIGHER): StructuralSwingLabel.HIGHER_LOW,
+        (SwingType.LOW, SwingRelation.LOWER): StructuralSwingLabel.LOWER_LOW,
+        (SwingType.LOW, SwingRelation.EQUAL): StructuralSwingLabel.EQUAL_LOW,
+    }
+)
+
+
+def _label_for(comparison: SwingComparison) -> StructuralSwingLabel:
+    """The label implied by a comparison — the one authoritative derivation.
+
+    Reads ``comparison.current.type`` and ``comparison.relation``. The previous
+    point's type is deliberately not consulted: `SwingComparison` already
+    guarantees both points share a type, so checking it again would invite the
+    two sources disagreeing.
+
+    Deliberately **private**, following `_relation_for`. A public
+    ``label_for(type, relation)`` would let a caller name a pairing that no
+    validated `SwingComparison` produced, which is the same shortcut-around-the-
+    invariants hazard ADR-0013 §6 removed. Callers use `label_swing`.
+    """
+    return _LABEL_BY_TYPE_AND_RELATION[(comparison.current.type, comparison.relation)]
+
+
+@dataclass(frozen=True, slots=True)
+class StructuralSwing:
+    """A `SwingComparison` and its conventional name. Exactly two fields.
+
+    ``comparison`` carries every underlying fact — both points, their indices,
+    timestamps and prices, and the relation — so none of it is repeated here.
+    Duplicating ``current``, ``price`` or ``index`` as extra fields would create
+    a second place for them to disagree.
+
+    ``label`` is **validated against the comparison**, not trusted: an object
+    claiming `HIGHER_HIGH` for a low that fell cannot be constructed.
+
+    Frozen, slotted and hashable, so a label cannot drift and can go in a set
+    when a later layer diffs runs.
+    """
+
+    comparison: SwingComparison
+    label: StructuralSwingLabel
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.comparison, SwingComparison):
+            raise TypeError(
+                "comparison must be a SwingComparison, got "
+                f"{type(self.comparison).__name__}"
+            )
+        if not isinstance(self.label, StructuralSwingLabel):
+            raise TypeError(
+                "label must be a StructuralSwingLabel, got "
+                f"{type(self.label).__name__}"
+            )
+        expected = _label_for(self.comparison)
+        if self.label is not expected:
+            raise ValueError(
+                f"label {self.label.value!r} does not match the comparison "
+                f"({self.comparison.current.type.value} + "
+                f"{self.comparison.relation.value}); expected {expected.value!r}"
             )

@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (1267 tests) + fixtures
+├── tests/                  pytest suite (1458 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -99,8 +99,10 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   `SwingPoint` (`index`, `timestamp`, `price`, `type`), `SwingRelation` (HIGHER/LOWER/EQUAL) and the
   frozen/slotted/hashable `SwingComparison` (`previous`, `current`, `relation`); `swings.py` —
   `detect_swings`, `required_candles`, `DEFAULT_LEFT_BARS`/`DEFAULT_RIGHT_BARS`; `relationships.py` —
-  `compare_swings` and `compare_swing_sequence`. Contracts for comparison:
-  [ADR-0013](adr/ADR-0013-swing-relationship-foundation.md).
+  `compare_swings` and `compare_swing_sequence`; `labels.py` — `label_swing` and
+  `label_swing_sequence`, plus `StructuralSwingLabel` and `StructuralSwing` in `models.py`. Contracts:
+  [ADR-0013](adr/ADR-0013-swing-relationship-foundation.md) (comparison),
+  [ADR-0014](adr/ADR-0014-structural-swing-label-foundation.md) (naming).
 - **Allowed dependencies:** `fmis.data` (the canonical `CandleSeries`); standard library only.
 - **Forbidden dependencies:** `fmis.decision_support`, `fmis.evidence`, `fmis.providers`,
   `fmis.pipeline`, `fmis.features`, `fmis.trading_context`, and anything AI / execution / portfolio.
@@ -119,8 +121,15 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   one. Input order is validated, never sorted. The ordering contract is globally non-decreasing by index
   and **strict within each type**, deliberately not globally strict, because an outside candle yields a
   HIGH and a LOW at one index and global strictness would break composition with `detect_swings`.
-- **HH/HL/LH/LL naming is withheld on purpose.** `type` and `relation` stay two separate facts so the
-  layer that eventually names them does so as an explicit decision.
+- **Naming rules (ADR-0014):** `StructuralSwingLabel` has exactly six members from one authoritative
+  `SwingType` x `SwingRelation` mapping (kept private, like the price rule). **Full names are canonical** —
+  `HH`/`HL`/`LH`/`LL` are prose shorthand only, because `LH` and `HL` differ by one transposition and mean
+  opposite things. `EQUAL_HIGH`/`EQUAL_LOW` are first-class and are never folded into HIGHER/LOWER nor
+  renamed "double top", "support" or "liquidity". Sequence order is preserved, never sorted; outside-bar
+  equal `current.index` pairs are accepted.
+- **Naming is not interpreting.** `HIGHER_HIGH` says a high's price is above the previous high and stops
+  there — not uptrend, breakout, BOS, CHoCH, continuation or a reason to trade; `LOWER_LOW` is not a short
+  signal. Those remain later milestones.
 - **Where structural *interpretation* belongs:** `fmis.features.market_structure` (Tier-2), which
   consumes these points and expresses a result as a `FeatureValue`. Detection is here because a tuple of
   `SwingPoint` objects is not a `FeatureValue`.
@@ -401,7 +410,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **1267 tests** across 22 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **1458 tests** across 23 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

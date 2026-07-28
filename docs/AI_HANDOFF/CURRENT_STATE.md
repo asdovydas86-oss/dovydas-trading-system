@@ -4,46 +4,41 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone W — Swing Relationship Foundation v1 (2026-07-28).
-**Latest commit at time of writing:** `e7dbbb9` — `Merge Market Structure Foundation v1`
-(the Milestone W commit is created by this milestone; update this line to its hash after commit).
+**Last updated for:** Milestone X — Structural Swing Label Foundation v1 (2026-07-28).
+**Latest commit at time of writing:** `153f930` — `Merge Swing Relationship Foundation v1`
+(the Milestone X commit is created by this milestone; update this line to its hash after commit).
 
 ---
 
 ## Current milestone
 
-- **W — Swing Relationship Foundation v1** (implementation): `fmis.market_structure` gains
-  `SwingRelation` (HIGHER/LOWER/EQUAL), the frozen/slotted/hashable `SwingComparison`
-  (`previous`, `current`, `relation`), and the pure functions `compare_swings` /
-  `compare_swing_sequence`. Contracts fixed in
-  [ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md).
+- **X — Structural Swing Label Foundation v1** (implementation): `fmis.market_structure` gains
+  `StructuralSwingLabel` (six members), the frozen/slotted/hashable `StructuralSwing`
+  (`comparison`, `label`), and the pure functions `label_swing` / `label_swing_sequence`. Contracts fixed
+  in [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md).
 
-  **Same-type only** — a high is compared to the previous high, a low to the previous low. Comparing a
-  high to a low would relate two different measurements.
+  **One authoritative mapping** of `SwingType` x `SwingRelation`, exhaustive over both enums, kept
+  private — a public `label_for(type, relation)` would name a pairing no validated comparison produced.
+  The label is derived from `current.type` only; the previous point's type is never consulted, because
+  `SwingComparison` already guarantees they match.
 
-  **Numeric, not directional.** `HIGHER` means the later price is the larger number; on a swing low it
-  says only that the low sits higher than the one before it. No bullish/bearish vocabulary, and no
-  `UNAVAILABLE` member — every comparison resolves.
+  **Naming is not interpreting.** `HIGHER_HIGH` says a high's price is above the previous high and stops
+  there — not uptrend, breakout, BOS, CHoCH or a reason to trade, and `LOWER_LOW` is not a short signal.
 
-  **HH/HL/LH/LL naming is deliberately withheld**: `type` and `relation` stay two separate facts so the
-  layer that eventually names them does so as an explicit decision rather than as a side effect.
+  **Full names are canonical.** `HH`/`HL`/`LH`/`LL` are prose shorthand only: `LH` and `HL` differ by one
+  transposition and mean opposite things, which is a poor property for an identifier used in conditionals.
 
-  **Exact price comparison, no epsilon.** An audit found no tick-size, price-precision, or normalization
-  abstraction anywhere in the repository, so any tolerance would be locally invented. The limitation —
-  "equal within a tick" cannot be expressed — is recorded in ADR-0013 §4.
+  **`EQUAL_HIGH` and `EQUAL_LOW` stay first-class** — never folded into HIGHER/LOWER, never renamed
+  "double top", "support" or "liquidity". Exact equality is inherited from ADR-0013 §4 unchanged; this
+  layer never touches a price.
 
-  **Order is validated, never sorted.** The contract is globally non-decreasing by index and *strict
-  within each type*; global strictness is deliberately not required because an outside candle yields a
-  HIGH and a LOW at one index, and requiring it would break composition with `detect_swings`.
-
-  **One authoritative price rule, kept private** (`models._relation_for`): `compare_swings` is the only
-  public pair operation, because it is the one that validates. **Equal-`current.index` ties break on
-  input order** — never enum or dictionary order — which for `detect_swings` output means HIGH before LOW.
-
-  Comparisons are **not evidence** — nothing classifies them, so `EvidenceFamily.MARKET_STRUCTURE`
+  Input order is preserved, never sorted; outside-bar comparisons sharing a `current.index` are accepted,
+  and the **secondary order at an equal index is inherited from the input, never imposed** — labelling
+  does not independently order HIGH before LOW.
+  Labels are still **not evidence** — nothing classifies them, so `EvidenceFamily.MARKET_STRUCTURE`
   remains empty.
 
-- **Previous:** V — Market Structure Foundation v1 (swing detection), merged into `main` via `e7dbbb9`.
+- **Previous:** W — Swing Relationship Foundation v1 (comparison), merged into `main` via `153f930`.
 
 ## Completed milestones
 
@@ -75,16 +70,18 @@ Reconstructed from git history (`git log --oneline`):
 | Evidence Taxonomy v1 (U) | `96bad56`, merged `21a4bb0` | `fmis.evidence` — evidence families + descriptor catalog; see [ADR-0011](../adr/ADR-0011-evidence-taxonomy.md) |
 | Evidence namespace hygiene fix | `6e098cf`, merged `352bf45` | `descriptors.py` -> `descriptor.py`; no API or taxonomy change |
 | Market Structure Foundation v1 (V) | `b91c3d1`, merged `e7dbbb9` | `fmis.market_structure` — deterministic swing detection; see [ADR-0012](../adr/ADR-0012-market-structure-foundation.md) |
-| Swing Relationship Foundation v1 (W) | _this commit_ | `SwingRelation`, `SwingComparison`, `compare_swings`, `compare_swing_sequence`; see [ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md) |
+| Swing Relationship Foundation v1 (W) | `90ae358`, merged `153f930` | `SwingRelation`, `SwingComparison`, `compare_swings`, `compare_swing_sequence`; see [ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md) |
+| Structural Swing Label Foundation v1 (X) | _this commit_ | `StructuralSwingLabel`, `StructuralSwing`, `label_swing`, `label_swing_sequence`; see [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**1267 passing** (`uv run pytest`, ~0.62 s). Per module:
+**1458 passing** (`uv run pytest`, ~0.74 s). Per module:
 
 | Module | Tests |
 |---|---|
+| `tests/test_market_structure_labels.py` | 190 |
 | `tests/test_market_structure_relationships.py` | 227 |
 | `tests/test_market_structure_swings.py` | 194 |
 | `tests/test_evidence_taxonomy.py` | 77 |
@@ -107,7 +104,7 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_trading_context.py` | 51 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **1267** |
+| **Total** | **1458** |
 
 ## Implemented indicators (Tier-1)
 
@@ -136,8 +133,11 @@ R5 — relevant to future backtesting).
 - **Market structure (`fmis.market_structure`):** `detect_swings` — deterministic, non-repainting swing
   highs and lows over closed candles; plus `compare_swings` / `compare_swing_sequence`, which compare
   each swing against the previous swing **of the same type** into a numeric `SwingRelation`
-  (HIGHER/LOWER/EQUAL). Exact price comparison, validated input order, HH/HL naming withheld
-  ([ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md)). Strict-left / `>=`-right comparison; plateaus collapse to one
+  (HIGHER/LOWER/EQUAL); and `label_swing` / `label_swing_sequence`, which name the pairing as one of six
+  `StructuralSwingLabel` members. Exact price comparison, validated/preserved order, full names canonical,
+  EQUAL first-class, and naming that stops short of interpretation
+  ([ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md),
+  [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md)). Strict-left / `>=`-right comparison; plateaus collapse to one
   point, separated equal highs stay distinct; insufficient history returns `()`. Located facts only, no
   structural interpretation ([ADR-0012](../adr/ADR-0012-market-structure-foundation.md)).
 - **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` + `EvidenceDescriptor` + an immutable
@@ -214,9 +214,11 @@ src/fmis/
 ├── market_structure/
 │   ├── __init__.py                 package rules + public surface
 │   ├── models.py                   SwingType, SwingPoint, SwingRelation,
-│   │                               SwingComparison
+│   │                               SwingComparison, StructuralSwingLabel,
+│   │                               StructuralSwing
 │   ├── swings.py                   detect_swings, required_candles
-│   └── relationships.py            compare_swings, compare_swing_sequence
+│   ├── relationships.py            compare_swings, compare_swing_sequence
+│   └── labels.py                   label_swing, label_swing_sequence
 ├── evidence/
 │   ├── __init__.py                 taxonomy rules + public surface
 │   ├── families.py                 EvidenceFamily
@@ -282,22 +284,22 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-Not yet chosen. With type and relation available separately, the natural next steps are:
+Not yet chosen. With named structural facts available, the natural next steps are:
 
-- **Structural naming (HH / HL / LH / LL)** — the layer that fuses `SwingType` and `SwingRelation` into
-  a composite label. It needs its own decision record covering equal cases and what the label does *not*
-  claim, which is exactly why ADR-0013 withheld the naming.
-- **Break of structure / change of character** — depends on the naming layer, and needs an explicit
-  definition of what counts as a break.
+- **Break of structure / change of character** — the first rule *over a sequence* of labels. It needs an
+  explicit definition of what counts as a break, including whether an `EQUAL_HIGH` breaks anything, before
+  any code ([ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) §10).
+- **Trend classification** — how many swings constitute a trend, and what an interleaved
+  `HIGHER_HIGH` / `LOWER_LOW` run means. Its own decision record.
 - **Support / resistance candidates** — `fmis.features.support_resistance` already names swing points as
-  its input.
+  its input, and `EQUAL_HIGH`/`EQUAL_LOW` are the obvious seed.
 - **Volume Evidence v1b** — still the deferred half of Milestone T.
 - **Trading reasoning v1** — first consumer of `TradingAnalysisContext`.
 
-**Known follow-ups from Milestone W** (each small, none blocking): exact comparison means `EQUAL` is
-reported only for bit-identical prices, and "equal within a tick" cannot be expressed until a tick-size
-or price-precision abstraction exists ([ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md) §4);
-comparisons are computed but not classified, so MARKET_STRUCTURE stays an empty evidence family.
+**Known follow-ups from Milestone X** (each small, none blocking): `StructuralSwing` is a thin wrapper, so
+a consumer reaching through `swing.comparison.current.price` repeatedly wants a projection rather than
+more fields on this type; the exact-equality limitation from ADR-0013 §4 is inherited verbatim, so
+`EQUAL_HIGH` fires only for bit-identical stored prices.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting

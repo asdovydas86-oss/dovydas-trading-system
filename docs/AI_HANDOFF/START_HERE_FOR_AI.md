@@ -52,9 +52,15 @@ short-term trading are separate domains.
   `compare_swings` / `compare_swing_sequence` then compare each swing against the previous swing **of the
   same type** into a numeric `SwingRelation` (HIGHER/LOWER/EQUAL — never bullish/bearish). Price
   comparison is **exact**: never add an epsilon, because no tick-size abstraction exists to calibrate one.
-  Input order is validated, **never sorted**. **Do not fuse `type` and `relation` into "higher high"** —
-  that naming is deliberately withheld. Rules in
+  Input order is validated, **never sorted**. Rules in
   [../adr/ADR-0013-swing-relationship-foundation.md](../adr/ADR-0013-swing-relationship-foundation.md).
+
+  `label_swing` / `label_swing_sequence` then name the pairing: `StructuralSwingLabel` has exactly
+  HIGHER_HIGH, LOWER_HIGH, EQUAL_HIGH, HIGHER_LOW, LOWER_LOW, EQUAL_LOW. **Full names only** — never add
+  `HH`/`HL`/`LH`/`LL` as API. **Never fold EQUAL_HIGH/EQUAL_LOW away** or rename them "double top",
+  "support" or "liquidity". **Naming is not interpreting**: HIGHER_HIGH is not an uptrend and LOWER_LOW is
+  not a short signal; BOS, CHoCH and trend are later milestones. Rules in
+  [../adr/ADR-0014-structural-swing-label-foundation.md](../adr/ADR-0014-structural-swing-label-foundation.md).
 - **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` (ten subject areas) and the frozen slotted
   `EvidenceDescriptor` (`family`, `name`, `description`), plus an immutable catalog. **A calculated
   indicator is not automatically evidence** — a descriptor exists only for a concept the system genuinely
@@ -134,7 +140,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 1267 passing.
+- **Tests:** 1458 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

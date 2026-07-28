@@ -611,11 +611,25 @@ def test_no_interpretation_vocabulary_in_code() -> None:
             assert word not in tokens, f"{py.name}: {word}"
 
 
-def test_no_hh_hl_lh_ll_naming_anywhere() -> None:
+def test_abbreviated_structural_naming_is_banned_everywhere() -> None:
+    """`HH`/`HL`/`LH`/`LL` never become canonical, in any module (ADR-0014 §3)."""
     for py in sorted(PACKAGE_DIR.glob("*.py")):
         tokens = _code_tokens(py)
-        for word in ("hh", "hl", "lh", "ll", "higherhigh", "lowerlow",
-                     "higher_high", "lower_low"):
+        for word in ("hh", "hl", "lh", "ll", "higherhigh", "lowerlow"):
+            assert word not in tokens, f"{py.name}: {word}"
+
+
+def test_composite_names_appear_only_in_the_naming_layer() -> None:
+    """This layer keeps type and relation separate; naming happens above it.
+
+    Full composite names are legitimate in `models.py` (the enum) and
+    `labels.py` (the mapping) since ADR-0014, but must not leak down into
+    detection or comparison.
+    """
+    for py in (PACKAGE_DIR / "swings.py", PACKAGE_DIR / "relationships.py"):
+        tokens = _code_tokens(py)
+        for word in ("higher_high", "lower_high", "equal_high",
+                     "higher_low", "lower_low", "equal_low"):
             assert word not in tokens, f"{py.name}: {word}"
 
 
@@ -708,7 +722,9 @@ def test_detect_swings_output_gives_high_before_low_at_a_shared_index() -> None:
 def test_public_api_is_exactly_the_declared_surface() -> None:
     assert set(ms.__all__) == {
         "SwingType", "SwingPoint", "SwingRelation", "SwingComparison",
+        "StructuralSwingLabel", "StructuralSwing",
         "detect_swings", "compare_swings", "compare_swing_sequence",
+        "label_swing", "label_swing_sequence",
         "required_candles", "DEFAULT_LEFT_BARS", "DEFAULT_RIGHT_BARS",
     }
     for name in ms.__all__:
@@ -719,7 +735,7 @@ def test_no_submodule_shares_a_name_with_a_public_object() -> None:
     import pkgutil
 
     submodules = {m.name for m in pkgutil.iter_modules(ms.__path__)}
-    assert submodules == {"models", "relationships", "swings"}
+    assert submodules == {"labels", "models", "relationships", "swings"}
     assert submodules & set(ms.__all__) == set()
 
 
@@ -740,6 +756,7 @@ def _internal_imports() -> set[str]:
 def test_imports_only_canonical_data_and_own_modules() -> None:
     assert _internal_imports() <= {
         "fmis.data",
+        "fmis.market_structure.labels",
         "fmis.market_structure.models",
         "fmis.market_structure.relationships",
         "fmis.market_structure.swings",

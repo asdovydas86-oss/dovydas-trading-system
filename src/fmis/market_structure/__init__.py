@@ -2,13 +2,17 @@
 
 Value types and pure functions in two layers:
 
-    CandleSeries -> detect_swings          -> tuple[SwingPoint, ...]
-    SwingPoints  -> compare_swing_sequence -> tuple[SwingComparison, ...]
+    CandleSeries    -> detect_swings          -> tuple[SwingPoint, ...]
+    SwingPoints     -> compare_swing_sequence -> tuple[SwingComparison, ...]
+    SwingComparisons-> label_swing_sequence   -> tuple[StructuralSwing, ...]
 
 `detect_swings` reports *where* a candle's high was a local maximum or its low a
 local minimum. `compare_swings` / `compare_swing_sequence` then report *how* each
 swing's price stands against the previous swing **of the same type**, as a
-`SwingRelation` of HIGHER, LOWER or EQUAL.
+`SwingRelation` of HIGHER, LOWER or EQUAL. `label_swing` /
+`label_swing_sequence` finally *name* that pairing — `HIGHER_HIGH`,
+`LOWER_LOW`, `EQUAL_HIGH` and so on — which is naming an established fact, not
+interpreting it.
 
 **Facts, not structure.** A swing point says *where* an extreme was; a
 comparison says which of two prices is the larger number. Neither says what that
@@ -16,11 +20,15 @@ means. Break of structure, change of character, trend, consolidation, support
 and resistance, and liquidity each require further decisions, and none of them
 belongs here. See ADR-0012 and ADR-0013.
 
-**The HH/HL/LH/LL naming is deliberately withheld.** A `SwingType.HIGH` whose
-relation is `SwingRelation.HIGHER` is what people call a "higher high", but that
-label fuses two facts into one word and invites reading a trend into it. The two
-are kept separate — ``type`` and ``relation`` — so the layer that eventually
-names them does so as an explicit decision.
+**Naming happens here; interpretation still does not.** A `SwingType.HIGH`
+whose relation is `SwingRelation.HIGHER` is a `StructuralSwingLabel.HIGHER_HIGH`
+— and that is all it is. It does not mean uptrend, breakout, break of structure,
+continuation, or a reason to trade, and `LOWER_LOW` is not a short signal. The
+underlying `type` and `relation` remain available separately on the comparison,
+so nothing is lost by naming the pair. Full names are canonical; `HH`/`LH`/`HL`
+are prose shorthand only, because `LH` and `HL` differ by one transposition and
+mean opposite things. `EQUAL_HIGH` and `EQUAL_LOW` stay first-class and are
+never folded away or renamed "double top", "support", or "liquidity".
 
 **Why this is a package and not a Feature.** `FeatureValue` covers floats,
 bools, strings, mappings and sequences of those; a tuple of `SwingPoint`
@@ -59,7 +67,11 @@ Rules for anything added here:
     operation, because it is the one that validates.
   * **Ties break on input order.** Two comparisons sharing a `current.index`
     (one candle yielding both a HIGH and a LOW) appear in the order those points
-    appeared in the input — never enum or dictionary order.
+    appeared in the input — never enum or dictionary order. Labelling preserves
+    that order exactly.
+  * **One authoritative label mapping, kept private** (`models._label_for`),
+    for the same reason the price rule is: a public `label_for(type, relation)`
+    would name a pairing no validated comparison produced.
   * **Validate order, never repair it.** Unsorted input is a caller bug; sorting
     it silently would hide the bug and compare the wrong pairs.
   * **Imports only `fmis.data`.** Never `fmis.decision_support`,
@@ -69,7 +81,10 @@ Rules for anything added here:
 
 from __future__ import annotations
 
+from fmis.market_structure.labels import label_swing, label_swing_sequence
 from fmis.market_structure.models import (
+    StructuralSwing,
+    StructuralSwingLabel,
     SwingComparison,
     SwingPoint,
     SwingRelation,
@@ -91,9 +106,13 @@ __all__ = [
     "SwingPoint",
     "SwingRelation",
     "SwingComparison",
+    "StructuralSwingLabel",
+    "StructuralSwing",
     "detect_swings",
     "compare_swings",
     "compare_swing_sequence",
+    "label_swing",
+    "label_swing_sequence",
     "required_candles",
     "DEFAULT_LEFT_BARS",
     "DEFAULT_RIGHT_BARS",

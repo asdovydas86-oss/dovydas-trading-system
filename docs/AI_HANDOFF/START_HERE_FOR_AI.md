@@ -31,6 +31,20 @@ short-term trading are separate domains.
 - **Observation reduction:** `candle_series_to_observations(series, field, *, series_id=None)` +
   `CandleField` enum (`fmis.data`) — a pure, closed-candles-only bridge from a candle field to an
   `ObservationSeries`. The field is **required** (no default); pass a `CandleField`, never a raw string.
+- **Decision support (`fmis.decision_support`):** `build_evidence_report(snapshot)` — organises a
+  snapshot into structured evidence. Consumes `AnalysisSnapshot` **only**; nothing below imports it.
+  **Classifies, never calculates** (the sole derived value, `atr_percent_of_close`, is isolated in
+  `derived.py` and AST-enforced). An RSI band is `NOT_DIRECTIONAL` by rule — "oversold" is never evidence
+  by itself; an alignment tie stays a tie. `OverallState` is WATCH/WAIT/INSUFFICIENT_DATA and carries
+  **no direction**. No BUY/SELL/target/stop/confidence anywhere, test-enforced. Rules in
+  [../adr/ADR-0008-decision-support-evidence-boundary.md](../adr/ADR-0008-decision-support-evidence-boundary.md).
+
+  ```python
+  from fmis.pipeline import analyze_symbol
+  from fmis.decision_support import build_evidence_report
+
+  report = build_evidence_report(analyze_symbol("BTCUSDT", "4h", limit=200))
+  ```
 - **Application layer (`fmis.pipeline`):** `analyze_symbol("BTCUSDT", "4h", limit=200)` — the end-to-end
   workflow, and the **only** layer that may know about more than one engine. No engine may import it, and
   **no formula may be defined in it** (test-enforced). Closed candles unconditionally; warm-up is a
@@ -75,7 +89,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 543 passing.
+- **Tests:** 637 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

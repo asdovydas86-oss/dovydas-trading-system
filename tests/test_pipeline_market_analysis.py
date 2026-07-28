@@ -624,16 +624,30 @@ def _internal_imports(pkg_dir: Path) -> set[str]:
     return found
 
 
-def test_pipeline_sits_at_the_top_of_the_dependency_graph() -> None:
-    """No engine may import the application layer; the arrow points one way."""
+#: The engine packages, all of which sit *below* the application layer. Layers
+#: above it (e.g. fmis.decision_support) may consume its result types; these
+#: may not, in either direction of reasoning.
+ENGINE_PACKAGES = (
+    "data", "ingest", "providers", "features", "alignment", "relative_value",
+)
+
+
+def test_no_engine_imports_the_application_layer() -> None:
+    """The arrow points one way: engines never depend on what orchestrates them."""
     src = Path(pipeline.__file__).parent.parent  # src/fmis
     offenders: list[str] = []
-    for py in src.rglob("*.py"):
-        if py.parent.name == "pipeline":
-            continue
-        if "fmis.pipeline" in py.read_text():
-            offenders.append(str(py))
+    for package in ENGINE_PACKAGES:
+        for py in (src / package).rglob("*.py"):
+            if "fmis.pipeline" in py.read_text():
+                offenders.append(str(py))
     assert offenders == []
+
+
+def test_engine_packages_scanned_actually_exist() -> None:
+    # Guards the test above from silently passing if a package is renamed.
+    src = Path(pipeline.__file__).parent.parent
+    for package in ENGINE_PACKAGES:
+        assert (src / package / "__init__.py").is_file(), package
 
 
 def test_pipeline_reuses_engines_rather_than_reaching_around_them() -> None:

@@ -112,6 +112,12 @@ class DataWindow:
     ``first_timestamp``/``last_timestamp`` describe the **closed** candles used,
     and are ``None`` only for an empty window. ``excluded_forming_count`` is the
     difference between what the provider returned and what was analysed.
+
+    ``last_close`` is the close of the last closed candle — a recorded fact about
+    the window, not a calculation. It is here because indicator values alone
+    cannot be related back to price: comparing price to a moving average, or
+    expressing a range as a fraction of price, both need it, and re-deriving it
+    downstream would mean re-reading candles the snapshot has already consumed.
     """
 
     fetched_count: int
@@ -119,6 +125,7 @@ class DataWindow:
     excluded_forming_count: int
     first_timestamp: datetime | None
     last_timestamp: datetime | None
+    last_close: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +202,7 @@ def _window_of(fetched: CandleSeries, closed: CandleSeries) -> DataWindow:
         excluded_forming_count=len(fetched.candles) - len(candles),
         first_timestamp=candles[0].timestamp if candles else None,
         last_timestamp=candles[-1].timestamp if candles else None,
+        last_close=candles[-1].close if candles else None,
     )
 
 

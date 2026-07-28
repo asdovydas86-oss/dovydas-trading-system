@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (543 tests) + fixtures
+├── tests/                  pytest suite (637 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -65,6 +65,43 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   (see below and [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)), and
   `fmis.data` deliberately does **not** re-export it — this keeps the package a pure canonical kernel and
   stops downstream layers importing alignment transitively.
+
+## `src/fmis/decision_support/` — Decision Support Evidence v1
+
+- **Purpose:** organise an `AnalysisSnapshot` into structured, deterministic evidence so a human — or a
+  later interpretation layer — reasons from structure rather than from a bag of numbers. Sits **above**
+  `fmis.pipeline`. Contracts: [ADR-0008](adr/ADR-0008-decision-support-evidence-boundary.md).
+- **Responsibilities today:** `classification.py` — the written-out rules (`classify_comparison`,
+  `classify_rsi_zone`, `classify_sign`) and their vocabulary; `derived.py` — the single derived
+  calculation `atr_percent_of_close`; `report.py` — `build_evidence_report` and the immutable result
+  types (`EvidenceReport`, `MarketContext`, `TrendEvidence`, `MomentumEvidence`, `VolatilityEvidence`,
+  `RelativeValueEvidence`, `EvidenceGroups`, `Observation`, `Scenario`, `OverallState`).
+- **Allowed dependencies:** `fmis.pipeline` (its published result types); standard library.
+- **Forbidden dependencies:** every engine — no provider, ingest, feature, alignment, or RVE import; no
+  `fmis.pipeline` submodule. **Nothing below may import this**, the pipeline included (test-enforced).
+- **Hard rules:** consumes snapshots only — no fetching, no indicator math, no metric recomputation
+  (RVE values are restated from the snapshot). **Classification, not calculation:** only `derived.py` may
+  compute, enforced by an AST test. No LLM, prompt, API, network, persistence, CLI, or dashboard; no rule
+  engine or configurable strategy system. An RSI band is `NOT_DIRECTIONAL` by rule; an alignment tie stays
+  a tie; scenarios restate observations and contain no number. **No trading vocabulary** in any value,
+  field name, or metadata — test-enforced against a banned-word list.
+- **Where a new rule belongs:** a new pure function in `classification.py` with its own boundary tests; a
+  second derived number goes beside `atr_percent_of_close` in `derived.py`, or into an engine.
+
+### Usage
+
+```python
+from fmis.pipeline import analyze_symbol
+from fmis.decision_support import build_evidence_report
+
+report = build_evidence_report(
+    analyze_symbol("BTCUSDT", "4h", limit=200, benchmark_symbol="ETHUSDT")
+)
+report.state                       # OverallState.WATCH | WAIT | INSUFFICIENT_DATA
+report.groups.dominant_alignment   # reported separately from the state
+report.volatility.atr_percent_of_close
+report.scenarios["deterioration"].conditions
+```
 
 ## `src/fmis/pipeline/` — application layer (Market Analysis Pipeline v1)
 
@@ -250,7 +287,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **543 tests** across 16 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **637 tests** across 17 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

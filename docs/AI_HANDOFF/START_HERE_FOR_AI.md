@@ -31,6 +31,16 @@ short-term trading are separate domains.
 - **Observation reduction:** `candle_series_to_observations(series, field, *, series_id=None)` +
   `CandleField` enum (`fmis.data`) — a pure, closed-candles-only bridge from a candle field to an
   `ObservationSeries`. The field is **required** (no default); pass a `CandleField`, never a raw string.
+- **Trading context (`fmis.trading_context`):** `TradingObjective` (SWING_TRADE, DAY_TRADE) and the
+  frozen `TradingAnalysisContext` (objective, primary/supporting timeframes, optional benchmark and
+  notes). Descriptive **only** — no behaviour, imports nothing from `fmis`, and nothing below imports it.
+  **Long-term investing is NOT a trading objective**: it becomes its own module with its own context and
+  interpretation. Never infer the objective from a timeframe, never add per-objective branching here, and
+  never add direction/entry/stop/target/size/risk fields. Rules in
+  [../adr/ADR-0009-trading-analysis-context-boundary.md](../adr/ADR-0009-trading-analysis-context-boundary.md).
+
+  > Shared calculations do not imply shared decision logic.
+
 - **Decision support (`fmis.decision_support`):** `build_evidence_report(snapshot)` — organises a
   snapshot into structured evidence. Consumes `AnalysisSnapshot` **only**; nothing below imports it.
   **Classifies, never calculates** (the sole derived value, `atr_percent_of_close`, is isolated in
@@ -89,7 +99,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 637 passing.
+- **Tests:** 688 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

@@ -61,6 +61,23 @@ short-term trading are separate domains.
   "support" or "liquidity". **Naming is not interpreting**: HIGHER_HIGH is not an uptrend and LOWER_LOW is
   not a short signal; BOS, CHoCH and trend are later milestones. Rules in
   [../adr/ADR-0014-structural-swing-label-foundation.md](../adr/ADR-0014-structural-swing-label-foundation.md).
+
+  `derive_structural_sequence_state` finally reads the **latest HIGH-side label beside the latest
+  LOW-side label**. `StructuralSequenceStateType` has exactly SHIFTED_HIGHER, SHIFTED_LOWER, EXPANDED,
+  CONTRACTED, UNCHANGED, INSUFFICIENT_STRUCTURE — five states partitioning all nine combinations plus one
+  for a missing side. **Never add a catch-all member** (MIXED/OTHER/UNKNOWN): the partition is already
+  complete, and a catch-all is where ambiguity hides. **Never fabricate a state from one side.** Both
+  source `StructuralSwing` objects stay on the result because the grouping is lossy — read
+  `latest_high.label` / `latest_low.label` rather than growing the enum.
+
+  > **The one exception to non-repainting in this package.** Swings, comparisons and labels are settled
+  > forever once emitted. The aggregate state is by design a statement about the *latest* pair and is
+  > **expected to change** when a newer swing is confirmed — a new fact, not a revision. Never describe
+  > the aggregate as non-repainting or cache it as permanent.
+
+  `SHIFTED_HIGHER` is not an uptrend, `CONTRACTED` is not consolidation, `EXPANDED` is not a breakout,
+  `UNCHANGED` is not a double top. Rules in
+  [../adr/ADR-0015-structural-sequence-state-foundation.md](../adr/ADR-0015-structural-sequence-state-foundation.md).
 - **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` (ten subject areas) and the frozen slotted
   `EvidenceDescriptor` (`family`, `name`, `description`), plus an immutable catalog. **A calculated
   indicator is not automatically evidence** — a descriptor exists only for a concept the system genuinely
@@ -140,7 +157,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 1458 passing.
+- **Tests:** 1773 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

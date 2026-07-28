@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (1458 tests) + fixtures
+├── tests/                  pytest suite (1773 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -100,9 +100,12 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   frozen/slotted/hashable `SwingComparison` (`previous`, `current`, `relation`); `swings.py` —
   `detect_swings`, `required_candles`, `DEFAULT_LEFT_BARS`/`DEFAULT_RIGHT_BARS`; `relationships.py` —
   `compare_swings` and `compare_swing_sequence`; `labels.py` — `label_swing` and
-  `label_swing_sequence`, plus `StructuralSwingLabel` and `StructuralSwing` in `models.py`. Contracts:
-  [ADR-0013](adr/ADR-0013-swing-relationship-foundation.md) (comparison),
-  [ADR-0014](adr/ADR-0014-structural-swing-label-foundation.md) (naming).
+  `label_swing_sequence`, plus `StructuralSwingLabel` and `StructuralSwing` in `models.py`;
+  `sequence_state.py` — `derive_structural_sequence_state`, plus `StructuralSequenceStateType` and the
+  frozen/slotted/hashable `StructuralSequenceState` (`latest_high`, `latest_low`, `state`) in
+  `models.py`. Contracts: [ADR-0013](adr/ADR-0013-swing-relationship-foundation.md) (comparison),
+  [ADR-0014](adr/ADR-0014-structural-swing-label-foundation.md) (naming),
+  [ADR-0015](adr/ADR-0015-structural-sequence-state-foundation.md) (sequence state).
 - **Allowed dependencies:** `fmis.data` (the canonical `CandleSeries`); standard library only.
 - **Forbidden dependencies:** `fmis.decision_support`, `fmis.evidence`, `fmis.providers`,
   `fmis.pipeline`, `fmis.features`, `fmis.trading_context`, and anything AI / execution / portfolio.
@@ -130,6 +133,23 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 - **Naming is not interpreting.** `HIGHER_HIGH` says a high's price is above the previous high and stops
   there — not uptrend, breakout, BOS, CHoCH, continuation or a reason to trade; `LOWER_LOW` is not a short
   signal. Those remain later milestones.
+- **Sequence-state rules (ADR-0015):** `derive_structural_sequence_state` selects the latest HIGH-side and
+  latest LOW-side `StructuralSwing` **independently** — they need not share a candle — and classifies the
+  pair by whether each side moved outward from its own previous swing, inward, or not at all. The five
+  complete states (`SHIFTED_HIGHER`, `SHIFTED_LOWER`, `EXPANDED`, `CONTRACTED`, `UNCHANGED`) partition all
+  nine combinations exactly, so there is **no catch-all member**; a missing side gives the single
+  `INSUFFICIENT_STRUCTURE` and never a fabricated one. The grouping is lossy on purpose, so both source
+  `StructuralSwing` objects are retained on the result. Outside bars resolve **atomically** to one final
+  state. Ordering is validated by the same shared `models._validate_current_point_order` the labelling
+  layer uses, so the two contracts cannot diverge.
+- **Two stability guarantees, not one.** Swing points, comparisons and labels are settled once emitted and
+  are never revised by later data. A `StructuralSequenceState` is a statement about the *latest* pair and
+  is **expected to be superseded** when a newer swing is confirmed on either side — a new fact about newer
+  data, not a revision. "Non-repainting" describes the former and **not** the aggregate state, and no
+  interface built on top may blur that.
+- **State is still not interpretation.** `SHIFTED_HIGHER` is not an uptrend, `CONTRACTED` is not
+  consolidation, `EXPANDED` is not a breakout, and `UNCHANGED` is not a double top, support or liquidity.
+  State history is deliberately postponed (ADR-0015 §11).
 - **Where structural *interpretation* belongs:** `fmis.features.market_structure` (Tier-2), which
   consumes these points and expresses a result as a `FeatureValue`. Detection is here because a tuple of
   `SwingPoint` objects is not a `FeatureValue`.
@@ -410,7 +430,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **1458 tests** across 23 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **1773 tests** across 24 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

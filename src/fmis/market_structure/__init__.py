@@ -5,6 +5,8 @@ Value types and pure functions in two layers:
     CandleSeries    -> detect_swings          -> tuple[SwingPoint, ...]
     SwingPoints     -> compare_swing_sequence -> tuple[SwingComparison, ...]
     SwingComparisons-> label_swing_sequence   -> tuple[StructuralSwing, ...]
+    StructuralSwings-> derive_structural_sequence_state
+                                              -> StructuralSequenceState
 
 `detect_swings` reports *where* a candle's high was a local maximum or its low a
 local minimum. `compare_swings` / `compare_swing_sequence` then report *how* each
@@ -29,6 +31,26 @@ so nothing is lost by naming the pair. Full names are canonical; `HH`/`LH`/`HL`
 are prose shorthand only, because `LH` and `HL` differ by one transposition and
 mean opposite things. `EQUAL_HIGH` and `EQUAL_LOW` stay first-class and are
 never folded away or renamed "double top", "support", or "liquidity".
+
+**The two sides are then read side by side, and still not interpreted.**
+`derive_structural_sequence_state` puts the latest HIGH-side label next to the
+latest LOW-side label and says how they stand together: both at higher prices,
+both lower, outward with nothing inward, inward with nothing outward, or neither
+moved. Five states partition the nine complete combinations exactly, so there is
+no catch-all member — and a sixth, `INSUFFICIENT_STRUCTURE`, covers a side that
+does not exist yet, because a two-sided statement is never invented from one
+side. `SHIFTED_HIGHER` is not an uptrend, `CONTRACTED` is not consolidation,
+`EXPANDED` is not a breakout, and `UNCHANGED` is not a double top. Both source
+`StructuralSwing` objects stay attached so the exact pair is never lost to the
+grouping. See ADR-0015.
+
+**Aggregate state evolves; confirmed facts do not.** A `SwingPoint`,
+`SwingComparison` and `StructuralSwing` are settled once emitted, and appending
+later data never revises one. A `StructuralSequenceState` is by design a
+statement about the *latest* pair, so a newer confirmed swing on either side
+supersedes it — a new fact about newer data, not a revision of an old one. Only
+the first guarantee is non-repainting in the strict sense, and this package does
+not claim the second.
 
 **Why this is a package and not a Feature.** `FeatureValue` covers floats,
 bools, strings, mappings and sequences of those; a tuple of `SwingPoint`
@@ -72,6 +94,10 @@ Rules for anything added here:
   * **One authoritative label mapping, kept private** (`models._label_for`),
     for the same reason the price rule is: a public `label_for(type, relation)`
     would name a pairing no validated comparison produced.
+  * **One authoritative state mapping, kept private** (`models._sequence_state_for`
+    over `models._STATE_BY_LABEL_PAIR`), for the same reason, and one shared
+    ordering rule (`models._validate_current_point_order`) so no consumer of an
+    ordered run grows a second, conflicting contract.
   * **Validate order, never repair it.** Unsorted input is a caller bug; sorting
     it silently would hide the bug and compare the wrong pairs.
   * **Imports only `fmis.data`.** Never `fmis.decision_support`,
@@ -83,6 +109,8 @@ from __future__ import annotations
 
 from fmis.market_structure.labels import label_swing, label_swing_sequence
 from fmis.market_structure.models import (
+    StructuralSequenceState,
+    StructuralSequenceStateType,
     StructuralSwing,
     StructuralSwingLabel,
     SwingComparison,
@@ -94,6 +122,7 @@ from fmis.market_structure.relationships import (
     compare_swing_sequence,
     compare_swings,
 )
+from fmis.market_structure.sequence_state import derive_structural_sequence_state
 from fmis.market_structure.swings import (
     DEFAULT_LEFT_BARS,
     DEFAULT_RIGHT_BARS,
@@ -108,11 +137,14 @@ __all__ = [
     "SwingComparison",
     "StructuralSwingLabel",
     "StructuralSwing",
+    "StructuralSequenceStateType",
+    "StructuralSequenceState",
     "detect_swings",
     "compare_swings",
     "compare_swing_sequence",
     "label_swing",
     "label_swing_sequence",
+    "derive_structural_sequence_state",
     "required_candles",
     "DEFAULT_LEFT_BARS",
     "DEFAULT_RIGHT_BARS",

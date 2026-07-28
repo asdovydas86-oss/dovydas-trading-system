@@ -96,7 +96,7 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 - **Purpose:** shared vocabulary for *what evidence is about*. Definitions only — no observation, no
   value, no behaviour. Contracts: [ADR-0011](adr/ADR-0011-evidence-taxonomy.md).
 - **Responsibilities today:** `families.py` — `EvidenceFamily` (TREND, MOMENTUM, VOLUME, VOLATILITY,
-  MARKET_STRUCTURE, RELATIVE_STRENGTH, LIQUIDITY, MACRO, NEWS, SENTIMENT); `descriptors.py` —
+  MARKET_STRUCTURE, RELATIVE_STRENGTH, LIQUIDITY, MACRO, NEWS, SENTIMENT); `descriptor.py` —
   the frozen, slotted `EvidenceDescriptor` (`family`, `name`, `description`); `catalog.py` — the
   immutable, canonically ordered catalog plus `descriptors()`, `descriptors_for()`, `find()`.
 - **Allowed dependencies:** **none from `fmis`** outside this package; standard library only.

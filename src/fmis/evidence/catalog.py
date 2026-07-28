@@ -32,7 +32,7 @@ is a deliberate design constraint verified by tests, not a runtime dependency.
 
 from __future__ import annotations
 
-from fmis.evidence.descriptors import EvidenceDescriptor
+from fmis.evidence.descriptor import EvidenceDescriptor
 from fmis.evidence.families import EvidenceFamily
 
 __all__ = ["descriptors", "descriptors_for", "find"]

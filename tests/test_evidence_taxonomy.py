@@ -9,10 +9,13 @@ concept is genuinely interpreted by the system today rather than aspirational.
 from __future__ import annotations
 
 import ast
+import importlib
+import pkgutil
 import re
 import sys
 from dataclasses import FrozenInstanceError, fields
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -465,10 +468,91 @@ def test_public_api_exports() -> None:
         assert hasattr(ev, name)
 
 
+def test_all_is_exact_and_ordered_as_declared() -> None:
+    assert ev.__all__ == [
+        "EvidenceFamily", "EvidenceDescriptor",
+        "descriptors", "descriptors_for", "find",
+    ]
+
+
+def test_star_import_exposes_exactly_the_public_api() -> None:
+    namespace: dict[str, object] = {}
+    exec("from fmis.evidence import *", namespace)  # noqa: S102
+    exposed = {k for k in namespace if not k.startswith("__")}
+    assert exposed == set(ev.__all__)
+
+
+# ============================ module namespace hygiene =======================
+#
+# The module holding `EvidenceDescriptor` is `descriptor` (singular) precisely so
+# it cannot collide with the public `descriptors()` function. When both were
+# named `descriptors`, the package attribute resolved to the function even after
+# `import fmis.evidence.descriptors`, so `fmis.evidence.descriptors.EvidenceDescriptor`
+# raised AttributeError while `from fmis.evidence.descriptors import ...` worked.
+
+
+def test_descriptors_attribute_is_the_public_function() -> None:
+    assert callable(ev.descriptors)
+    assert not isinstance(ev.descriptors, ModuleType)
+    assert ev.descriptors() == descriptors()
+
+
+def test_descriptor_attribute_is_the_submodule_after_explicit_import() -> None:
+    import fmis.evidence.descriptor  # noqa: PLC0415
+
+    assert isinstance(fmis.evidence.descriptor, ModuleType)
+    assert fmis.evidence.descriptor.__name__ == "fmis.evidence.descriptor"
+    assert fmis.evidence.descriptor.EvidenceDescriptor is EvidenceDescriptor
+
+
+def test_evidence_descriptor_identity_is_stable_across_imports() -> None:
+    from fmis.evidence import EvidenceDescriptor as from_package
+    from fmis.evidence.descriptor import EvidenceDescriptor as from_submodule
+    import fmis.evidence.descriptor as module  # noqa: PLC0415
+
+    assert from_package is from_submodule is module.EvidenceDescriptor
+
+
+def test_no_submodule_shares_a_name_with_a_public_object() -> None:
+    submodules = {m.name for m in pkgutil.iter_modules(ev.__path__)}
+    assert submodules == {"catalog", "descriptor", "families"}
+    assert submodules & set(ev.__all__) == set()
+
+
+def test_no_package_in_the_repository_has_such_a_collision() -> None:
+    """Regression guard for the whole tree, not just this package.
+
+    A submodule sharing a name with an exported object is shadowed at the package
+    attribute, silently and only for attribute access. Cheap to check everywhere.
+    """
+    collisions: dict[str, list[str]] = {}
+    for name in (
+        "fmis.data", "fmis.ingest", "fmis.providers", "fmis.features",
+        "fmis.features.indicators", "fmis.features.volume", "fmis.alignment",
+        "fmis.relative_value", "fmis.pipeline", "fmis.decision_support",
+        "fmis.trading_context", "fmis.evidence",
+    ):
+        module = importlib.import_module(name)
+        if not hasattr(module, "__path__"):
+            continue
+        submodules = {m.name for m in pkgutil.iter_modules(module.__path__)}
+        clash = sorted(submodules & set(getattr(module, "__all__", [])))
+        if clash:
+            collisions[name] = clash
+    assert collisions == {}
+
+
+def test_old_plural_module_path_is_gone_without_an_alias() -> None:
+    # The package has no released external API and nothing imported the module
+    # path, so no compatibility shim was added.
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("fmis.evidence.descriptors")
+
+
 def test_imports_nothing_outside_its_own_package() -> None:
     assert _internal_imports() <= {
         "fmis.evidence.catalog",
-        "fmis.evidence.descriptors",
+        "fmis.evidence.descriptor",
         "fmis.evidence.families",
     }
 
@@ -513,7 +597,7 @@ def test_importing_the_taxonomy_loads_nothing_else(fresh_fmis_imports: None) -> 
     loaded = {m for m in sys.modules if m.startswith("fmis.")}
     assert loaded <= {
         "fmis.evidence", "fmis.evidence.catalog",
-        "fmis.evidence.descriptors", "fmis.evidence.families",
+        "fmis.evidence.descriptor", "fmis.evidence.families",
     }
 
 

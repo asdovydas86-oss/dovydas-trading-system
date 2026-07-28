@@ -49,6 +49,7 @@ from fmis.features.indicators.ema import ExponentialMovingAverage
 from fmis.features.indicators.macd import MovingAverageConvergenceDivergence
 from fmis.features.indicators.rsi import RelativeStrengthIndex
 from fmis.features.types import Feature
+from fmis.features.volume.statistics import RelativeVolume
 from fmis.providers.binance import Transport, fetch_klines
 from fmis.relative_value import (
     RelativeValueResult,
@@ -176,14 +177,20 @@ class AnalysisSnapshot:
 
 
 def default_features() -> tuple[Feature, ...]:
-    """The default technical feature set — existing indicators, standard periods.
+    """The default technical feature set — existing features, standard periods.
 
-    EMA(20), EMA(50), RSI(14), ATR(14), and MACD(12, 26, 9): every Tier-1
-    indicator implemented today, at its conventional period. A fresh tuple is
-    returned per call so no feature instance is shared between analyses.
+    EMA(20), EMA(50), RSI(14), ATR(14), MACD(12, 26, 9), and RelativeVolume(20):
+    each at its conventional period. A fresh tuple is returned per call so no
+    feature instance is shared between analyses.
+
+    `RelativeVolume` is the only volume feature included by default, because its
+    metadata already reports both ``current_volume`` and ``average_volume`` — a
+    second default feature would restate numbers this one already carries.
+    `AverageVolume` is registerable on request, like `ExponentialMovingAverage`
+    at a non-default period.
 
     Pass an explicit ``features`` sequence to `analyze_symbol` to choose others;
-    adding a *new* indicator means adding it to `fmis.features`, never here.
+    adding a *new* feature means adding it to `fmis.features`, never here.
     """
     return (
         ExponentialMovingAverage(20),
@@ -191,6 +198,7 @@ def default_features() -> tuple[Feature, ...]:
         RelativeStrengthIndex(14),
         AverageTrueRange(14),
         MovingAverageConvergenceDivergence(),
+        RelativeVolume(20),
     )
 
 

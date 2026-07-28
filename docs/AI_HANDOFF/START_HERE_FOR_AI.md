@@ -91,7 +91,17 @@ short-term trading are separate domains.
   `FeatureContext`, `FeatureSet`, `Feature` protocol, `BaseFeature`.
 - **Tier-1 indicators:** EMA, ATR, RSI, MACD, plus shared kernels `sources.py` (OHLC vocabulary) and
   `ema_math.py` (EMA math).
-- **Tier-2 packages** (`trend`, `momentum`, `volatility`, `volume`, `market_structure`,
+- **Volume measurements (`fmis.features.volume`, Tier-2):** `AverageVolume` and `RelativeVolume`, sharing
+  one `trailing_mean` kernel. `relative_volume = current_volume / average_volume`, baseline = the
+  `lookback` candles **preceding** the latest one (excluded from its own comparison; warm-up
+  `lookback + 1`; default 20). Zero baseline -> `value=None` + `undefined_reason`, never infinity or an
+  epsilon. **Measurements only — never add a label or threshold here**; that is a later evidence
+  milestone. Rules in [../adr/ADR-0010-volume-foundation.md](../adr/ADR-0010-volume-foundation.md).
+
+  > Shared calculation does not mean identical interpretation: crypto, HKEX, Shanghai/Shenzhen, mining
+  > and large-cap AI names differ in session, auction, price-limit and venue structure.
+
+- **Other Tier-2 packages** (`trend`, `momentum`, `volatility`, `market_structure`,
   `support_resistance`, `pattern_detection`): **placeholders only — no calculation code.**
 - **Relative Value Engine (`fmis.relative_value`, v1a):** five scalar, fact-only metrics —
   `period_return`, `relative_return`, `realized_volatility`, `volatility_ratio`, `pearson_correlation` —
@@ -99,7 +109,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 688 passing.
+- **Tests:** 769 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

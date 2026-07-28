@@ -4,35 +4,38 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone U — Evidence Taxonomy v1 (2026-07-28).
-**Latest commit at time of writing:** `50e9a43` — `Merge Volume Foundation v1a`
-(the Milestone U commit is created by this milestone; update this line to its hash after commit).
+**Last updated for:** Milestone V — Market Structure Foundation v1 (2026-07-28).
+**Latest commit at time of writing:** `352bf45` — `Merge Evidence Module Namespace Hygiene Fix`
+(the Milestone V commit is created by this milestone; update this line to its hash after commit).
 
 ---
 
 ## Current milestone
 
-- **U — Evidence Taxonomy v1** (implementation): new `fmis.evidence` package — a shared vocabulary for
-  *what evidence is about*. `EvidenceFamily` (ten subject areas), the frozen slotted `EvidenceDescriptor`
-  (`family`, `name`, `description`), and an immutable canonically ordered catalog. Definitions only: no
-  observation, no value, no score, no behaviour. Contracts fixed in
-  [ADR-0011](../adr/ADR-0011-evidence-taxonomy.md).
+- **V — Market Structure Foundation v1** (implementation): new `fmis.market_structure` package with
+  `SwingType`, the frozen/slotted/hashable `SwingPoint`, and `detect_swings`. Contracts fixed in
+  [ADR-0012](../adr/ADR-0012-market-structure-foundation.md).
 
-  **The governing rule: a calculated indicator is not automatically evidence.** A descriptor exists only
-  for a concept the system genuinely *classifies* today. An architecture audit found exactly six —
-  TREND (`price_vs_ema_fast`, `price_vs_ema_slow`, `ema_fast_vs_ema_slow`) and MOMENTUM (`rsi_zone`,
-  `macd_vs_signal`, `macd_histogram`) — and **five families are deliberately empty**: volume and
-  volatility are measured but not classified, and the relative-value metrics are restated unchanged, so
-  no "relative-value alignment" exists to describe.
+  **Non-repainting by construction.** Closed candles only; a swing at index `i` depends solely on
+  `[i-left_bars, i+right_bars]`, all already closed when it is emitted, so later candles never revise it.
+  A property test detects on every prefix of random series and requires exact agreement with the full
+  run. In any finite snapshot the newest `right_bars` closed candles cannot yet be classified; they
+  become eligible once further candles close, so the confirmation frontier advances while confirmed
+  output stays stable. That delay *is* the mechanism, not a shortcoming.
 
-  **No combined evidence-type enum was created.** Supporting/conflicting is owned by `EvidenceGroups`,
-  neutral/unavailable by `Alignment`, insufficient-data by `OverallState` and feature metadata — three
-  existing owners across two different dimensions.
+  **Plateau policy:** strictly greater on the left, greater-or-equal on the right. A run of equal highs
+  yields exactly one point (its first bar); separated equal highs stay two distinct swings.
+  `SwingPoint.index` indexes `series.closed().candles`.
 
-  `decision_support` integration is **deferred**: neither package imports the other, both directions
-  test-enforced.
+  **Located facts only** — no BOS, CHoCH, HH/HL/LH/LL, trend, support/resistance, or liquidity, and no
+  direction, strength or confidence on the point. Swing points are **not** evidence in the ADR-0011
+  sense: nothing classifies them yet, so the MARKET_STRUCTURE evidence family stays empty.
 
-- **Previous:** T — Volume Foundation v1a (`fmis.features.volume`), merged into `main` via `50e9a43`.
+  `fmis.features.market_structure` no longer claims swing detection; it remains the home for structural
+  *features* that interpret these points, since a `SwingPoint` tuple is not a `FeatureValue`.
+
+- **Previous:** U — Evidence Taxonomy v1 (`fmis.evidence`), merged into `main` via `21a4bb0`, followed by
+  the namespace hygiene fix `352bf45`.
 
 ## Completed milestones
 
@@ -61,17 +64,20 @@ Reconstructed from git history (`git log --oneline`):
 | Decision Support Evidence v1 (R) | `8dcd551`, merged `b29d833` | `fmis.decision_support` — snapshot → structured `EvidenceReport`; see [ADR-0008](../adr/ADR-0008-decision-support-evidence-boundary.md) |
 | Trading Analysis Context v1 (S) | `0e0cd44`, merged `423ebaa` | `fmis.trading_context` — explicit trading objective + timeframes; see [ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) |
 | Volume Foundation v1a (T) | `6f9ecd9`, merged `50e9a43` | `fmis.features.volume` — average + relative volume measurements; see [ADR-0010](../adr/ADR-0010-volume-foundation.md) |
-| Evidence Taxonomy v1 (U) | _this commit_ | `fmis.evidence` — evidence families + descriptor catalog; see [ADR-0011](../adr/ADR-0011-evidence-taxonomy.md) |
+| Evidence Taxonomy v1 (U) | `96bad56`, merged `21a4bb0` | `fmis.evidence` — evidence families + descriptor catalog; see [ADR-0011](../adr/ADR-0011-evidence-taxonomy.md) |
+| Evidence namespace hygiene fix | `6e098cf`, merged `352bf45` | `descriptors.py` -> `descriptor.py`; no API or taxonomy change |
+| Market Structure Foundation v1 (V) | _this commit_ | `fmis.market_structure` — deterministic swing detection; see [ADR-0012](../adr/ADR-0012-market-structure-foundation.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**838 passing** (`uv run pytest`, ~0.32 s). Per module:
+**1040 passing** (`uv run pytest`, ~0.47 s). Per module:
 
 | Module | Tests |
 |---|---|
-| `tests/test_evidence_taxonomy.py` | 69 |
+| `tests/test_market_structure_swings.py` | 194 |
+| `tests/test_evidence_taxonomy.py` | 77 |
 | `tests/test_features_volume.py` | 81 |
 | `tests/test_decision_support_evidence.py` | 93 |
 | `tests/test_providers_binance.py` | 98 |
@@ -91,7 +97,7 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_trading_context.py` | 51 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **838** |
+| **Total** | **1040** |
 
 ## Implemented indicators (Tier-1)
 
@@ -117,6 +123,10 @@ R5 — relevant to future backtesting).
   **Long-term investing is not a trading objective** and gets its own future module. No
   objective-dependent branching, no timeframe inference or presets, no strategy/risk/direction fields
   ([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md)).
+- **Market structure (`fmis.market_structure`):** `detect_swings` — deterministic, non-repainting swing
+  highs and lows over closed candles. Strict-left / `>=`-right comparison; plateaus collapse to one
+  point, separated equal highs stay distinct; insufficient history returns `()`. Located facts only, no
+  structural interpretation ([ADR-0012](../adr/ADR-0012-market-structure-foundation.md)).
 - **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` + `EvidenceDescriptor` + an immutable
   catalog of the six concepts the system genuinely classifies today. Definitions only — no value, score,
   direction, or availability state; supporting/conflicting and availability are **not** redefined.
@@ -188,6 +198,10 @@ src/fmis/
 ├── alignment/
 │   ├── __init__.py                 policy-layer surface (re-exports intersection)
 │   └── intersection.py             align_intersection, AlignmentResult/Report, SeriesAlignmentStats
+├── market_structure/
+│   ├── __init__.py                 package rules + public surface
+│   ├── models.py                   SwingType, SwingPoint
+│   └── swings.py                   detect_swings, required_candles
 ├── evidence/
 │   ├── __init__.py                 taxonomy rules + public surface
 │   ├── families.py                 EvidenceFamily
@@ -253,21 +267,22 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-Not yet chosen. Natural follow-ons:
+Not yet chosen. Swing points unlock a cluster of structural work, each its own decision:
 
-- **Evidence taxonomy integration** — decide how a `decision_support.Observation` refers to an
-  `EvidenceDescriptor`. Deliberately deferred from Milestone U; it is a real design question
-  ([ADR-0011](../adr/ADR-0011-evidence-taxonomy.md) §8).
-- **Volume Evidence v1b** — classify relative volume, which would earn the VOLUME family its first
-  descriptor. The hard part remains that a ratio means different things per market
-  ([ADR-0010](../adr/ADR-0010-volume-foundation.md) §6).
-- **Trading reasoning v1** — the first consumer of `TradingAnalysisContext`, taking it with an
-  `EvidenceReport`.
-- **A thin CLI / entry point** (§2.9(8)) — still the last structural gap.
+- **Swing relationships (HH / HL / LH / LL)** — the first *comparison between* swings, and the natural
+  next step. It belongs in `fmis.features.market_structure` if it can be expressed as a `FeatureValue`.
+- **Break of structure / change of character** — depends on the above, and needs an explicit definition
+  of what counts as a break before any code.
+- **Support / resistance candidates** — `fmis.features.support_resistance` already names swing points as
+  its input.
+- **Volume Evidence v1b** — still the deferred half of Milestone T.
+- **Trading reasoning v1** — first consumer of `TradingAnalysisContext`.
 
-**Known follow-ups from Milestone U** (each small, none blocking): nothing consumes the taxonomy yet;
-`EvidenceFamily` overlaps `FeatureCategory` on five names by design (different axes — see
-[ADR-0011](../adr/ADR-0011-evidence-taxonomy.md) §2) and both must be kept distinct.
+**Known follow-ups from Milestone V** (each small, none blocking): `SwingPoint.index` is meaningful only
+alongside the closed series it came from; the newest `right_bars` closed candles are permanently
+not yet classifiable and become eligible as further candles close, which any display must state rather
+than hide; detection is `O(n·(left+right))` with no
+caching, irrelevant at current series lengths.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting

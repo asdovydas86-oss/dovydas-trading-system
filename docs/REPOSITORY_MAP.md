@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (838 tests) + fixtures
+├── tests/                  pytest suite (1040 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -90,6 +90,29 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 > **Shared calculations do not imply shared decision logic.** The deterministic engines are
 > objective-agnostic and reused by everything; what their numbers *mean* stays module-specific.
+
+## `src/fmis/market_structure/` — market structure primitives
+
+- **Purpose:** deterministic swing detection — *located facts* about where local extremes occurred.
+  Contracts: [ADR-0012](adr/ADR-0012-market-structure-foundation.md).
+- **Responsibilities today:** `models.py` — `SwingType` (HIGH/LOW) and the frozen, slotted, hashable
+  `SwingPoint` (`index`, `timestamp`, `price`, `type`); `swings.py` — `detect_swings`,
+  `required_candles`, and the `DEFAULT_LEFT_BARS`/`DEFAULT_RIGHT_BARS` defaults.
+- **Allowed dependencies:** `fmis.data` (the canonical `CandleSeries`); standard library only.
+- **Forbidden dependencies:** `fmis.decision_support`, `fmis.evidence`, `fmis.providers`,
+  `fmis.pipeline`, `fmis.features`, `fmis.trading_context`, and anything AI / execution / portfolio.
+  Nothing below imports this package.
+- **Hard rules:** **closed candles only**; never inspect a candle outside `[i-left, i+right]`; a point,
+  once emitted, is never revised by later data (asserted by a prefix property test over random series).
+  Comparison is **strictly greater on the left, greater-or-equal on the right**, so a plateau yields
+  exactly one point (the first bar) while separated equal highs stay two distinct swings. Insufficient
+  history returns `()`, not an error. **No interpretation** — no BOS, CHoCH, HH/HL/LH/LL, trend, support,
+  resistance, or liquidity, and `SwingPoint` carries no direction, strength, or confidence.
+- **Index semantics:** `SwingPoint.index` is a position in `series.closed().candles`, never in the raw
+  series.
+- **Where structural *interpretation* belongs:** `fmis.features.market_structure` (Tier-2), which
+  consumes these points and expresses a result as a `FeatureValue`. Detection is here because a tuple of
+  `SwingPoint` objects is not a `FeatureValue`.
 
 ## `src/fmis/evidence/` — evidence taxonomy
 
@@ -367,7 +390,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **838 tests** across 20 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **1040 tests** across 21 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

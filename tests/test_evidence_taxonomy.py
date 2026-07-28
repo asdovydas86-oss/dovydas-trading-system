@@ -530,7 +530,7 @@ def test_no_package_in_the_repository_has_such_a_collision() -> None:
         "fmis.data", "fmis.ingest", "fmis.providers", "fmis.features",
         "fmis.features.indicators", "fmis.features.volume", "fmis.alignment",
         "fmis.relative_value", "fmis.pipeline", "fmis.decision_support",
-        "fmis.trading_context", "fmis.evidence",
+        "fmis.trading_context", "fmis.evidence", "fmis.market_structure",
     ):
         module = importlib.import_module(name)
         if not hasattr(module, "__path__"):

@@ -578,9 +578,12 @@ def test_no_structure_interpretation_vocabulary_in_code() -> None:
         "liquidity", "breakout", "bullish", "bearish", "buy", "sell", "signal",
         "strength", "confidence", "score",
         "hh", "hl", "lh", "ll", "higherhigh", "lowerlow",
-        "higher_high", "higher_low", "lower_high", "lower_low",
     )
-    for py in sorted(PACKAGE_DIR.glob("*.py")):
+    # Composite names became legitimate in the naming layer with ADR-0014, so
+    # this scan covers detection and comparison only. Abbreviations stay banned
+    # everywhere, and test_composite_names_appear_only_in_the_naming_layer in
+    # the relationship tests keeps composites out of these two modules.
+    for py in (PACKAGE_DIR / "swings.py", PACKAGE_DIR / "relationships.py"):
         tree = ast.parse(py.read_text())
         docstrings = {
             d for node in ast.walk(tree)
@@ -603,7 +606,9 @@ def test_no_structure_interpretation_vocabulary_in_code() -> None:
 def test_public_api_is_exactly_the_declared_surface() -> None:
     assert set(ms.__all__) == {
         "SwingType", "SwingPoint", "SwingRelation", "SwingComparison",
+        "StructuralSwingLabel", "StructuralSwing",
         "detect_swings", "compare_swings", "compare_swing_sequence",
+        "label_swing", "label_swing_sequence",
         "required_candles", "DEFAULT_LEFT_BARS", "DEFAULT_RIGHT_BARS",
     }
     for name in ms.__all__:
@@ -630,6 +635,7 @@ def _internal_imports() -> set[str]:
 def test_imports_only_the_canonical_data_models() -> None:
     assert _internal_imports() <= {
         "fmis.data",
+        "fmis.market_structure.labels",
         "fmis.market_structure.models",
         "fmis.market_structure.relationships",
         "fmis.market_structure.swings",

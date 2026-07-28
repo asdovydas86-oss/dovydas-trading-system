@@ -4,30 +4,34 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone R — Decision Support Evidence v1 (2026-07-28).
-**Latest commit at time of writing:** `fb57d62` — merge of `feat/market-analysis-pipeline-v1` into
-`main` (the Milestone R commit is created by this milestone; update this line to its hash after commit).
+**Last updated for:** Milestone S — Trading Analysis Context v1 (2026-07-28).
+**Latest commit at time of writing:** `b29d833` — merge of `feat/decision-support-evidence-v1` into
+`main` (the Milestone S commit is created by this milestone; update this line to its hash after commit).
 
 ---
 
 ## Current milestone
 
-- **R — Decision Support Evidence v1** (implementation): new `fmis.decision_support` package, sitting
-  above `fmis.pipeline` and consuming an `AnalysisSnapshot` only. `build_evidence_report(snapshot)`
-  returns an immutable `EvidenceReport`: market context, trend/momentum/volatility evidence as explicit
-  classifications, restated RVE results, supporting/conflicting/unavailable grouping, mechanical scenario
-  conditions, and an undirectional `OverallState` (WATCH / WAIT / INSUFFICIENT_DATA).
-  **Classification, not calculation** — the only derived number is `atr_percent_of_close`, isolated in
-  `derived.py` and enforced by an AST test. Contracts fixed in
-  [ADR-0008](../adr/ADR-0008-decision-support-evidence-boundary.md).
+- **S — Trading Analysis Context v1** (implementation): new `fmis.trading_context` package holding
+  `TradingObjective` (`SWING_TRADE`, `DAY_TRADE`) and the frozen `TradingAnalysisContext`. Descriptive
+  value objects with **no behaviour**, so a future trading reasoning layer receives its objective
+  explicitly rather than inferring it. Imports nothing from `fmis`; nothing below imports it. Contracts
+  fixed in [ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md).
 
-  Two rules encode the discipline structurally: an RSI band is `NOT_DIRECTIONAL` (so "oversold" can never
-  become evidence by itself), and an alignment tie stays a tie rather than being resolved arbitrarily.
+  **Architectural correction recorded here:** long-term investing is **not** a trading objective and has
+  no enum member. It rests on thesis, fundamentals, valuation, catalysts and portfolio construction, and
+  becomes its own application module with its own context and interpretation. Adding the member would be
+  a one-word change that silently commits every future trading rule to investment decisions.
 
-  Prerequisite change: `DataWindow` gained `last_close`, without which price-relative evidence was not
-  expressible from a snapshot.
+  The boundary this establishes: **shared calculations do not imply shared decision logic.** The
+  deterministic engines are objective-agnostic and reused by everything; what their numbers *mean* stays
+  module-specific.
 
-- **Previous:** Q — Market Analysis Pipeline v1 (`fmis.pipeline`), merged into `main` via `fb57d62`.
+  Deliberately **not** integrated with the pipeline — nothing there would read it, and a stored-but-unread
+  field invites being mistaken for meaning ([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) §9).
+
+- **Previous:** R — Decision Support Evidence v1 (`fmis.decision_support`), merged into `main` via
+  `b29d833` after a twelve-point review.
 
 ## Completed milestones
 
@@ -53,13 +57,14 @@ Reconstructed from git history (`git log --oneline`):
 | Ingestion boundary (O) | `b2ab82a`, merged `37f0dea` | `fmis.ingest` — strict record → canonical decoding; see [ADR-0005](../adr/ADR-0005-ingestion-boundary-strictness.md) |
 | Binance adapter (P) | `4f7017c`, merged `26f4c0f` | `fmis.providers.binance` — public klines → canonical series; see [ADR-0006](../adr/ADR-0006-provider-adapter-contract.md) |
 | Market Analysis Pipeline v1 (Q) | `742e832` + `bfb4edf`, merged `fb57d62` | `fmis.pipeline` — end-to-end orchestration → `AnalysisSnapshot`; see [ADR-0007](../adr/ADR-0007-application-layer-boundary.md) |
-| Decision Support Evidence v1 (R) | _this commit_ | `fmis.decision_support` — snapshot → structured `EvidenceReport`; see [ADR-0008](../adr/ADR-0008-decision-support-evidence-boundary.md) |
+| Decision Support Evidence v1 (R) | `8dcd551`, merged `b29d833` | `fmis.decision_support` — snapshot → structured `EvidenceReport`; see [ADR-0008](../adr/ADR-0008-decision-support-evidence-boundary.md) |
+| Trading Analysis Context v1 (S) | _this commit_ | `fmis.trading_context` — explicit trading objective + timeframes; see [ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**637 passing** (`uv run pytest`, ~0.23 s). Per module:
+**688 passing** (`uv run pytest`, ~0.25 s). Per module:
 
 | Module | Tests |
 |---|---|
@@ -79,8 +84,9 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_atr.py` | 15 |
 | `tests/test_features_architecture.py` | 19 |
 | `tests/test_ema_math.py` | 5 |
+| `tests/test_trading_context.py` | 51 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **637** |
+| **Total** | **688** |
 
 ## Implemented indicators (Tier-1)
 
@@ -101,6 +107,11 @@ R5 — relevant to future backtesting).
   *canonical series alignment* (multi-series, strict intersection), **now connected** by the
   `candle_series_to_observations` reduction (a candle field → `ObservationSeries`).
 - **Canonical models:** `Candle`, `CandleSeries`, `ObservationSeries` (`src/fmis/data/`).
+- **Trading context (`fmis.trading_context`):** `TradingObjective` (SWING_TRADE, DAY_TRADE) +
+  `TradingAnalysisContext` — descriptive value objects, no behaviour, importing nothing from `fmis`.
+  **Long-term investing is not a trading objective** and gets its own future module. No
+  objective-dependent branching, no timeframe inference or presets, no strategy/risk/direction fields
+  ([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md)).
 - **Decision support (`fmis.decision_support`):** `build_evidence_report` — turns a snapshot into
   structured evidence: explicit classifications, supporting/conflicting/unavailable grouping, mechanical
   scenario conditions, and an undirectional `OverallState`. Consumes snapshots only; classifies rather
@@ -144,7 +155,8 @@ R5 — relevant to future backtesting).
   (never anything downstream, and never the private `_timeutils`); `fmis.providers` imports only
   `fmis.ingest` + `fmis.data` and never constructs `Candle` directly; `fmis.pipeline` sits on top and
   **no engine imports it**; `fmis.decision_support` sits above the pipeline and **nothing below imports
-  it**, the pipeline included (both test-enforced); shared kernels (`sources.py`,
+  it**, the pipeline included; `fmis.trading_context` is a leaf importing nothing from `fmis`, and no
+  lower or sibling layer references it (all test-enforced); shared kernels (`sources.py`,
   `ema_math.py`, `_timeutils.py`) import nothing internal.
 - **Zero runtime dependencies.**
 
@@ -161,6 +173,9 @@ src/fmis/
 ├── alignment/
 │   ├── __init__.py                 policy-layer surface (re-exports intersection)
 │   └── intersection.py             align_intersection, AlignmentResult/Report, SeriesAlignmentStats
+├── trading_context/
+│   ├── __init__.py                 layer rules + public surface
+│   └── context.py                  TradingObjective, TradingAnalysisContext
 ├── decision_support/
 │   ├── __init__.py                 layer rules + public surface
 │   ├── classification.py           classify_comparison/rsi_zone/sign, Alignment
@@ -215,20 +230,21 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-Not yet chosen. With facts now organised into evidence, the strongest candidates are:
+Not yet chosen. With the trading objective now explicit, the strongest candidates are:
 
-- **A thin CLI / entry point** (§2.9(8)) — still the last structural gap. `EvidenceReport` is a stable,
-  printable shape, so a renderer can sit on top of it without freezing anything immature.
-- **AI interpretation layer** — the evidence report was built to be its input. It belongs in its own
-  package above `fmis.decision_support`, and needs its own decision record covering determinism
-  boundaries, prompt provenance, and how a non-deterministic output is marked as such.
-- **Milestone M** — first Tier-2 composite feature; it would flow into a snapshot, and then into an
-  evidence report, with no change to either layer.
+- **Trading reasoning v1** — the first consumer of `TradingAnalysisContext`, taking it together with an
+  `EvidenceReport`. It is where per-objective interpretation legitimately lives, and it needs its own
+  decision record before any rule is written.
+- **A thin CLI / entry point** (§2.9(8)) — still the last structural gap.
+- **Long-term investing module** — its own package, context, and ADR, reusing the shared deterministic
+  engines and none of the trading interpretation ([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) §3).
+- **Milestone M** — first Tier-2 composite feature; flows through snapshot and evidence unchanged.
 
-**Known follow-ups from Milestone R** (each small, none blocking): the report is bound to the
-`default_features()` names, so a snapshot built from a different feature selection yields `UNAVAILABLE`
-observations; RSI bands and the three-observation floor are constants rather than configuration
-(deliberate — see [ADR-0008](../adr/ADR-0008-decision-support-evidence-boundary.md)).
+**Known follow-ups from Milestone S** (each small, none blocking): `TradingAnalysisContext` has no
+consumer yet, so it gets its first real exercise when trading reasoning lands and may need additive
+fields then; timeframes are `str` pending a canonical timeframe type
+([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) §8); `notes` is deliberately
+unstructured free text.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting

@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (637 tests) + fixtures
+├── tests/                  pytest suite (688 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -65,6 +65,31 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   (see below and [ADR-0002](adr/ADR-0002-alignment-as-temporal-comparison-policy-layer.md)), and
   `fmis.data` deliberately does **not** re-export it — this keeps the package a pure canonical kernel and
   stops downstream layers importing alignment transitively.
+
+## `src/fmis/trading_context/` — trading analysis context
+
+- **Purpose:** record what a *trading* analysis is scoped to — its objective and timeframes — so a future
+  trading reasoning layer receives that explicitly instead of inferring it. Descriptive value objects
+  with **no behaviour**. Contracts: [ADR-0009](adr/ADR-0009-trading-analysis-context-boundary.md).
+- **Responsibilities today:** `context.py` — `TradingObjective` (`SWING_TRADE`, `DAY_TRADE`) and the
+  frozen `TradingAnalysisContext` (`objective`, `primary_timeframe`, `supporting_timeframes`,
+  `benchmark_symbol`, `notes`).
+- **Allowed dependencies:** **none from `fmis`** — standard library only. This is a leaf that higher
+  layers depend on; the direction never reverses, and a test asserts no lower or sibling layer references
+  it.
+- **Forbidden dependencies:** every other `fmis` package, plus network, AI, persistence, execution,
+  portfolio, and future investment modules.
+- **Hard rules:** **long-term investing is not a trading objective** and has no enum member — it becomes
+  its own module with its own context. No objective-dependent branching anywhere (test-enforced: no enum
+  member is referenced outside its own definition). The objective is never inferred from a timeframe, and
+  no timeframe is selected, defaulted, reordered, or recommended. No direction/entry/stop/target/size/
+  leverage/risk/confidence/strategy fields — the field list is pinned by test. Timeframes are `str`
+  because no canonical timeframe type exists (ADR-0006 §6); their syntax is deliberately unvalidated.
+- **Not integrated with the pipeline**, deliberately: nothing there would read it, and a stored-but-unread
+  field invites being mistaken for meaning. See [ADR-0009](adr/ADR-0009-trading-analysis-context-boundary.md) §9.
+
+> **Shared calculations do not imply shared decision logic.** The deterministic engines are
+> objective-agnostic and reused by everything; what their numbers *mean* stays module-specific.
 
 ## `src/fmis/decision_support/` — Decision Support Evidence v1
 
@@ -287,7 +312,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **637 tests** across 17 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **688 tests** across 18 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

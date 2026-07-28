@@ -49,7 +49,7 @@ any type here. No calculation, no classification, no counting, no hypothesis.
 from __future__ import annotations
 
 from fmis.evidence.catalog import descriptors, descriptors_for, find
-from fmis.evidence.descriptors import EvidenceDescriptor
+from fmis.evidence.descriptor import EvidenceDescriptor
 from fmis.evidence.families import EvidenceFamily
 
 __all__ = [

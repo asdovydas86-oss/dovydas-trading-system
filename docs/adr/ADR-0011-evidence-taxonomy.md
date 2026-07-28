@@ -149,3 +149,23 @@ now would freeze that answer before the vocabulary has settled and before anythi
   here and asserted by a test, but a future reader must understand both are intentional.
 - Nothing consumes the taxonomy yet. That is expected for a vocabulary introduced ahead of its consumer,
   and it may need additive families or descriptors when a reasoning layer first uses it.
+
+---
+
+## Correction (2026-07-28) — descriptor module renamed
+
+`src/fmis/evidence/descriptors.py` was renamed to `descriptor.py` (singular). The plural module name
+collided with the public `descriptors()` function: because `__init__.py` binds the function after the
+submodule, `fmis.evidence.descriptors` resolved to the **function** even after
+`import fmis.evidence.descriptors`, so `fmis.evidence.descriptors.EvidenceDescriptor` raised
+`AttributeError` while `from fmis.evidence.descriptors import EvidenceDescriptor` worked. Singular also
+reads better: the module defines exactly one type.
+
+**Nothing else changed.** The public `descriptors()` function keeps its name, `__all__` is unchanged
+(`EvidenceFamily`, `EvidenceDescriptor`, `descriptors`, `descriptors_for`, `find`), and no taxonomy
+semantics moved: the six descriptors, their families, descriptions, canonical ordering, and `find()`
+behaviour are byte-identical before and after, verified by diffing a captured snapshot.
+
+No compatibility alias for the old module path was added — the package has no released external API and
+nothing imported that path. A test now asserts no submodule in **any** `fmis` package shares a name with
+one of its exported objects, so this class of shadowing cannot return unnoticed.

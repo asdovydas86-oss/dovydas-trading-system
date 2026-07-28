@@ -191,7 +191,7 @@ src/fmis/
 ├── evidence/
 │   ├── __init__.py                 taxonomy rules + public surface
 │   ├── families.py                 EvidenceFamily
-│   ├── descriptors.py              EvidenceDescriptor
+│   ├── descriptor.py               EvidenceDescriptor
 │   └── catalog.py                  descriptors(), descriptors_for(), find()
 ├── trading_context/
 │   ├── __init__.py                 layer rules + public surface

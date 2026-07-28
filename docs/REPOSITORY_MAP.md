@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (688 tests) + fixtures
+├── tests/                  pytest suite (769 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -260,7 +260,7 @@ cmp.relative_value.alignment.aligned_observation_count
   - `registry.py` — `FeatureRegistry` (name → feature; duplicate names raise).
   - `feature_engine/` — see below.
   - `indicators/` — see below.
-  - `trend/`, `momentum/`, `volatility/`, `volume/`, `market_structure/`, `support_resistance/`,
+  - `trend/`, `momentum/`, `volatility/`, `market_structure/`, `support_resistance/`,
     `pattern_detection/` — **placeholder packages** (docstring + planned-features `TODO` list +
     `__all__ = []`; **no calculation code**). These are the intended homes for the **Planned** Tier-2
     Composite Feature Layer.
@@ -277,6 +277,32 @@ cmp.relative_value.alignment.aligned_observation_count
   - Non-technical domains (macro, news, on-chain, derivatives, sentiment) — `FeatureCategory` is
     technical-only and enforced by a test.
   - AI interpretation of any kind.
+
+## `src/fmis/features/volume/` — Tier-2 volume measurements
+
+- **Purpose:** deterministic volume **measurements** — the first Tier-2 category with calculation code.
+  Contracts: [ADR-0010](adr/ADR-0010-volume-foundation.md).
+- **Responsibilities today (v1a):** `volume_math.py` — `trailing_mean` / `required_values`, the **single
+  source of truth** for the baseline window; `statistics.py` — `AverageVolume` and `RelativeVolume`
+  features (`FeatureCategory.VOLUME`).
+- **Window convention:** the baseline is the `lookback` candles **preceding** the latest closed one, which
+  is excluded from its own comparison; warm-up is `lookback + 1`. Default lookback 20.
+- **Allowed dependencies:** `fmis.features.types` and its own kernel; standard library. The kernel imports
+  nothing internal at all.
+- **Forbidden dependencies:** `fmis.pipeline`, `fmis.decision_support`, `fmis.providers`, `fmis.ingest`,
+  `fmis.alignment`, `fmis.relative_value`, `fmis.trading_context`; anything provider- or market-specific.
+- **Hard rules:** **measurements, not conclusions** — no label, threshold, direction, or judgement
+  (test-enforced, including a scan for threshold constants). A zero baseline is reported as undefined,
+  never as infinity and never with an epsilon. Volume validity is inherited from `Candle`, never
+  re-validated. No other package may re-derive the baseline or the ratio (test-enforced across all seven
+  lower/sibling packages, with a rename guard).
+- **Where a new volume metric belongs:** a sibling of `statistics.py`, reusing `trailing_mean`. VWAP, OBV,
+  accumulation/distribution, money-flow and volume profile are each their own future milestone.
+
+> **Shared calculation does not mean identical interpretation.** The same relative-volume arithmetic
+> serves crypto, HKEX, Shanghai/Shenzhen, mining equities and large-cap AI names — venues whose session
+> structure, auction mechanics, price limits and venue fragmentation make the same number mean different
+> things. The core measures; market-aware reasoning interprets.
 
 ## `src/fmis/features/feature_engine/`
 
@@ -312,7 +338,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **688 tests** across 18 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **769 tests** across 19 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

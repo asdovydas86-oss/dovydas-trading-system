@@ -4,34 +4,33 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone S — Trading Analysis Context v1 (2026-07-28).
-**Latest commit at time of writing:** `b29d833` — merge of `feat/decision-support-evidence-v1` into
-`main` (the Milestone S commit is created by this milestone; update this line to its hash after commit).
+**Last updated for:** Milestone T — Volume Foundation v1a (2026-07-28).
+**Latest commit at time of writing:** `423ebaa` — `Merge Trading Analysis Context v1`
+(the Milestone T commit is created by this milestone; update this line to its hash after commit).
 
 ---
 
 ## Current milestone
 
-- **S — Trading Analysis Context v1** (implementation): new `fmis.trading_context` package holding
-  `TradingObjective` (`SWING_TRADE`, `DAY_TRADE`) and the frozen `TradingAnalysisContext`. Descriptive
-  value objects with **no behaviour**, so a future trading reasoning layer receives its objective
-  explicitly rather than inferring it. Imports nothing from `fmis`; nothing below imports it. Contracts
-  fixed in [ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md).
+- **T — Volume Foundation v1a** (implementation): first Tier-2 category with calculation code.
+  `fmis.features.volume` adds `AverageVolume` and `RelativeVolume` as ordinary features in the existing
+  engine, sharing one `trailing_mean` kernel — the single source of truth for the baseline. Contracts
+  fixed in [ADR-0010](../adr/ADR-0010-volume-foundation.md).
 
-  **Architectural correction recorded here:** long-term investing is **not** a trading objective and has
-  no enum member. It rests on thesis, fundamentals, valuation, catalysts and portfolio construction, and
-  becomes its own application module with its own context and interpretation. Adding the member would be
-  a one-word change that silently commits every future trading rule to investment decisions.
+  **Window convention:** the baseline is the `lookback` candles *preceding* the latest closed one, which
+  is excluded from its own comparison; warm-up is `lookback + 1`. Including it would let a spike dilute
+  its own denominator — at lookback 20 a 20× candle would report ~10.5×.
 
-  The boundary this establishes: **shared calculations do not imply shared decision logic.** The
-  deterministic engines are objective-agnostic and reused by everything; what their numbers *mean* stays
-  module-specific.
+  **Zero baseline is undefined**, never infinity and never epsilon: `value=None` with
+  `undefined_reason="zero_average_volume"`, distinguishable from warm-up. A halt or a thin session
+  genuinely produces it.
 
-  Deliberately **not** integrated with the pipeline — nothing there would read it, and a stored-but-unread
-  field invites being mistaken for meaning ([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) §9).
+  **Measurements, not conclusions** — no labels, no thresholds. Classifying the ratio is a later Volume
+  Evidence v1b milestone; `EvidenceReport` is untouched. Pipeline integration is one feature added to
+  `default_features()`, with no volume-specific branching.
 
-- **Previous:** R — Decision Support Evidence v1 (`fmis.decision_support`), merged into `main` via
-  `b29d833` after a twelve-point review.
+- **Previous:** S — Trading Analysis Context v1 (`fmis.trading_context`), merged into `main` via
+  `423ebaa`.
 
 ## Completed milestones
 
@@ -58,16 +57,18 @@ Reconstructed from git history (`git log --oneline`):
 | Binance adapter (P) | `4f7017c`, merged `26f4c0f` | `fmis.providers.binance` — public klines → canonical series; see [ADR-0006](../adr/ADR-0006-provider-adapter-contract.md) |
 | Market Analysis Pipeline v1 (Q) | `742e832` + `bfb4edf`, merged `fb57d62` | `fmis.pipeline` — end-to-end orchestration → `AnalysisSnapshot`; see [ADR-0007](../adr/ADR-0007-application-layer-boundary.md) |
 | Decision Support Evidence v1 (R) | `8dcd551`, merged `b29d833` | `fmis.decision_support` — snapshot → structured `EvidenceReport`; see [ADR-0008](../adr/ADR-0008-decision-support-evidence-boundary.md) |
-| Trading Analysis Context v1 (S) | _this commit_ | `fmis.trading_context` — explicit trading objective + timeframes; see [ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) |
+| Trading Analysis Context v1 (S) | `0e0cd44`, merged `423ebaa` | `fmis.trading_context` — explicit trading objective + timeframes; see [ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) |
+| Volume Foundation v1a (T) | _this commit_ | `fmis.features.volume` — average + relative volume measurements; see [ADR-0010](../adr/ADR-0010-volume-foundation.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**688 passing** (`uv run pytest`, ~0.25 s). Per module:
+**769 passing** (`uv run pytest`, ~0.30 s). Per module:
 
 | Module | Tests |
 |---|---|
+| `tests/test_features_volume.py` | 81 |
 | `tests/test_decision_support_evidence.py` | 93 |
 | `tests/test_providers_binance.py` | 98 |
 | `tests/test_pipeline_market_analysis.py` | 52 |
@@ -86,7 +87,7 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_trading_context.py` | 51 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **688** |
+| **Total** | **769** |
 
 ## Implemented indicators (Tier-1)
 
@@ -146,6 +147,11 @@ R5 — relevant to future backtesting).
   (`status` OK/UNDEFINED + `reason` + immutable provenance metadata). Consumes `ObservationSeries` only;
   requires inputs already aligned (never aligns itself). Contracts:
   [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
+- **Volume measurements (`fmis.features.volume`, v1a):** `AverageVolume` and `RelativeVolume` —
+  `relative_volume = current_volume / average_volume`, where the baseline is the `lookback` candles
+  **preceding** the latest one (warm-up `lookback + 1`, default lookback 20). Zero baseline is undefined,
+  never infinity. Measurements only — no labels or thresholds. **Shared calculation does not mean
+  identical interpretation across markets** ([ADR-0010](../adr/ADR-0010-volume-foundation.md)).
 - **Feature Engine:** `FeatureEngine` orchestration; registry-based discovery; topological dependency
   ordering; closed-candle enforcement; immutable `FeatureResult`/`FeatureSet`.
 - **Dependency graph:** clean, acyclic, one-directional; `fmis.data` imports nothing from outside
@@ -209,9 +215,12 @@ src/fmis/
 
 ## Placeholder modules (no calculation code)
 
-Under `src/fmis/features/`: `trend/`, `momentum/`, `volatility/`, `volume/`, `market_structure/`,
+Under `src/fmis/features/`: `trend/`, `momentum/`, `volatility/`, `market_structure/`,
 `support_resistance/`, `pattern_detection/` — each is a docstring + planned-features `TODO` list +
 `__all__ = []`. These are the intended homes for the **Planned** Composite Feature Layer.
+
+`volume/` is **no longer a placeholder**: it holds the deterministic volume measurements added in
+Milestone T ([ADR-0010](../adr/ADR-0010-volume-foundation.md)).
 
 ## Known open items from the architecture review
 
@@ -230,21 +239,22 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-Not yet chosen. With the trading objective now explicit, the strongest candidates are:
+Not yet chosen. Natural follow-ons:
 
+- **Volume Evidence v1b** — classify relative volume in `fmis.decision_support`. It is the deliberately
+  deferred half of Milestone T, and the hard part is that a given ratio means different things per market
+  ([ADR-0010](../adr/ADR-0010-volume-foundation.md) §6), so it may need market awareness the system does
+  not yet have.
 - **Trading reasoning v1** — the first consumer of `TradingAnalysisContext`, taking it together with an
-  `EvidenceReport`. It is where per-objective interpretation legitimately lives, and it needs its own
-  decision record before any rule is written.
+  `EvidenceReport`.
 - **A thin CLI / entry point** (§2.9(8)) — still the last structural gap.
-- **Long-term investing module** — its own package, context, and ADR, reusing the shared deterministic
-  engines and none of the trading interpretation ([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) §3).
-- **Milestone M** — first Tier-2 composite feature; flows through snapshot and evidence unchanged.
+- **Long-term investing module** — its own package, context, and ADR
+  ([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) §3).
 
-**Known follow-ups from Milestone S** (each small, none blocking): `TradingAnalysisContext` has no
-consumer yet, so it gets its first real exercise when trading reasoning lands and may need additive
-fields then; timeframes are `str` pending a canonical timeframe type
-([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) §8); `notes` is deliberately
-unstructured free text.
+**Known follow-ups from Milestone T** (each small, none blocking): only `RelativeVolume(20)` is a default,
+`AverageVolume` is registerable but not registered; raw exchange volume is not normalized across venues,
+so cross-market comparison of the ratio is not yet meaningful; provider-specific volume fields (taker buy,
+quote volume) remain outside the canonical model.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting

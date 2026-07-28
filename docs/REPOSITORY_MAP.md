@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (769 tests) + fixtures
+├── tests/                  pytest suite (838 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -90,6 +90,35 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 
 > **Shared calculations do not imply shared decision logic.** The deterministic engines are
 > objective-agnostic and reused by everything; what their numbers *mean* stays module-specific.
+
+## `src/fmis/evidence/` — evidence taxonomy
+
+- **Purpose:** shared vocabulary for *what evidence is about*. Definitions only — no observation, no
+  value, no behaviour. Contracts: [ADR-0011](adr/ADR-0011-evidence-taxonomy.md).
+- **Responsibilities today:** `families.py` — `EvidenceFamily` (TREND, MOMENTUM, VOLUME, VOLATILITY,
+  MARKET_STRUCTURE, RELATIVE_STRENGTH, LIQUIDITY, MACRO, NEWS, SENTIMENT); `descriptors.py` —
+  the frozen, slotted `EvidenceDescriptor` (`family`, `name`, `description`); `catalog.py` — the
+  immutable, canonically ordered catalog plus `descriptors()`, `descriptors_for()`, `find()`.
+- **Allowed dependencies:** **none from `fmis`** outside this package; standard library only.
+- **Forbidden dependencies:** every other `fmis` package — and **`decision_support` in particular**, in
+  both directions: this package does not import it, and it was not modified to import this one. Both are
+  test-enforced.
+- **Hard rules:** a **calculated indicator is not automatically evidence** — a descriptor exists only for
+  a concept the system genuinely *classifies* today, verified by a test that builds a real report and
+  matches every catalogued name against an emitted, classified observation. No score, weight, confidence,
+  direction, or availability field. **No combined evidence-type enum**: supporting/conflicting is owned by
+  `EvidenceGroups`, neutral/unavailable by `Alignment`, insufficient-data by `OverallState` and feature
+  metadata. Names must already be normalized (rejected, never rewritten). No mutable registry, no plugin
+  mechanism, no arithmetic.
+- **Current catalog:** six descriptors — TREND (`price_vs_ema_fast`, `price_vs_ema_slow`,
+  `ema_fast_vs_ema_slow`) and MOMENTUM (`rsi_zone`, `macd_vs_signal`, `macd_histogram`). The other five
+  populated-looking families are **empty on purpose**: volume and volatility are measured but not
+  classified, and the relative-value metrics are restated unchanged.
+- **Where a new descriptor belongs:** `catalog.py` — but only after the corresponding classification
+  actually exists, which the cross-check test enforces.
+
+> **A shared vocabulary is not shared interpretation.** Trading, investing, macro and news modules may
+> each read the same family differently; the taxonomy names the subject and says nothing about the claim.
 
 ## `src/fmis/decision_support/` — Decision Support Evidence v1
 
@@ -338,7 +367,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **769 tests** across 19 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **838 tests** across 20 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

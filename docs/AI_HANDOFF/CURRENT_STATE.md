@@ -4,33 +4,35 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone T — Volume Foundation v1a (2026-07-28).
-**Latest commit at time of writing:** `423ebaa` — `Merge Trading Analysis Context v1`
-(the Milestone T commit is created by this milestone; update this line to its hash after commit).
+**Last updated for:** Milestone U — Evidence Taxonomy v1 (2026-07-28).
+**Latest commit at time of writing:** `50e9a43` — `Merge Volume Foundation v1a`
+(the Milestone U commit is created by this milestone; update this line to its hash after commit).
 
 ---
 
 ## Current milestone
 
-- **T — Volume Foundation v1a** (implementation): first Tier-2 category with calculation code.
-  `fmis.features.volume` adds `AverageVolume` and `RelativeVolume` as ordinary features in the existing
-  engine, sharing one `trailing_mean` kernel — the single source of truth for the baseline. Contracts
-  fixed in [ADR-0010](../adr/ADR-0010-volume-foundation.md).
+- **U — Evidence Taxonomy v1** (implementation): new `fmis.evidence` package — a shared vocabulary for
+  *what evidence is about*. `EvidenceFamily` (ten subject areas), the frozen slotted `EvidenceDescriptor`
+  (`family`, `name`, `description`), and an immutable canonically ordered catalog. Definitions only: no
+  observation, no value, no score, no behaviour. Contracts fixed in
+  [ADR-0011](../adr/ADR-0011-evidence-taxonomy.md).
 
-  **Window convention:** the baseline is the `lookback` candles *preceding* the latest closed one, which
-  is excluded from its own comparison; warm-up is `lookback + 1`. Including it would let a spike dilute
-  its own denominator — at lookback 20 a 20× candle would report ~10.5×.
+  **The governing rule: a calculated indicator is not automatically evidence.** A descriptor exists only
+  for a concept the system genuinely *classifies* today. An architecture audit found exactly six —
+  TREND (`price_vs_ema_fast`, `price_vs_ema_slow`, `ema_fast_vs_ema_slow`) and MOMENTUM (`rsi_zone`,
+  `macd_vs_signal`, `macd_histogram`) — and **five families are deliberately empty**: volume and
+  volatility are measured but not classified, and the relative-value metrics are restated unchanged, so
+  no "relative-value alignment" exists to describe.
 
-  **Zero baseline is undefined**, never infinity and never epsilon: `value=None` with
-  `undefined_reason="zero_average_volume"`, distinguishable from warm-up. A halt or a thin session
-  genuinely produces it.
+  **No combined evidence-type enum was created.** Supporting/conflicting is owned by `EvidenceGroups`,
+  neutral/unavailable by `Alignment`, insufficient-data by `OverallState` and feature metadata — three
+  existing owners across two different dimensions.
 
-  **Measurements, not conclusions** — no labels, no thresholds. Classifying the ratio is a later Volume
-  Evidence v1b milestone; `EvidenceReport` is untouched. Pipeline integration is one feature added to
-  `default_features()`, with no volume-specific branching.
+  `decision_support` integration is **deferred**: neither package imports the other, both directions
+  test-enforced.
 
-- **Previous:** S — Trading Analysis Context v1 (`fmis.trading_context`), merged into `main` via
-  `423ebaa`.
+- **Previous:** T — Volume Foundation v1a (`fmis.features.volume`), merged into `main` via `50e9a43`.
 
 ## Completed milestones
 
@@ -58,16 +60,18 @@ Reconstructed from git history (`git log --oneline`):
 | Market Analysis Pipeline v1 (Q) | `742e832` + `bfb4edf`, merged `fb57d62` | `fmis.pipeline` — end-to-end orchestration → `AnalysisSnapshot`; see [ADR-0007](../adr/ADR-0007-application-layer-boundary.md) |
 | Decision Support Evidence v1 (R) | `8dcd551`, merged `b29d833` | `fmis.decision_support` — snapshot → structured `EvidenceReport`; see [ADR-0008](../adr/ADR-0008-decision-support-evidence-boundary.md) |
 | Trading Analysis Context v1 (S) | `0e0cd44`, merged `423ebaa` | `fmis.trading_context` — explicit trading objective + timeframes; see [ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) |
-| Volume Foundation v1a (T) | _this commit_ | `fmis.features.volume` — average + relative volume measurements; see [ADR-0010](../adr/ADR-0010-volume-foundation.md) |
+| Volume Foundation v1a (T) | `6f9ecd9`, merged `50e9a43` | `fmis.features.volume` — average + relative volume measurements; see [ADR-0010](../adr/ADR-0010-volume-foundation.md) |
+| Evidence Taxonomy v1 (U) | _this commit_ | `fmis.evidence` — evidence families + descriptor catalog; see [ADR-0011](../adr/ADR-0011-evidence-taxonomy.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**769 passing** (`uv run pytest`, ~0.30 s). Per module:
+**838 passing** (`uv run pytest`, ~0.32 s). Per module:
 
 | Module | Tests |
 |---|---|
+| `tests/test_evidence_taxonomy.py` | 69 |
 | `tests/test_features_volume.py` | 81 |
 | `tests/test_decision_support_evidence.py` | 93 |
 | `tests/test_providers_binance.py` | 98 |
@@ -87,7 +91,7 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_trading_context.py` | 51 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **769** |
+| **Total** | **838** |
 
 ## Implemented indicators (Tier-1)
 
@@ -113,6 +117,11 @@ R5 — relevant to future backtesting).
   **Long-term investing is not a trading objective** and gets its own future module. No
   objective-dependent branching, no timeframe inference or presets, no strategy/risk/direction fields
   ([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md)).
+- **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` + `EvidenceDescriptor` + an immutable
+  catalog of the six concepts the system genuinely classifies today. Definitions only — no value, score,
+  direction, or availability state; supporting/conflicting and availability are **not** redefined.
+  Imports nothing from `fmis`; not wired to `decision_support` in either direction
+  ([ADR-0011](../adr/ADR-0011-evidence-taxonomy.md)).
 - **Decision support (`fmis.decision_support`):** `build_evidence_report` — turns a snapshot into
   structured evidence: explicit classifications, supporting/conflicting/unavailable grouping, mechanical
   scenario conditions, and an undirectional `OverallState`. Consumes snapshots only; classifies rather
@@ -161,8 +170,8 @@ R5 — relevant to future backtesting).
   (never anything downstream, and never the private `_timeutils`); `fmis.providers` imports only
   `fmis.ingest` + `fmis.data` and never constructs `Candle` directly; `fmis.pipeline` sits on top and
   **no engine imports it**; `fmis.decision_support` sits above the pipeline and **nothing below imports
-  it**, the pipeline included; `fmis.trading_context` is a leaf importing nothing from `fmis`, and no
-  lower or sibling layer references it (all test-enforced); shared kernels (`sources.py`,
+  it**, the pipeline included; `fmis.trading_context` and `fmis.evidence` are leaves importing nothing from
+  `fmis`, and no other package references either (all test-enforced); shared kernels (`sources.py`,
   `ema_math.py`, `_timeutils.py`) import nothing internal.
 - **Zero runtime dependencies.**
 
@@ -179,6 +188,11 @@ src/fmis/
 ├── alignment/
 │   ├── __init__.py                 policy-layer surface (re-exports intersection)
 │   └── intersection.py             align_intersection, AlignmentResult/Report, SeriesAlignmentStats
+├── evidence/
+│   ├── __init__.py                 taxonomy rules + public surface
+│   ├── families.py                 EvidenceFamily
+│   ├── descriptors.py              EvidenceDescriptor
+│   └── catalog.py                  descriptors(), descriptors_for(), find()
 ├── trading_context/
 │   ├── __init__.py                 layer rules + public surface
 │   └── context.py                  TradingObjective, TradingAnalysisContext
@@ -241,20 +255,19 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 Not yet chosen. Natural follow-ons:
 
-- **Volume Evidence v1b** — classify relative volume in `fmis.decision_support`. It is the deliberately
-  deferred half of Milestone T, and the hard part is that a given ratio means different things per market
-  ([ADR-0010](../adr/ADR-0010-volume-foundation.md) §6), so it may need market awareness the system does
-  not yet have.
-- **Trading reasoning v1** — the first consumer of `TradingAnalysisContext`, taking it together with an
+- **Evidence taxonomy integration** — decide how a `decision_support.Observation` refers to an
+  `EvidenceDescriptor`. Deliberately deferred from Milestone U; it is a real design question
+  ([ADR-0011](../adr/ADR-0011-evidence-taxonomy.md) §8).
+- **Volume Evidence v1b** — classify relative volume, which would earn the VOLUME family its first
+  descriptor. The hard part remains that a ratio means different things per market
+  ([ADR-0010](../adr/ADR-0010-volume-foundation.md) §6).
+- **Trading reasoning v1** — the first consumer of `TradingAnalysisContext`, taking it with an
   `EvidenceReport`.
 - **A thin CLI / entry point** (§2.9(8)) — still the last structural gap.
-- **Long-term investing module** — its own package, context, and ADR
-  ([ADR-0009](../adr/ADR-0009-trading-analysis-context-boundary.md) §3).
 
-**Known follow-ups from Milestone T** (each small, none blocking): only `RelativeVolume(20)` is a default,
-`AverageVolume` is registerable but not registered; raw exchange volume is not normalized across venues,
-so cross-market comparison of the ratio is not yet meaningful; provider-specific volume fields (taker buy,
-quote volume) remain outside the canonical model.
+**Known follow-ups from Milestone U** (each small, none blocking): nothing consumes the taxonomy yet;
+`EvidenceFamily` overlaps `FeatureCategory` on five names by design (different axes — see
+[ADR-0011](../adr/ADR-0011-evidence-taxonomy.md) §2) and both must be kept distinct.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting

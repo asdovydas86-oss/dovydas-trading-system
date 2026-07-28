@@ -41,6 +41,17 @@ short-term trading are separate domains.
 
   > Shared calculations do not imply shared decision logic.
 
+- **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` (ten subject areas) and the frozen slotted
+  `EvidenceDescriptor` (`family`, `name`, `description`), plus an immutable catalog. **A calculated
+  indicator is not automatically evidence** — a descriptor exists only for a concept the system genuinely
+  *classifies*, so the catalog holds six (TREND + MOMENTUM) and five families are deliberately empty.
+  Never add a score/weight/confidence/direction field, and never redefine supporting/conflicting or
+  availability — `EvidenceGroups`, `Alignment` and `OverallState` already own them. Imports nothing from
+  `fmis`; not wired to `decision_support` in either direction. Rules in
+  [../adr/ADR-0011-evidence-taxonomy.md](../adr/ADR-0011-evidence-taxonomy.md).
+
+  > A shared vocabulary is not shared interpretation.
+
 - **Decision support (`fmis.decision_support`):** `build_evidence_report(snapshot)` — organises a
   snapshot into structured evidence. Consumes `AnalysisSnapshot` **only**; nothing below imports it.
   **Classifies, never calculates** (the sole derived value, `atr_percent_of_close`, is isolated in
@@ -109,7 +120,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 769 passing.
+- **Tests:** 838 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

@@ -41,6 +41,13 @@ short-term trading are separate domains.
 
   > Shared calculations do not imply shared decision logic.
 
+- **Market structure (`fmis.market_structure`):** `detect_swings(series, left_bars=2, right_bars=2)` ->
+  `tuple[SwingPoint, ...]`. **Closed candles only**; a swing confirms only after `right_bars` further
+  candles have closed, which is what makes it **non-repainting** — never emit a provisional swing.
+  Comparison is **strict on the left, `>=` on the right**, so a plateau gives one point (its first bar)
+  while separated equal highs stay two. `SwingPoint.index` indexes `series.closed().candles`. **No
+  interpretation here** — BOS, CHoCH, HH/HL, trend, S/R and liquidity are all later milestones. Rules in
+  [../adr/ADR-0012-market-structure-foundation.md](../adr/ADR-0012-market-structure-foundation.md).
 - **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` (ten subject areas) and the frozen slotted
   `EvidenceDescriptor` (`family`, `name`, `description`), plus an immutable catalog. **A calculated
   indicator is not automatically evidence** — a descriptor exists only for a concept the system genuinely
@@ -120,7 +127,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 838 passing.
+- **Tests:** 1040 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

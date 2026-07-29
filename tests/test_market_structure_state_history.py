@@ -734,17 +734,26 @@ def test_an_arbitrary_cut_inside_an_outside_bar_group_is_outside_the_guarantee()
 
 
 def test_a_candle_prefix_never_splits_an_outside_bar_group() -> None:
-    """Why the limitation cannot arise from real data."""
+    """Why the documented limitation cannot arise from real data.
+
+    Asserts the actual claim: for every candle prefix, a snapshot at some index
+    holds exactly the triggers the *full* history holds at that index. A prefix
+    that split an outside bar would show a 1-trigger snapshot where the full
+    history has 2.
+    """
     rng = random.Random(25)
-    groups_seen = 0
+    outside_bar_groups = 0
+    compared = 0
     for _ in range(60):
         bars = random_bars(rng)
+        full = {snapshot.index: snapshot.triggers for snapshot in history(bars)}
+        outside_bar_groups += sum(1 for t in full.values() if len(t) == 2)
         for k in range(1, len(bars) + 1):
             for snapshot in history(bars[:k]):
-                groups_seen += 1
-                types = {t.comparison.current.type for t in snapshot.triggers}
-                assert len(types) == len(snapshot.triggers)
-    assert groups_seen > 0
+                compared += 1
+                assert snapshot.triggers == full[snapshot.index]
+    assert compared > 0
+    assert outside_bar_groups > 0, "the sample must contain outside bars to be meaningful"
 
 
 # ============================ 26 equivalence contract ========================

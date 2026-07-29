@@ -35,6 +35,7 @@ README summarizes and points, it does not restate them.
 | [ARCHITECTURE_AND_ROADMAP_V1.md](ARCHITECTURE_AND_ROADMAP_V1.md) | Target architecture, module boundaries, dependency rules, Relative Value Engine spec, roadmap, decisions | **Authoritative — architecture** |
 | [ARCHITECTURE_REVIEW_2026-07-24.md](ARCHITECTURE_REVIEW_2026-07-24.md) | Full architectural verification at commit `5e7e3d5`: findings R1–R14, divergences from the architecture doc, readiness verdict | **Authoritative — amends the architecture doc §5** |
 | [adr/](adr/README.md) | Architecture Decision Records — one decision per file, with alternatives and consequences | **Authoritative — decisions** |
+| [reviews/MARKET_STRUCTURE_ARCHITECTURE_REVIEW_V1.md](reviews/MARKET_STRUCTURE_ARCHITECTURE_REVIEW_V1.md) | Audit of the complete deterministic market-structure foundation (ADR-0012…0015) at commit `1154622`: contract-ownership map, stability semantics, P0–P4 findings, recommended next milestone | **Authoritative — market-structure readiness** |
 | [RVE_DESIGN_V1.md](RVE_DESIGN_V1.md) | Relative Value Engine technical design (Milestones J/K/L): contracts, public API, interactions, decisions RV-1…RV-11 | Design proposal — not authorization to implement |
 | [REPOSITORY_MAP.md](REPOSITORY_MAP.md) | What each directory is for, and its allowed/forbidden dependencies | Reference — current repo |
 | [AI_HANDOFF/START_HERE_FOR_AI.md](AI_HANDOFF/START_HERE_FOR_AI.md) | Onboarding + non-negotiable rules for AI agents | Reference — workflow |

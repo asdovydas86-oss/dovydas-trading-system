@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (1773 tests) + fixtures
+├── tests/                  pytest suite (2073 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -103,9 +103,12 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   `label_swing_sequence`, plus `StructuralSwingLabel` and `StructuralSwing` in `models.py`;
   `sequence_state.py` — `derive_structural_sequence_state`, plus `StructuralSequenceStateType` and the
   frozen/slotted/hashable `StructuralSequenceState` (`latest_high`, `latest_low`, `state`) in
-  `models.py`. Contracts: [ADR-0013](adr/ADR-0013-swing-relationship-foundation.md) (comparison),
+  `models.py`; `state_history.py` — `derive_structural_sequence_state_history`, plus the
+  frozen/slotted/hashable `StructuralSequenceStateSnapshot` (`state`, `triggers`, with `index` and
+  `timestamp` as computed **projections**) in `models.py`. Contracts: [ADR-0013](adr/ADR-0013-swing-relationship-foundation.md) (comparison),
   [ADR-0014](adr/ADR-0014-structural-swing-label-foundation.md) (naming),
-  [ADR-0015](adr/ADR-0015-structural-sequence-state-foundation.md) (sequence state).
+  [ADR-0015](adr/ADR-0015-structural-sequence-state-foundation.md) (sequence state),
+  [ADR-0016](adr/ADR-0016-structural-sequence-state-history-foundation.md) (state history).
 - **Allowed dependencies:** `fmis.data` (the canonical `CandleSeries`); standard library only.
 - **Forbidden dependencies:** `fmis.decision_support`, `fmis.evidence`, `fmis.providers`,
   `fmis.pipeline`, `fmis.features`, `fmis.trading_context`, and anything AI / execution / portfolio.
@@ -142,9 +145,20 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   `StructuralSwing` objects are retained on the result. Outside bars resolve **atomically** to one final
   state. Ordering is validated by the same shared `models._validate_current_point_order` the labelling
   layer uses, so the two contracts cannot diverge.
-- **Two stability guarantees, not one.** Swing points, comparisons and labels are settled once emitted and
-  are never revised by later data. A `StructuralSequenceState` is a statement about the *latest* pair and
-  is **expected to be superseded** when a newer swing is confirmed on either side — a new fact about newer
+- **State-history rules (ADR-0016):** one `StructuralSequenceStateSnapshot` per candle that changed
+  structure — event-indexed, not bar-indexed. Same-candle HIGH/LOW groups are applied **atomically**, so
+  no half-applied state is emitted; `INSUFFICIENT_STRUCTURE` snapshots are **recorded, not suppressed**;
+  `index`/`timestamp` are computed projections rather than stored fields; and there is deliberately **no
+  transition type and no "changed" flag** — recording a sequence is not reading it. The history is
+  prefix-stable under **candle-series and complete structural-group extension only**; an arbitrary cut
+  inside a same-candle group is explicitly outside the guarantee, and a test pins that limitation.
+  Both the single-state and history APIs are kept, under a tested final-state equivalence contract.
+- **One ordering rule (Z0):** `models._validate_key_order` over normalised
+  `(index, timestamp, type)` keys, with thin adapters for the point and comparison layers that differ
+  only in message nouns. Closes review findings P2-1 and P2-2.
+- **Two stability guarantees, not one.** Swing points, comparisons, labels **and history snapshots** are
+  settled once emitted and are never revised by later data. Only `derive_structural_sequence_state`'s
+  single answer is a statement about the *latest* pair and is **expected to be superseded** when a newer swing is confirmed on either side — a new fact about newer
   data, not a revision. "Non-repainting" describes the former and **not** the aggregate state, and no
   interface built on top may blur that.
 - **State is still not interpretation.** `SHIFTED_HIGHER` is not an uptrend, `CONTRACTED` is not
@@ -430,7 +444,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **1773 tests** across 24 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **2073 tests** across 26 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

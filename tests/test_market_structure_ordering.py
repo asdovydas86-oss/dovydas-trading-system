@@ -553,6 +553,9 @@ def test_the_public_api_is_unchanged_by_this_milestone() -> None:
         "StructuralSwingLabel", "StructuralSwing",
         "StructuralSequenceStateType", "StructuralSequenceState",
         "detect_swings", "compare_swings", "compare_swing_sequence",
-        "label_swing", "label_swing_sequence", "derive_structural_sequence_state",
+        "label_swing", "label_swing_sequence",
+        "StructuralSequenceStateType", "StructuralSequenceState",
+        "StructuralSequenceStateSnapshot",
+        "derive_structural_sequence_state", "derive_structural_sequence_state_history",
         "required_candles", "DEFAULT_LEFT_BARS", "DEFAULT_RIGHT_BARS",
     }

@@ -4,14 +4,41 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone Y — Structural Sequence State Foundation v1 (2026-07-28).
-**Latest commit at time of writing:** `1154622` — `Merge Structural Sequence State Foundation v1`.
+**Last updated for:** Milestones Z0-Z1 — ordering unification + Structural Sequence State History v1 (2026-07-29).
+**Latest commit at time of writing:** `8535a98` — `Merge Market Structure Architecture Review v1`
+(the Z0/Z1 commits are created by these milestones).
 
 ---
 
 ## Current milestone
 
-- **Y — Structural Sequence State Foundation v1** (implementation): `fmis.market_structure` gains
+- **Z0 — Structural Sequence Ordering Unification** (implementation): the sequence-ordering contract had
+  two independent implementations (architecture review P2-1). Both now project onto normalised
+  `(index, timestamp, type)` keys and delegate to one private core, `models._validate_key_order`, with
+  adapters carrying only each layer's message nouns. All ten messages byte-identical, verified by
+  differential against both originals over 12,889 generated cases. No public API change.
+
+- **Z1 — Structural Sequence State History Foundation v1** (implementation): `fmis.market_structure`
+  gains `StructuralSequenceStateSnapshot` (`state`, `triggers`, plus `index`/`timestamp` as computed
+  **projections**) and `derive_structural_sequence_state_history`. Contracts fixed in
+  [ADR-0016](../adr/ADR-0016-structural-sequence-state-history-foundation.md); design in
+  [the design document](../design/STRUCTURAL_SEQUENCE_STATE_HISTORY_DESIGN_V1.md).
+
+  **One snapshot per candle that changed structure**, event-indexed rather than bar-indexed. Outside-bar
+  HIGH/LOW pairs apply **atomically**, so no half-applied state is ever emitted.
+  `INSUFFICIENT_STRUCTURE` snapshots are recorded, never suppressed.
+
+  **Prefix-stable under candle-series extension and complete structural-group extension** — and
+  explicitly **not** under an arbitrary cut inside a same-candle HIGH/LOW group, which cannot arise from
+  candle growth and is not detectable. The limitation is tested, not just documented.
+
+  **Recording is not interpreting.** No transition type, no "changed" flag, no direction or magnitude.
+  Every classification rule is delegated; the module performs no arithmetic and names no state member.
+
+  Both APIs remain, under a tested equivalence contract:
+  `history[-1].state == derive_structural_sequence_state(...)`.
+
+- **Y — Structural Sequence State Foundation v1** (merged `1154622`): `fmis.market_structure` gains
   `StructuralSequenceStateType` (six members), the frozen/slotted/hashable `StructuralSequenceState`
   (`latest_high`, `latest_low`, `state`), and the pure function `derive_structural_sequence_state`.
   Contracts fixed in [ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md).
@@ -95,17 +122,19 @@ Reconstructed from git history (`git log --oneline`):
 | Market Structure Foundation v1 (V) | `b91c3d1`, merged `e7dbbb9` | `fmis.market_structure` — deterministic swing detection; see [ADR-0012](../adr/ADR-0012-market-structure-foundation.md) |
 | Swing Relationship Foundation v1 (W) | `90ae358`, merged `153f930` | `SwingRelation`, `SwingComparison`, `compare_swings`, `compare_swing_sequence`; see [ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md) |
 | Structural Swing Label Foundation v1 (X) | `5a25f39`, merged `b5f8723` | `StructuralSwingLabel`, `StructuralSwing`, `label_swing`, `label_swing_sequence`; see [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) |
-| Structural Sequence State Foundation v1 (Y) | _this commit_ | `StructuralSequenceStateType`, `StructuralSequenceState`, `derive_structural_sequence_state`; see [ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md) |
+| Structural Sequence State Foundation v1 (Y) | `6047e65`, merged `1154622` | `StructuralSequenceStateType`, `StructuralSequenceState`, `derive_structural_sequence_state`; see [ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**1773 passing** (`uv run pytest`, ~0.9 s). Per module:
+**2073 passing** (`uv run pytest`, ~1.4 s). Per module:
 
 | Module | Tests |
 |---|---|
 | `tests/test_market_structure_sequence_state.py` | 312 |
+| `tests/test_market_structure_state_history.py` | 267 |
+| `tests/test_market_structure_ordering.py` | 33 |
 | `tests/test_market_structure_relationships.py` | 228 |
 | `tests/test_market_structure_swings.py` | 194 |
 | `tests/test_market_structure_labels.py` | 193 |
@@ -129,7 +158,7 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_trading_context.py` | 51 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **1773** |
+| **Total** | **2073** |
 
 ## Implemented indicators (Tier-1)
 

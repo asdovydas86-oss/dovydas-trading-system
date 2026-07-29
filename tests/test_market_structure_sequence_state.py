@@ -1055,10 +1055,18 @@ def test_market_structure_evidence_family_remains_empty() -> None:
     assert len(descriptors()) == 6
 
 
-def test_no_state_history_api_was_introduced() -> None:
-    """History is a later milestone; nothing here should hint that it exists."""
-    for name in ("structural_sequence_state_sequence", "state_history",
-                 "derive_structural_sequence_states", "transitions"):
+def test_no_transition_or_interpretation_api_was_introduced() -> None:
+    """State history landed in Z1; transition *interpretation* did not.
+
+    This guard originally also forbade a history API. That milestone has since
+    been delivered deliberately (ADR-0016), so the history names are no longer
+    listed — but everything that would read a sequence rather than record it is
+    still forbidden, and the list has grown rather than shrunk.
+    """
+    for name in ("structural_sequence_state_sequence",
+                 "derive_structural_sequence_states", "transitions",
+                 "StructuralSequenceTransition", "derive_transitions",
+                 "state_changed", "trend", "regime", "bias"):
         assert not hasattr(ms, name), name
 
 
@@ -1071,7 +1079,10 @@ def test_public_api_is_exactly_the_declared_surface() -> None:
         "StructuralSwingLabel", "StructuralSwing",
         "StructuralSequenceStateType", "StructuralSequenceState",
         "detect_swings", "compare_swings", "compare_swing_sequence",
-        "label_swing", "label_swing_sequence", "derive_structural_sequence_state",
+        "label_swing", "label_swing_sequence",
+        "StructuralSequenceStateType", "StructuralSequenceState",
+        "StructuralSequenceStateSnapshot",
+        "derive_structural_sequence_state", "derive_structural_sequence_state_history",
         "required_candles", "DEFAULT_LEFT_BARS", "DEFAULT_RIGHT_BARS",
     }
     for name in ms.__all__:
@@ -1126,7 +1137,7 @@ def test_no_submodule_shares_a_name_with_a_public_object() -> None:
 
     submodules = {m.name for m in pkgutil.iter_modules(ms.__path__)}
     assert submodules == {"labels", "models", "relationships", "sequence_state",
-                          "swings"}
+                          "state_history", "swings"}
     assert submodules & set(ms.__all__) == set()
 
 
@@ -1151,6 +1162,7 @@ def test_imports_only_canonical_data_and_own_modules() -> None:
         "fmis.market_structure.models",
         "fmis.market_structure.relationships",
         "fmis.market_structure.sequence_state",
+        "fmis.market_structure.state_history",
         "fmis.market_structure.swings",
     }
 

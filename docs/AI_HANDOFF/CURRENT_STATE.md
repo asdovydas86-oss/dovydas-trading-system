@@ -4,13 +4,50 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestones Z0-Z1 — ordering unification + Structural Sequence State History v1 (2026-07-29).
-**Latest commit at time of writing:** `8535a98` — `Merge Market Structure Architecture Review v1`
-(the Z0/Z1 commits are created by these milestones).
+**Last updated for:** Milestone AA — Trend Foundation v1 (2026-07-29).
+**Latest commit at time of writing:** `0c845d6` — `Merge Structural Sequence State History Review v1`
+(the Milestone AA commits are created by this milestone).
 
 ---
 
 ## Current milestone
+
+- **AA — Trend Foundation v1** (implementation): a new sibling package `fmis.structural_trend`, the first
+  deterministic **consumer** of the structural sequence state history, and the first layer in the
+  repository whose output rests on a *stated policy* rather than on arithmetic alone. Contracts fixed in
+  [ADR-0017](../adr/ADR-0017-structural-trend-foundation.md); design in
+  [the design document](../design/TREND_FOUNDATION_DESIGN_V1.md).
+
+  **The definition:** a structural trend is a *sustained same-direction structural shift* — at least
+  `MINIMUM_DIRECTIONAL_SHIFTS` (2) snapshots of the same directional state, with no opposing directional
+  snapshot between them.
+
+  **Only two states are directional evidence:** `SHIFTED_HIGHER` and `SHIFTED_LOWER`, the two that say
+  *both* structural sides moved the same way in price. `EXPANDED`, `CONTRACTED`, `UNCHANGED` and
+  `INSUFFICIENT_STRUCTURE` are **transparent** — they neither advance nor invalidate a run, because none
+  is evidence *against* a direction.
+
+  **Persistence is unconditional; invalidation is exactly one opposing shift.** The cost is documented
+  rather than patched: a trend followed by 500 contracting snapshots still reads as sustained, because
+  every decay rule needs an arbitrary constant this layer has no basis for.
+
+  **Ambiguity is reported, never resolved.** `NEUTRAL` (evidence exists on both sides and conflicts) and
+  `INDETERMINATE` (evidence is absent) are never folded together. An alternating history is `NEUTRAL`, not
+  the latest direction.
+
+  **The threshold is a policy, not a measurement** — a module constant, deliberately not a parameter.
+  Measured: `minimum=1` yields a direction in 79% of 1,627 sequences, `minimum=2` in 22%, `minimum=3` in
+  5%.
+
+  **Prefix-stable** under candle-series extension and complete structural-group extension, measured at 0
+  violations over 2,000 + 739 prefixes. The arbitrary inside-group cut stays **outside** the guarantee
+  (inherited from ADR-0016 §7, 133/891 divergences), pinned by a test asserting the divergence still
+  exists.
+
+  **Five new public names**, no collision, no dependency added, no existing export or exception message
+  changed, `EvidenceFamily` and the evidence catalog untouched.
+
+### Previous milestone
 
 - **Z0 — Structural Sequence Ordering Unification** (implementation): the sequence-ordering contract had
   two independent implementations (architecture review P2-1). Both now project onto normalised
@@ -125,16 +162,18 @@ Reconstructed from git history (`git log --oneline`):
 | Structural Sequence State Foundation v1 (Y) | `6047e65`, merged `1154622` | `StructuralSequenceStateType`, `StructuralSequenceState`, `derive_structural_sequence_state`; see [ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md) |
 | Structural Sequence Ordering Unification (Z0) | `682ca31` | one `_validate_key_order` core; closes review P2-1/P2-2; no API change |
 | Structural Sequence State History Foundation v1 (Z1) | `d1c0b3b` | `StructuralSequenceStateSnapshot`, `derive_structural_sequence_state_history`; see [ADR-0016](../adr/ADR-0016-structural-sequence-state-history-foundation.md) |
+| Trend Foundation v1 (AA) | see final report | `fmis.structural_trend` — `StructuralTrendType`, `StructuralTrendSnapshot`, `MINIMUM_DIRECTIONAL_SHIFTS`, `derive_structural_trend`, `derive_structural_trend_history`; see [ADR-0017](../adr/ADR-0017-structural-trend-foundation.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**2073 passing** (`uv run pytest`, ~1.4 s). Per module:
+**2425 passing** (`uv run pytest`, ~1.7 s). Per module:
 
 | Module | Tests |
 |---|---|
 | `tests/test_market_structure_sequence_state.py` | 312 |
+| `tests/test_structural_trend.py` | 352 |
 | `tests/test_market_structure_state_history.py` | 267 |
 | `tests/test_market_structure_ordering.py` | 33 |
 | `tests/test_market_structure_relationships.py` | 228 |
@@ -277,11 +316,19 @@ src/fmis/
 │   ├── models.py                   SwingType, SwingPoint, SwingRelation,
 │   │                               SwingComparison, StructuralSwingLabel,
 │   │                               StructuralSwing, StructuralSequenceStateType,
-│   │                               StructuralSequenceState
+│   │                               StructuralSequenceState,
+│   │                               StructuralSequenceStateSnapshot
 │   ├── swings.py                   detect_swings, required_candles
 │   ├── relationships.py            compare_swings, compare_swing_sequence
 │   ├── labels.py                   label_swing, label_swing_sequence
-│   └── sequence_state.py           derive_structural_sequence_state
+│   ├── sequence_state.py           derive_structural_sequence_state
+│   └── state_history.py            derive_structural_sequence_state_history
+├── structural_trend/
+│   ├── __init__.py                 package rules + public surface
+│   ├── models.py                   StructuralTrendType, StructuralTrendSnapshot,
+│   │                               MINIMUM_DIRECTIONAL_SHIFTS
+│   └── trend.py                    derive_structural_trend,
+│                                   derive_structural_trend_history
 ├── evidence/
 │   ├── __init__.py                 taxonomy rules + public surface
 │   ├── families.py                 EvidenceFamily
@@ -347,20 +394,30 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-Not yet chosen. With named structural facts available, the natural next steps are:
+Not yet chosen. Structural facts, their sequence history, and a first summary of that sequence all now
+exist. The natural next steps are:
 
-- **Break of structure / change of character** — the first rule *over a sequence* of labels. It needs an
-  explicit definition of what counts as a break, including whether an `EQUAL_HIGH` breaks anything, before
-  any code ([ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) §11).
-- **Structural sequence state history** — deliberately postponed from Milestone Y. It needs one decision
-  first: whether an outside bar updating both sides at one index emits one transition or two
-  ([ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md) §11).
-- **Trend classification** — how many swings constitute a trend, and what an interleaved
-  `HIGHER_HIGH` / `LOWER_LOW` run means. Its own decision record.
+- **Level-crossing foundation** (the precursor to break of structure) — BOS needs a "price crossed level
+  L at bar *i*" fact that **no layer above `detect_swings` can currently produce**. It requires a new
+  input contract reading *both* swing levels and candles, and its own ADR deciding close-versus-wick,
+  which level is protected and when it stops being, whether an `EQUAL_HIGH` breaks anything, and how an
+  outside bar crossing both sides is grouped. Recommended as a **sibling package**, so
+  `fmis.market_structure` keeps the property that only its first stage touches a candle
+  ([the architecture review](../reviews/MARKET_STRUCTURE_ARCHITECTURE_REVIEW_V1.md) §15).
+- **Change of character** — defined over the *BOS sequence*, never over trend. The ordering is fixed:
+  BOS on levels, CHoCH over BOS, trend as a summary consuming both and defining neither. Any definition
+  making trend an input to a break is rejected on sight (§15, [ADR-0017](../adr/ADR-0017-structural-trend-foundation.md) §18).
 - **Support / resistance candidates** — `fmis.features.support_resistance` already names swing points as
   its input, and `EQUAL_HIGH`/`EQUAL_LOW` are the obvious seed.
 - **Volume Evidence v1b** — still the deferred half of Milestone T.
 - **Trading reasoning v1** — first consumer of `TradingAnalysisContext`.
+
+**Known follow-ups from Milestone AA** (each small, none blocking): `MINIMUM_DIRECTIONAL_SHIFTS` is a
+**policy no test can validate as correct**, only as correctly implemented — any disagreement with it is a
+disagreement about the number and should be argued as such, not by redefining the four members;
+persistence is unconditional, so nothing built on top may assume a sustained trend is *recent*; and
+`NEUTRAL` and `INDETERMINATE` must never be collapsed by a consumer, because that erases the difference
+between a choppy market and a quiet one.
 
 **Known follow-ups from Milestone Y** (each small, none blocking): the package now has two kinds of
 output with different stability guarantees, so any interface built on top must not describe the aggregate

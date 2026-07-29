@@ -610,7 +610,8 @@ def test_public_api_is_exactly_the_declared_surface() -> None:
         "detect_swings", "compare_swings", "compare_swing_sequence",
         "label_swing", "label_swing_sequence",
         "StructuralSequenceStateType", "StructuralSequenceState",
-        "derive_structural_sequence_state",
+        "StructuralSequenceStateSnapshot",
+        "derive_structural_sequence_state", "derive_structural_sequence_state_history",
         "required_candles", "DEFAULT_LEFT_BARS", "DEFAULT_RIGHT_BARS",
     }
     for name in ms.__all__:
@@ -641,6 +642,7 @@ def test_imports_only_the_canonical_data_models() -> None:
         "fmis.market_structure.models",
         "fmis.market_structure.relationships",
         "fmis.market_structure.sequence_state",
+        "fmis.market_structure.state_history",
         "fmis.market_structure.swings",
     }
 

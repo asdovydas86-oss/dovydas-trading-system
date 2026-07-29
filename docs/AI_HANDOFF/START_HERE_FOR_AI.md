@@ -70,10 +70,22 @@ short-term trading are separate domains.
   source `StructuralSwing` objects stay on the result because the grouping is lossy — read
   `latest_high.label` / `latest_low.label` rather than growing the enum.
 
-  > **The one exception to non-repainting in this package.** Swings, comparisons and labels are settled
-  > forever once emitted. The aggregate state is by design a statement about the *latest* pair and is
-  > **expected to change** when a newer swing is confirmed — a new fact, not a revision. Never describe
-  > the aggregate as non-repainting or cache it as permanent.
+  > **The one exception to non-repainting in this package.** Swings, comparisons, labels and history
+  > snapshots are settled forever once emitted. `derive_structural_sequence_state`'s single answer is by
+  > design a statement about the *latest* pair and is **expected to change** when a newer swing is
+  > confirmed — a new fact, not a revision. Never describe that single answer as non-repainting or cache
+  > it as permanent.
+
+  `derive_structural_sequence_state_history` records the state at every candle that changed it, one
+  `StructuralSequenceStateSnapshot` each. Outside-bar HIGH/LOW pairs are applied **atomically**;
+  `INSUFFICIENT_STRUCTURE` snapshots are **recorded, not suppressed**; `index`/`timestamp` are computed
+  projections, never stored. **Never add a transition type, a "changed" flag, a direction or a
+  magnitude** — recording a sequence is not reading it, and those are the substance of trend/BOS/CHoCH.
+
+  > **State the guarantee narrowly.** The history is prefix-stable under candle-series extension and
+  > complete structural-group extension — **not** under an arbitrary cut inside a same-candle HIGH/LOW
+  > group. Never widen this claim. Rules in
+  > [../adr/ADR-0016-structural-sequence-state-history-foundation.md](../adr/ADR-0016-structural-sequence-state-history-foundation.md).
 
   `SHIFTED_HIGHER` is not an uptrend, `CONTRACTED` is not consolidation, `EXPANDED` is not a breakout,
   `UNCHANGED` is not a double top. Rules in
@@ -157,7 +169,7 @@ short-term trading are separate domains.
   (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
   and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
   It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 1773 passing.
+- **Tests:** 2073 passing.
 
 For the precise, always-current snapshot (test count, latest commit, next milestone) read
 [CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.

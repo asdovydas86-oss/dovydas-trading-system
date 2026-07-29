@@ -46,6 +46,7 @@ __all__ = [
     "StructuralSwing",
     "StructuralSequenceStateType",
     "StructuralSequenceState",
+    "StructuralSequenceStateSnapshot",
 ]
 
 
@@ -665,3 +666,122 @@ class StructuralSequenceState:
                 f"state {self.state.value!r} does not match the latest sides; "
                 f"expected {expected.value!r}"
             )
+
+
+@dataclass(frozen=True, slots=True)
+class StructuralSequenceStateSnapshot:
+    """The structural sequence state at one candle, and the swings that set it.
+
+    A `StructuralSequenceState` describes the *latest* pair and is superseded as
+    newer swings confirm (ADR-0015 §8). A snapshot fixes one such state to the
+    candle that produced it, so a run of snapshots is a sequence of **historical
+    facts** rather than a value that keeps changing. See ADR-0016.
+
+    Exactly two fields.
+
+    ``state`` is the complete aggregate, reused whole rather than flattened.
+    `StructuralSequenceState` already validates that its own three fields agree,
+    so copying ``latest_high`` / ``latest_low`` / ``state`` up here would create a
+    second place for them to disagree — the hazard ADR-0014 §5 removed.
+
+    ``triggers`` are the `StructuralSwing` objects **confirmed at this candle**:
+    one normally, two when an outside bar produced both a HIGH and a LOW. They
+    are what changed, as opposed to ``state.latest_high`` / ``latest_low``, which
+    may have been carried forward from an earlier snapshot. Both orders of an
+    outside-bar pair are accepted and preserved; this type imposes no
+    HIGH-before-LOW convention, matching ADR-0014 §8.
+
+    ``index`` and ``timestamp`` are **computed projections, not fields**. Every
+    trigger in a group shares them by construction, so storing them would
+    duplicate a derived fact.
+
+    Deliberately absent: any transition classification, any "changed" flag, any
+    direction, magnitude, duration, strength, confidence or score. Whether one
+    snapshot following another is meaningful is a reading, and it belongs to a
+    later layer that can state its conditions. A consumer comparing
+    ``history[i - 1].state.state`` with ``history[i].state.state`` already has
+    every fact such a layer would need.
+
+    Frozen, slotted and hashable, matching every other value type here.
+    """
+
+    state: StructuralSequenceState
+    triggers: tuple[StructuralSwing, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, StructuralSequenceState):
+            raise TypeError(
+                "state must be a StructuralSequenceState, got "
+                f"{type(self.state).__name__}"
+            )
+        if not isinstance(self.triggers, tuple):
+            raise TypeError(
+                f"triggers must be a tuple, got {type(self.triggers).__name__}"
+            )
+        for position, trigger in enumerate(self.triggers):
+            if not isinstance(trigger, StructuralSwing):
+                raise TypeError(
+                    f"triggers[{position}] must be a StructuralSwing, got "
+                    f"{type(trigger).__name__}"
+                )
+        if not 1 <= len(self.triggers) <= 2:
+            raise ValueError(
+                "triggers must hold one swing, or two when one candle produced "
+                f"both a high and a low; got {len(self.triggers)}"
+            )
+
+        first = self.triggers[0].comparison.current
+        types = [trigger.comparison.current.type for trigger in self.triggers]
+        if len(set(types)) != len(types):
+            raise ValueError(
+                "triggers must have distinct swing types; got "
+                f"{[type.value for type in types]}"
+            )
+        for position, trigger in enumerate(self.triggers[1:], start=1):
+            current = trigger.comparison.current
+            if current.index != first.index:
+                raise ValueError(
+                    f"triggers[{position}] has index {current.index}, but a "
+                    f"snapshot covers one candle; expected {first.index}"
+                )
+            if current.timestamp != first.timestamp:
+                raise ValueError(
+                    f"triggers[{position}] has timestamp "
+                    f"{current.timestamp.isoformat()}, but a snapshot covers one "
+                    f"candle; expected {first.timestamp.isoformat()}"
+                )
+
+        # Each trigger must be the state's own latest side. This is what makes a
+        # snapshot a coherent fact rather than a state and an unrelated cause
+        # stapled together, and it is checked by identity: the state must hold
+        # the very object that triggered it, not an equal one.
+        for trigger in self.triggers:
+            side = trigger.comparison.current.type
+            held = (
+                self.state.latest_high
+                if side is SwingType.HIGH
+                else self.state.latest_low
+            )
+            if held is not trigger:
+                raise ValueError(
+                    f"the {side.value!r} trigger is not the state's latest "
+                    f"{side.value} swing; a snapshot's triggers must be the "
+                    "sides the state itself holds"
+                )
+
+    @property
+    def index(self) -> int:
+        """The closed-candle index this snapshot describes.
+
+        A projection of ``triggers[0].comparison.current.index``, not stored.
+        Every trigger shares it, enforced on construction.
+        """
+        return self.triggers[0].comparison.current.index
+
+    @property
+    def timestamp(self) -> datetime:
+        """The timestamp of the candle this snapshot describes.
+
+        A projection of ``triggers[0].comparison.current.timestamp``, not stored.
+        """
+        return self.triggers[0].comparison.current.timestamp

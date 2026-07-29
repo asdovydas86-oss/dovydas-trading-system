@@ -7,6 +7,8 @@ Value types and pure functions in four stages:
     SwingComparisons-> label_swing_sequence   -> tuple[StructuralSwing, ...]
     StructuralSwings-> derive_structural_sequence_state
                                               -> StructuralSequenceState
+    StructuralSwings-> derive_structural_sequence_state_history
+                                              -> tuple[…StateSnapshot, ...]
 
 `detect_swings` reports *where* a candle's high was a local maximum or its low a
 local minimum. `compare_swings` / `compare_swing_sequence` then report *how* each
@@ -44,13 +46,28 @@ side. `SHIFTED_HIGHER` is not an uptrend, `CONTRACTED` is not consolidation,
 `StructuralSwing` objects stay attached so the exact pair is never lost to the
 grouping. See ADR-0015.
 
+**The state at every candle that changed it.**
+`derive_structural_sequence_state_history` folds the same run into one
+`StructuralSequenceStateSnapshot` per candle, each holding the complete state and
+the swings confirmed at that candle. A snapshot's ``index`` and ``timestamp`` are
+computed projections, not stored fields. Outside bars resolve atomically to one
+snapshot; `INSUFFICIENT_STRUCTURE` snapshots are recorded, never suppressed; and
+there is deliberately no transition type, no "changed" flag and no direction —
+recording a sequence is not reading it. See ADR-0016.
+
 **Aggregate state evolves; confirmed facts do not.** A `SwingPoint`,
 `SwingComparison` and `StructuralSwing` are settled once emitted, and appending
 later data never revises one. A `StructuralSequenceState` is by design a
 statement about the *latest* pair, so a newer confirmed swing on either side
 supersedes it — a new fact about newer data, not a revision of an old one. Only
 the first guarantee is non-repainting in the strict sense, and this package does
-not claim the second.
+not claim the second for `derive_structural_sequence_state`.
+
+The **history** restores it: snapshots are prefix-stable under candle-series
+extension and under complete structural-group extension. That guarantee is
+stated narrowly on purpose — it does **not** hold for an arbitrary cut inside a
+same-candle HIGH/LOW group, which cannot arise from candle growth and is not
+detectable. See ADR-0016.
 
 **Why this is a package and not a Feature.** `FeatureValue` covers floats,
 bools, strings, mappings and sequences of those; a tuple of `SwingPoint`
@@ -94,6 +111,10 @@ Rules for anything added here:
   * **One authoritative label mapping, kept private** (`models._label_for`),
     for the same reason the price rule is: a public `label_for(type, relation)`
     would name a pairing no validated comparison produced.
+  * **History records, it never interprets.** A snapshot per candle, outside
+    bars atomic, insufficient states emitted. No transition type, no "changed"
+    flag, no direction, magnitude or duration — those are readings, and each
+    needs its own decision record.
   * **One authoritative state mapping, kept private** (`models._sequence_state_for`
     over `models._STATE_BY_LABEL_PAIR`), for the same reason, and one shared
     ordering rule (`models._validate_current_point_order`) so no consumer of an
@@ -110,6 +131,7 @@ from __future__ import annotations
 from fmis.market_structure.labels import label_swing, label_swing_sequence
 from fmis.market_structure.models import (
     StructuralSequenceState,
+    StructuralSequenceStateSnapshot,
     StructuralSequenceStateType,
     StructuralSwing,
     StructuralSwingLabel,
@@ -123,6 +145,9 @@ from fmis.market_structure.relationships import (
     compare_swings,
 )
 from fmis.market_structure.sequence_state import derive_structural_sequence_state
+from fmis.market_structure.state_history import (
+    derive_structural_sequence_state_history,
+)
 from fmis.market_structure.swings import (
     DEFAULT_LEFT_BARS,
     DEFAULT_RIGHT_BARS,
@@ -139,12 +164,14 @@ __all__ = [
     "StructuralSwing",
     "StructuralSequenceStateType",
     "StructuralSequenceState",
+    "StructuralSequenceStateSnapshot",
     "detect_swings",
     "compare_swings",
     "compare_swing_sequence",
     "label_swing",
     "label_swing_sequence",
     "derive_structural_sequence_state",
+    "derive_structural_sequence_state_history",
     "required_candles",
     "DEFAULT_LEFT_BARS",
     "DEFAULT_RIGHT_BARS",

@@ -123,6 +123,8 @@ Reconstructed from git history (`git log --oneline`):
 | Swing Relationship Foundation v1 (W) | `90ae358`, merged `153f930` | `SwingRelation`, `SwingComparison`, `compare_swings`, `compare_swing_sequence`; see [ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md) |
 | Structural Swing Label Foundation v1 (X) | `5a25f39`, merged `b5f8723` | `StructuralSwingLabel`, `StructuralSwing`, `label_swing`, `label_swing_sequence`; see [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) |
 | Structural Sequence State Foundation v1 (Y) | `6047e65`, merged `1154622` | `StructuralSequenceStateType`, `StructuralSequenceState`, `derive_structural_sequence_state`; see [ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md) |
+| Structural Sequence Ordering Unification (Z0) | `682ca31` | one `_validate_key_order` core; closes review P2-1/P2-2; no API change |
+| Structural Sequence State History Foundation v1 (Z1) | `d1c0b3b` | `StructuralSequenceStateSnapshot`, `derive_structural_sequence_state_history`; see [ADR-0016](../adr/ADR-0016-structural-sequence-state-history-foundation.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 

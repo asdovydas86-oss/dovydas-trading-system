@@ -332,10 +332,113 @@ class StructuralSwing:
             )
 
 
+def _validate_key_order(
+    keys: Sequence[tuple[int, datetime, SwingType]],
+    *,
+    subject: str,
+    index_noun: str,
+    timestamp_noun: str,
+    element_noun: str,
+) -> None:
+    """The one authoritative sequence-ordering rule, over normalised keys.
+
+    A key is ``(index, timestamp, type)``. Every layer that consumes an ordered
+    structural run projects its own elements onto keys and calls this, so the rule
+    has exactly one implementation and cannot drift between layers. The rule:
+
+      * ``index`` is **non-decreasing** across the whole run;
+      * ``timestamp`` is non-decreasing with it;
+      * keys sharing an ``index`` share its timestamp;
+      * within each `SwingType`, index and timestamp are **strictly** increasing.
+
+    Global strictness is deliberately not required: one outside candle produces a
+    HIGH and a LOW at the same index, so a run legitimately contains two keys
+    sharing an index. Per-type strictness is what matters, and it is also what
+    rejects a duplicated element.
+
+    Order is validated, never repaired, and the relative order of two keys at an
+    equal index is whatever the input had — this rule imposes no HIGH-before-LOW
+    convention of its own.
+
+    Deliberately **private**. The four noun arguments exist because the two
+    original implementations shipped with different wording, and the messages are
+    a contract: `compare_swing_sequence` says "points … index … point" while
+    `label_swing_sequence` says "comparisons … current index … comparison". Both
+    are reproduced **byte-for-byte** by substituting nouns and nothing else.
+
+    ``index_noun`` and ``timestamp_noun`` are passed separately rather than
+    derived from one another. Deriving "current timestamp" from "current index" by
+    string manipulation would put the message contract at the mercy of a
+    transformation, and a reworded message is exactly the regression that slipped
+    past substring assertions in the structural-label milestone.
+
+    Args:
+        keys: the run to check, already materialised in input order.
+        subject: the caller's parameter name, used in error text.
+        index_noun: how the caller names an index ("index" / "current index").
+        timestamp_noun: how the caller names a timestamp.
+        element_noun: how the caller names one element ("point" / "comparison").
+
+    Raises:
+        ValueError: the run is not ordered.
+    """
+    latest: dict[SwingType, tuple[int, datetime]] = {}
+
+    for position, (index, timestamp, type) in enumerate(keys):
+        if position > 0:
+            earlier_index, earlier_timestamp, _ = keys[position - 1]
+            if index < earlier_index:
+                raise ValueError(
+                    f"{subject} must be ordered by {index_noun}; "
+                    f"{subject}[{position}] has index {index} after "
+                    f"{earlier_index}"
+                )
+            if timestamp < earlier_timestamp:
+                raise ValueError(
+                    f"{subject} must be ordered by {timestamp_noun}; "
+                    f"{subject}[{position}] has "
+                    f"{timestamp.isoformat()} after "
+                    f"{earlier_timestamp.isoformat()}"
+                )
+            # Two keys may share an index only when both came from one candle, in
+            # which case they share its timestamp too.
+            shared_index = index == earlier_index
+            if shared_index and timestamp != earlier_timestamp:
+                raise ValueError(
+                    f"{subject}[{position}] shares {index_noun} "
+                    f"{index} with the previous {element_noun} but carries "
+                    "a different timestamp"
+                )
+
+        previous = latest.get(type)
+        if previous is not None:
+            # Strict within a type: one candle cannot yield two elements of the
+            # same type, so a repeat here — including an identical object — is a
+            # real inconsistency.
+            previous_index, previous_timestamp = previous
+            if index <= previous_index:
+                raise ValueError(
+                    f"{subject}[{position}] repeats or precedes {index_noun} "
+                    f"{previous_index} for swing type "
+                    f"{type.value!r}"
+                )
+            if timestamp <= previous_timestamp:
+                raise ValueError(
+                    f"{subject}[{position}] repeats or precedes {timestamp_noun} "
+                    f"{previous_timestamp.isoformat()} for "
+                    f"swing type {type.value!r}"
+                )
+        latest[type] = (index, timestamp)
+
+
 def _validate_current_point_order(
     comparisons: Sequence[SwingComparison], subject: str
 ) -> None:
-    """The one authoritative ordering rule for a run of comparisons.
+    """Ordering rule for a run of comparisons — a thin adapter over `_validate_key_order`.
+
+    Projects each comparison onto its ``current`` point's key and delegates. The
+    rule itself lives in one place; this function exists to name the "current
+    point" projection and to fix this layer's message vocabulary.
 
     Checked on each comparison's ``current`` point:
 
@@ -353,14 +456,12 @@ def _validate_current_point_order(
     at an equal index is whatever the input had — this rule imposes no
     HIGH-before-LOW convention of its own.
 
-    Deliberately **private**, and defined once so that every layer consuming an
-    ordered run inherits the same contract rather than growing a second, subtly
-    different one. ``subject`` names the caller's parameter in error messages so
-    the message points at the argument the caller actually passed; every other
-    word of those messages is fixed, because `label_swing_sequence` shipped with
-    this exact wording and extracting the rule must not reword its output. The
-    noun "comparison" stays correct for every caller: whatever a caller holds, it
-    is a run of `SwingComparison` objects that arrives here.
+    Deliberately **private**. ``subject`` names the caller's parameter in error
+    messages so the message points at the argument the caller actually passed;
+    every other word of those messages is fixed, because `label_swing_sequence`
+    shipped with this exact wording and extracting the rule must not reword its
+    output. The noun "comparison" stays correct for every caller: whatever a
+    caller holds, it is a run of `SwingComparison` objects that arrives here.
 
     Args:
         comparisons: the run to check, already materialised in input order.
@@ -369,53 +470,20 @@ def _validate_current_point_order(
     Raises:
         ValueError: the run is not ordered.
     """
-    latest: dict[SwingType, SwingComparison] = {}
-
-    for position, comparison in enumerate(comparisons):
-        current = comparison.current
-        if position > 0:
-            earlier = comparisons[position - 1].current
-            if current.index < earlier.index:
-                raise ValueError(
-                    f"{subject} must be ordered by current index; "
-                    f"{subject}[{position}] has index {current.index} after "
-                    f"{earlier.index}"
-                )
-            if current.timestamp < earlier.timestamp:
-                raise ValueError(
-                    f"{subject} must be ordered by current timestamp; "
-                    f"{subject}[{position}] has "
-                    f"{current.timestamp.isoformat()} after "
-                    f"{earlier.timestamp.isoformat()}"
-                )
-            # Two comparisons may share a current index only when both came from
-            # one candle, in which case they share its timestamp too.
-            shared_index = current.index == earlier.index
-            if shared_index and current.timestamp != earlier.timestamp:
-                raise ValueError(
-                    f"{subject}[{position}] shares current index "
-                    f"{current.index} with the previous comparison but carries "
-                    "a different timestamp"
-                )
-
-        previous = latest.get(current.type)
-        if previous is not None:
-            # Strict within a type: one candle cannot be the current point of two
-            # comparisons of the same type, so a repeat here — including an
-            # identical comparison object — is a real inconsistency.
-            if current.index <= previous.current.index:
-                raise ValueError(
-                    f"{subject}[{position}] repeats or precedes current index "
-                    f"{previous.current.index} for swing type "
-                    f"{current.type.value!r}"
-                )
-            if current.timestamp <= previous.current.timestamp:
-                raise ValueError(
-                    f"{subject}[{position}] repeats or precedes current "
-                    f"timestamp {previous.current.timestamp.isoformat()} for "
-                    f"swing type {current.type.value!r}"
-                )
-        latest[current.type] = comparison
+    _validate_key_order(
+        [
+            (
+                comparison.current.index,
+                comparison.current.timestamp,
+                comparison.current.type,
+            )
+            for comparison in comparisons
+        ],
+        subject=subject,
+        index_noun="current index",
+        timestamp_noun="current timestamp",
+        element_noun="comparison",
+    )
 
 
 class StructuralSequenceStateType(str, Enum):

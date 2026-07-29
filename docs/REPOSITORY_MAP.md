@@ -163,10 +163,56 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   interface built on top may blur that.
 - **State is still not interpretation.** `SHIFTED_HIGHER` is not an uptrend, `CONTRACTED` is not
   consolidation, `EXPANDED` is not a breakout, and `UNCHANGED` is not a double top, support or liquidity.
-  State history is deliberately postponed (ADR-0015 §11).
+  State history shipped in Z1 (ADR-0016) and records the sequence without reading it; the first
+  reading of that sequence lives one layer up in `fmis.structural_trend` (ADR-0017), never here —
+  the package deliberately contains no trend vocabulary, and a test enforces it.
 - **Where structural *interpretation* belongs:** `fmis.features.market_structure` (Tier-2), which
   consumes these points and expresses a result as a `FeatureValue`. Detection is here because a tuple of
   `SwingPoint` objects is not a `FeatureValue`.
+
+## `src/fmis/structural_trend/` — structural trend (first consumer of the state history)
+
+- **Purpose:** summarise a `StructuralSequenceStateSnapshot` history into a deterministic **structural
+  trend**. The first layer in the repository whose output rests on a *stated policy* rather than on
+  arithmetic alone. Contracts: [ADR-0017](adr/ADR-0017-structural-trend-foundation.md); design in
+  [design/TREND_FOUNDATION_DESIGN_V1.md](design/TREND_FOUNDATION_DESIGN_V1.md).
+- **Responsibilities today:** `models.py` — `StructuralTrendType` (`SUSTAINED_HIGHER`, `SUSTAINED_LOWER`,
+  `NEUTRAL`, `INDETERMINATE`), the public policy constant `MINIMUM_DIRECTIONAL_SHIFTS` (2), the
+  frozen/slotted/hashable `StructuralTrendSnapshot` (`trend`, `state_snapshot`, with `index` and
+  `timestamp` as **projections, not fields**), and the private authorities
+  `_TREND_BY_DIRECTIONAL_STATE` / `_is_directional_state` / `_trend_for_directional_state` /
+  `_validate_snapshot_history_order`; `trend.py` — `derive_structural_trend`,
+  `derive_structural_trend_history`, and the private `_Run` accumulator with `_advance` / `_classify`
+  shared by both public functions. **Five public names**, none colliding with any existing export.
+- **The policy in one line:** only `SHIFTED_HIGHER` and `SHIFTED_LOWER` are directional evidence; the
+  other four states are **transparent**; two same-direction shifts with no opposing one between them are
+  sustained; **one** opposing shift invalidates.
+- **Ambiguity is reported, never resolved.** `NEUTRAL` means evidence exists on both sides and conflicts;
+  `INDETERMINATE` means evidence is absent. They are never folded together — a choppy market and a quiet
+  one must stay distinguishable.
+- **The threshold is a policy, not a measurement.** `MINIMUM_DIRECTIONAL_SHIFTS` is a module constant and
+  deliberately **not** a parameter: per-call tuning is not offered, and the prefix-stability guarantee is
+  stated per-threshold. Changing it changes every result and needs its own ADR.
+- **Prefix-stable** under candle-series extension and complete structural-group extension (0 violations
+  over 2,000 + 739 measured prefixes). The **arbitrary inside-group cut is explicitly outside** the
+  guarantee, inherited from ADR-0016 §7 and pinned by a test that asserts the divergence still exists.
+  Prefix stability means an emitted reading never changes — **not** that the trend keeps its value.
+- **Persistence is unconditional, and the cost is documented:** a trend followed by 500 contracting
+  snapshots still reads as sustained. Every decay rule would need an arbitrary constant this layer has no
+  basis for, and a wrong one would be invisible.
+- **Not interpretation beyond that policy.** `SUSTAINED_HIGHER` is not an uptrend, not bullish, not
+  momentum, not a breakout, not a reason to buy; `SUSTAINED_LOWER` is not a short signal. No confidence,
+  score, strength, rank, probability, magnitude or duration exists here, and no `EvidenceDescriptor` —
+  `EvidenceFamily.MARKET_STRUCTURE` stays empty.
+- **Why a sibling package:** not `fmis.market_structure` (ADR-0016 §12; its architecture test forbids the
+  token there), and not `fmis.features.trend` (a `StructuralTrendSnapshot` tuple is not a `FeatureValue`,
+  ADR-0012's reasoning). This keeps `market_structure`'s property that only its first stage touches a
+  candle.
+- **Allowed dependencies:** `fmis.market_structure`'s **public surface only**, and the standard library.
+- **Forbidden dependencies:** `fmis.data` directly, `fmis.market_structure`'s private submodules, and
+  `fmis.decision_support`, `fmis.evidence`, `fmis.providers`, `fmis.pipeline`, `fmis.ingest`,
+  `fmis.trading_context`, `fmis.relative_value`, `fmis.features`, `fmis.alignment`. **Nothing below
+  imports this package**, and trend is never an input to a break (architecture review §15).
 
 ## `src/fmis/evidence/` — evidence taxonomy
 
@@ -444,7 +490,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **2073 tests** across 26 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **2425 tests** across 27 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

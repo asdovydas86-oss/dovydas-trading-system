@@ -42,6 +42,7 @@ from fmis.market_structure.models import (
     SwingPoint,
     SwingType,
     _relation_for,
+    _validate_key_order,
 )
 
 __all__ = ["compare_swings", "compare_swing_sequence"]
@@ -120,46 +121,24 @@ def compare_swing_sequence(
                 f"got {type(point).__name__}"
             )
 
+    # Ordering is checked in full before any comparison is built, so an unordered
+    # run never yields a partial result. The rule itself lives in
+    # `models._validate_key_order`; this call is the point-level projection onto
+    # it, and the noun arguments reproduce this layer's original wording exactly.
+    _validate_key_order(
+        [(point.index, point.timestamp, point.type) for point in ordered],
+        subject="points",
+        index_noun="index",
+        timestamp_noun="timestamp",
+        element_noun="point",
+    )
+
     comparisons: list[SwingComparison] = []
     latest: dict[SwingType, SwingPoint] = {}
 
-    for position, point in enumerate(ordered):
-        if position > 0:
-            earlier = ordered[position - 1]
-            if point.index < earlier.index:
-                raise ValueError(
-                    f"points must be ordered by index; points[{position}] has "
-                    f"index {point.index} after {earlier.index}"
-                )
-            if point.timestamp < earlier.timestamp:
-                raise ValueError(
-                    f"points must be ordered by timestamp; points[{position}] "
-                    f"has {point.timestamp.isoformat()} after "
-                    f"{earlier.timestamp.isoformat()}"
-                )
-            # Two points may share an index only when they came from one candle,
-            # in which case they necessarily share its timestamp too.
-            if point.index == earlier.index and point.timestamp != earlier.timestamp:
-                raise ValueError(
-                    f"points[{position}] shares index {point.index} with the "
-                    "previous point but carries a different timestamp"
-                )
-
+    for point in ordered:
         previous = latest.get(point.type)
         if previous is not None:
-            # Strict within a type: one candle cannot be two swing highs, so a
-            # repeated index or timestamp here is a real inconsistency.
-            if point.index <= previous.index:
-                raise ValueError(
-                    f"points[{position}] repeats or precedes index "
-                    f"{previous.index} for swing type {point.type.value!r}"
-                )
-            if point.timestamp <= previous.timestamp:
-                raise ValueError(
-                    f"points[{position}] repeats or precedes timestamp "
-                    f"{previous.timestamp.isoformat()} for swing type "
-                    f"{point.type.value!r}"
-                )
             comparisons.append(compare_swings(previous, point))
         latest[point.type] = point
 

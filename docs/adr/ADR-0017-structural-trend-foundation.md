@@ -77,8 +77,9 @@ deliberately **not a function parameter**: a parameter invites per-call tuning, 
 prefix-stability guarantee per-threshold, so two results derived under different thresholds are not
 comparable. Changing it changes the meaning of every result and requires its own decision record.
 
-Measured over 1,627 non-empty state sequences: `minimum=1` yields a direction in 79% of them, `minimum=2`
-in 22%, `minimum=3` in 5%. The threshold materially changes the answer, which is precisely why it is
+Measured over every state sequence of length 1–4 over all six members (1,554 sequences — an exhaustive
+enumeration, so exactly reproducible): `minimum=1` reports a direction in 78.1% of them, `minimum=2` in
+18.9%, `minimum=3` in 2.4%. The threshold materially changes the answer, which is precisely why it is
 stated in the open rather than buried in a conditional.
 
 ### 5. `NEUTRAL` and `INDETERMINATE` are different, and both exist
@@ -137,8 +138,21 @@ prefixes and 739 complete-group prefixes.
 ### 9. The limitations of that guarantee, stated just as exactly
 1. **An arbitrary cut inside a same-candle HIGH/LOW group** is outside it — inherited verbatim from
    ADR-0016 §7, neither weakened nor repaired. It cannot arise from candle growth and is not detectable.
-   Measured at 133 divergences over 891 split groups, and **a test asserts the divergence still exists**,
-   so the limitation cannot be quietly "fixed" into a false guarantee.
+
+   Two different figures are measurable here and they must not be conflated, because the review found the
+   design's first draft citing one of them as though it measured the other:
+
+   | Measured over 891 split outside-bar groups | Divergences |
+   |---|---|
+   | **as the guarantee's own equality** — whole `StructuralTrendSnapshot` tuples | **891 / 891 (all)** |
+   | trend *value* only, ignoring the embedded state snapshot | 133 / 891 (15%) |
+
+   The first is the number that bears on §8, because the guarantee is stated over
+   `derive_structural_trend_history`'s return value, and a split group produces a different — and
+   correct — state snapshot for that candle, so the readings differ as objects even where the trend value
+   happens to coincide. The second says how often the *conclusion* also changes, which is interesting but
+   is not the guarantee. **Both are pinned by test**, so neither can be quietly "fixed" into a false
+   guarantee or silently substituted for the other.
 2. **Nothing is claimed across two `detect_swings` parameterisations.** Different `left_bars`/`right_bars`
    produce a different history entirely.
 3. **Nothing is claimed across two values of `MINIMUM_DIRECTIONAL_SHIFTS`** (§4).
@@ -266,6 +280,17 @@ outside bars). All four are prefix-stable, so that property alone did not discri
 - The `EQUAL_*` and exact-comparison limitations from ADR-0013 §4 are inherited unchanged, as is the
   event-indexed nature of the history from ADR-0016: a consumer wanting a value at every bar must join on
   `index` or `timestamp` itself.
+- **Two inherited limitations the independent review surfaced, neither a defect of this layer:**
+  - A snapshot carries no symbol or timeframe — deliberate, and the architecture review §16 records that
+    context belongs in an envelope rather than on atomic facts. So a caller who **concatenates two
+    instruments' histories** can produce a run that passes ordering validation (increasing indices and
+    timestamps) and is folded into one trend. This layer cannot detect it, and adding a check would require
+    the metadata the package deliberately does not carry. Any future multi-timeframe or multi-symbol layer
+    must join on **timestamp**, never index, and must not concatenate.
+  - `MINIMUM_DIRECTIONAL_SHIFTS` is read from `models` into `trend`'s namespace at import time, so
+    rebinding `fmis.structural_trend.MINIMUM_DIRECTIONAL_SHIFTS` at runtime is **inert** while rebinding
+    `fmis.structural_trend.trend.MINIMUM_DIRECTIONAL_SHIFTS` is live. Neither is a supported way to change
+    the policy (§4); the asymmetry is recorded so nobody mistakes the inert one for a working dial.
 - **Still postponed, and unblocked by nothing here:** BOS, CHoCH, support/resistance, protected levels,
   liquidity, sweep, double top/bottom, regime, bias, multi-timeframe merging, tolerance/tick-size handling,
   incremental derivation, and every evidence descriptor for market structure.

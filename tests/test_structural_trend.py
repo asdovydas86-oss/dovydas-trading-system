@@ -938,10 +938,18 @@ def test_the_arbitrary_inside_group_cut_is_outside_the_guarantee() -> None:
     """ADR-0016 §7's limitation, inherited. Pinned so it cannot be "fixed" falsely.
 
     Splitting an outside bar's HIGH from its LOW yields a different — and correct —
-    state for that candle, so the trend at and after it may differ. This is
-    measured, not assumed: the test asserts a divergence really exists.
+    state for that candle, so the reading at and after it differs. This is measured,
+    not assumed.
+
+    **Two figures, deliberately kept apart** (ADR-0017 §9.1). Compared as whole
+    `StructuralTrendSnapshot` tuples — the guarantee's own equality — *every* split
+    diverges, because the embedded state snapshot for that candle is genuinely
+    different. Compared on the trend *value* alone, only a minority diverge. The
+    review found the first draft of the design quoting the second figure as though
+    it measured the first, so both are pinned here and neither can be silently
+    substituted for the other.
     """
-    divergences = split = 0
+    split = divergent_snapshots = divergent_values = 0
     for seed in range(40):
         rng = random.Random(5000 + seed)
         run = structural_run(series(random_rows(rng, 40, (seed % 3 - 1) * 1.2, 3)).candles)
@@ -951,6 +959,7 @@ def test_the_arbitrary_inside_group_cut_is_outside_the_guarantee() -> None:
         full = derive_structural_trend_history(
             derive_structural_sequence_state_history(run)
         )
+        full_values = [s.trend for s in full]
         for index, group in sorted(grouped.items()):
             if len(group) < 2:
                 continue
@@ -962,12 +971,21 @@ def test_the_arbitrary_inside_group_cut_is_outside_the_guarantee() -> None:
                 derive_structural_sequence_state_history(cut)
             )
             if partial != full[: len(partial)]:
-                divergences += 1
-    assert split > 0
-    assert divergences > 0, (
-        "the inside-group cut no longer diverges; either the fixture stopped "
-        "producing outside bars or a stronger guarantee was introduced without "
-        "updating ADR-0016 §7 and ADR-0017"
+                divergent_snapshots += 1
+            if [s.trend for s in partial] != full_values[: len(partial)]:
+                divergent_values += 1
+
+    assert split > 0, "the fixture stopped producing outside bars"
+    # Under the guarantee's own equality the cut diverges every single time.
+    assert divergent_snapshots == split, (
+        "an inside-group cut no longer changes every reading; either the state "
+        "history stopped resolving groups atomically or a stronger guarantee was "
+        "introduced without updating ADR-0016 §7 and ADR-0017 §9"
+    )
+    # The trend *value* changes less often — a different and weaker statement.
+    assert 0 < divergent_values < split, (
+        "the trend-value divergence rate collapsed to 0 or 100%, so the two "
+        "figures ADR-0017 §9.1 distinguishes are no longer distinguishable"
     )
 
 

@@ -124,9 +124,9 @@ expresses repetition, on the reasoning that any larger value is a strictly more 
 which §6 rejects as forcing direction.
 
 It is exposed as a **public module constant** so the policy is legible in code and in tests, and it is
-deliberately **not a function parameter** (§7.4). Sensitivity was measured over 1,627 non-empty state
-sequences (§5.4): `minimum=1` yields a direction in 79% of them, `minimum=2` in 22%, `minimum=3` in 5%.
-The threshold materially changes the answer, which is exactly why it is stated rather than buried.
+deliberately **not a function parameter** (§7.4). Sensitivity is measured in §5.4: over every state
+sequence of length 1–4, `minimum=1` reports a direction in 78% of them, `minimum=2` in 19%, `minimum=3` in
+2%. The threshold materially changes the answer, which is exactly why it is stated rather than buried.
 
 ### 4.3 The seventeen questions, answered
 
@@ -188,13 +188,21 @@ matter.
 
 ### 5.4 Threshold sensitivity, measured
 
-Over the 1,627 non-empty sequences, the fraction resolving to a direction:
+Measured over the **exhaustive enumeration alone**, so the figures are exactly reproducible by anyone
+without a fixture: every state sequence of length 1–4 over all six members (1,554 sequences), and the same
+to length 6 (55,986) to show the trend of the trend.
 
-| `MINIMUM_DIRECTIONAL_SHIFTS` | directional outcomes |
-|---|---|
-| 1 | 1,286 / 1,627 (79%) |
-| 2 | 350 / 1,627 (22%) |
-| 3 | 84 / 1,627 (5%) |
+| `MINIMUM_DIRECTIONAL_SHIFTS` | length 1–4 | length 1–6 |
+|---|---|---|
+| 1 | 1,214 / 1,554 (78.1%) | 50,526 / 55,986 (90.2%) |
+| 2 | 294 / 1,554 (18.9%) | 17,526 / 55,986 (31.3%) |
+| 3 | 38 / 1,554 (2.4%) | 4,174 / 55,986 (7.5%) |
+
+The exact counts move with the corpus — the independent review reconstructed the full 1,629-sequence corpus
+of §5.2 and obtained 1,286 / 351 / 85 against the design's first draft of 1,286 / 350 / 84, because one
+hand-built candle fixture in the corpus is not reproducible from a seed. The **percentages are stable and
+the conclusion is unaffected**, and the reproducible enumeration above is quoted in preference to a figure
+that depends on a fixture.
 
 ## 6. Rejected policies
 
@@ -447,9 +455,13 @@ by the paragraph above the trend history over it agrees on those positions.
 
 1. **An arbitrary cut inside a same-candle HIGH/LOW group.** Inherited verbatim from ADR-0016 §7 and not
    weakened or repaired here. Taking the HIGH of an outside bar without its LOW yields a different — and
-   correct — state for that candle, which can change the trend at and after that position. **Measured: 133
-   divergences across 891 split outside-bar groups (15%).** It cannot arise from candle growth and is not
-   detectable, exactly as ADR-0016 §7 records.
+   correct — state for that candle, which can change the reading at and after that position. It cannot
+   arise from candle growth and is not detectable, exactly as ADR-0016 §7 records.
+
+   Two figures are measurable over the same 891 split outside-bar groups and **must not be conflated**:
+   compared as whole `StructuralTrendSnapshot` tuples — which is the guarantee's own equality — **all 891
+   diverge**; compared on the trend *value* alone, **133 (15%)** diverge. The first is the figure that
+   bears on the guarantee; the second says how often the conclusion also changes. Both are pinned by test.
 2. **Re-parameterised detection.** Changing `left_bars` / `right_bars` produces a different swing run and
    therefore a different history; nothing is claimed across two different detection parameterisations.
 3. **A different `MINIMUM_DIRECTIONAL_SHIFTS`.** The guarantee is per-threshold. Two histories derived
@@ -467,7 +479,8 @@ by the paragraph above the trend history over it agrees on those positions.
 | candle-series extension (40 series × every bar prefix) | 2,000 prefixes | **0** |
 | complete structural-group extension (40 series × every group prefix) | 739 prefixes | **0** |
 | exhaustive + named + candle-derived sequence corpus (§5.2) | 1,629 sequences, all prefixes | **0** |
-| arbitrary inside-group cut (**excluded** by §8.3) | 891 splits | 133 — expected |
+| arbitrary inside-group cut (**excluded** by §8.3), as snapshot tuples | 891 splits | 891 — expected |
+| the same cut, trend *value* only | 891 splits | 133 — expected |
 
 ## 9. Deterministic replay contract
 

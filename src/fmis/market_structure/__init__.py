@@ -1,6 +1,6 @@
 """Market structure primitives — deterministic swing detection.
 
-Value types and pure functions in two layers:
+Value types and pure functions in four stages:
 
     CandleSeries    -> detect_swings          -> tuple[SwingPoint, ...]
     SwingPoints     -> compare_swing_sequence -> tuple[SwingComparison, ...]

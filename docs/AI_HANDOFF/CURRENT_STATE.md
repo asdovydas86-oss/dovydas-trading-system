@@ -5,8 +5,7 @@ should be updated at the end of every milestone. If it disagrees with the code, 
 update this file.
 
 **Last updated for:** Milestone Y — Structural Sequence State Foundation v1 (2026-07-28).
-**Latest commit at time of writing:** `b5f8723` — `Merge Structural Swing Label Foundation v1`
-(the Milestone Y commit is created by this milestone; update this line to its hash after commit).
+**Latest commit at time of writing:** `1154622` — `Merge Structural Sequence State Foundation v1`.
 
 ---
 

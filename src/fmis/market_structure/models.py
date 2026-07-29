@@ -15,6 +15,12 @@ high or a lower low. Naming a fact is not interpreting it — break of structure
 trend, and support levels all require further decisions this layer deliberately
 does not make.
 
+A `StructuralSequenceState` puts the latest HIGH-side label beside the latest
+LOW-side label and says how the two stand together — both sides at higher
+prices, both lower, outward, inward, or neither. That is still arithmetic about
+two already-established facts. It is not a trend, a bias, or a reason to trade,
+and either side may simply be absent.
+
 ``index`` is a position into the **closed** candles of the series it was derived
 from (`CandleSeries.closed().candles`), not into the raw series. Detection
 operates on closed candles only, so any forming candle is absent before indices
@@ -25,7 +31,7 @@ whether the last bar had closed.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -38,6 +44,8 @@ __all__ = [
     "SwingComparison",
     "StructuralSwingLabel",
     "StructuralSwing",
+    "StructuralSequenceStateType",
+    "StructuralSequenceState",
 ]
 
 
@@ -321,4 +329,271 @@ class StructuralSwing:
                 f"label {self.label.value!r} does not match the comparison "
                 f"({self.comparison.current.type.value} + "
                 f"{self.comparison.relation.value}); expected {expected.value!r}"
+            )
+
+
+def _validate_current_point_order(
+    comparisons: Sequence[SwingComparison], subject: str
+) -> None:
+    """The one authoritative ordering rule for a run of comparisons.
+
+    Checked on each comparison's ``current`` point:
+
+      * ``current.index`` is **non-decreasing** across the whole run;
+      * ``current.timestamp`` is non-decreasing with it;
+      * comparisons sharing a ``current.index`` share its timestamp;
+      * within each `SwingType`, index and timestamp are **strictly** increasing.
+
+    Global strictness is deliberately not required: one outside candle produces a
+    HIGH and a LOW at the same index, so `compare_swing_sequence` legitimately
+    emits two comparisons sharing a ``current.index``. Per-type strictness is what
+    matters, and it is also what rejects a duplicated comparison.
+
+    Order is validated, never repaired, and the relative order of two comparisons
+    at an equal index is whatever the input had — this rule imposes no
+    HIGH-before-LOW convention of its own.
+
+    Deliberately **private**, and defined once so that every layer consuming an
+    ordered run inherits the same contract rather than growing a second, subtly
+    different one. ``subject`` names the caller's parameter in error messages so
+    the message points at the argument the caller actually passed; every other
+    word of those messages is fixed, because `label_swing_sequence` shipped with
+    this exact wording and extracting the rule must not reword its output. The
+    noun "comparison" stays correct for every caller: whatever a caller holds, it
+    is a run of `SwingComparison` objects that arrives here.
+
+    Args:
+        comparisons: the run to check, already materialised in input order.
+        subject: the caller's parameter name, used in error text.
+
+    Raises:
+        ValueError: the run is not ordered.
+    """
+    latest: dict[SwingType, SwingComparison] = {}
+
+    for position, comparison in enumerate(comparisons):
+        current = comparison.current
+        if position > 0:
+            earlier = comparisons[position - 1].current
+            if current.index < earlier.index:
+                raise ValueError(
+                    f"{subject} must be ordered by current index; "
+                    f"{subject}[{position}] has index {current.index} after "
+                    f"{earlier.index}"
+                )
+            if current.timestamp < earlier.timestamp:
+                raise ValueError(
+                    f"{subject} must be ordered by current timestamp; "
+                    f"{subject}[{position}] has "
+                    f"{current.timestamp.isoformat()} after "
+                    f"{earlier.timestamp.isoformat()}"
+                )
+            # Two comparisons may share a current index only when both came from
+            # one candle, in which case they share its timestamp too.
+            shared_index = current.index == earlier.index
+            if shared_index and current.timestamp != earlier.timestamp:
+                raise ValueError(
+                    f"{subject}[{position}] shares current index "
+                    f"{current.index} with the previous comparison but carries "
+                    "a different timestamp"
+                )
+
+        previous = latest.get(current.type)
+        if previous is not None:
+            # Strict within a type: one candle cannot be the current point of two
+            # comparisons of the same type, so a repeat here — including an
+            # identical comparison object — is a real inconsistency.
+            if current.index <= previous.current.index:
+                raise ValueError(
+                    f"{subject}[{position}] repeats or precedes current index "
+                    f"{previous.current.index} for swing type "
+                    f"{current.type.value!r}"
+                )
+            if current.timestamp <= previous.current.timestamp:
+                raise ValueError(
+                    f"{subject}[{position}] repeats or precedes current "
+                    f"timestamp {previous.current.timestamp.isoformat()} for "
+                    f"swing type {current.type.value!r}"
+                )
+        latest[current.type] = comparison
+
+
+class StructuralSequenceStateType(str, Enum):
+    """How the latest HIGH-side and latest LOW-side labels stand together.
+
+    Six members partitioning the nine complete label combinations, plus one
+    member for an incomplete pair. Each describes **numeric movement of two
+    already-established facts** and nothing else.
+
+    The partition is built from one idea: each side has moved *outward* from its
+    own previous swing, *inward*, or not at all. `HIGHER_HIGH` and `LOWER_LOW`
+    are outward, `LOWER_HIGH` and `HIGHER_LOW` are inward, `EQUAL_HIGH` and
+    `EQUAL_LOW` are static. That covers all nine cells with no overlap and no
+    leftovers, which is why there is no `MIXED` member — a dumping ground would
+    mean the partition was incomplete.
+
+      * `SHIFTED_HIGHER` — both sides moved to higher prices (one outward, one
+        inward). It does **not** mean uptrend, bullish, strong, or continuation.
+      * `SHIFTED_LOWER` — both sides moved to lower prices. Not bearish, not a
+        reversal, not weakness.
+      * `EXPANDED` — one or both sides moved outward and neither moved inward.
+        Not a breakout, not volatility, not a range break.
+      * `CONTRACTED` — one or both sides moved inward and neither moved outward.
+        Not consolidation, not compression, not a squeeze.
+      * `UNCHANGED` — neither side moved: `EQUAL_HIGH` with `EQUAL_LOW`. Not a
+        double top, not a double bottom, not support, resistance or liquidity.
+      * `INSUFFICIENT_STRUCTURE` — no labelled swing on one side or on either.
+        See `StructuralSequenceState`.
+
+    "Expanded" and "contracted" describe the two sides' movement, not a measured
+    width. The HIGH side is compared to the previous HIGH and the LOW side to the
+    previous LOW, and those two baselines are independent and generally from
+    different candles, so this layer never computes or claims a range size — it
+    reads no price at all.
+
+    Deliberately absent: BULLISH, BEARISH, UPTREND, DOWNTREND, LONG, SHORT, BUY,
+    SELL, CONTINUATION, REVERSAL, BREAKOUT, BOS, CHOCH, STRONG, WEAK, CONFIRMED,
+    and anything carrying confidence, score or ranking.
+    """
+
+    SHIFTED_HIGHER = "shifted_higher"
+    SHIFTED_LOWER = "shifted_lower"
+    EXPANDED = "expanded"
+    CONTRACTED = "contracted"
+    UNCHANGED = "unchanged"
+    INSUFFICIENT_STRUCTURE = "insufficient_structure"
+
+
+#: The one authoritative mapping from (latest HIGH label, latest LOW label) to
+#: its state. Exhaustive over the nine complete combinations by construction; an
+#: immutable mapping so the classification cannot be re-pointed at runtime.
+#: Written out cell by cell rather than derived, so that reading it is the same
+#: as reading the ADR's matrix.
+_STATE_BY_LABEL_PAIR: Mapping[
+    tuple[StructuralSwingLabel, StructuralSwingLabel], StructuralSequenceStateType
+] = MappingProxyType(
+    {
+        # both sides moved to higher prices
+        (
+            StructuralSwingLabel.HIGHER_HIGH,
+            StructuralSwingLabel.HIGHER_LOW,
+        ): StructuralSequenceStateType.SHIFTED_HIGHER,
+        # both sides moved to lower prices
+        (
+            StructuralSwingLabel.LOWER_HIGH,
+            StructuralSwingLabel.LOWER_LOW,
+        ): StructuralSequenceStateType.SHIFTED_LOWER,
+        # outward on one or both sides, inward on neither
+        (
+            StructuralSwingLabel.HIGHER_HIGH,
+            StructuralSwingLabel.LOWER_LOW,
+        ): StructuralSequenceStateType.EXPANDED,
+        (
+            StructuralSwingLabel.HIGHER_HIGH,
+            StructuralSwingLabel.EQUAL_LOW,
+        ): StructuralSequenceStateType.EXPANDED,
+        (
+            StructuralSwingLabel.EQUAL_HIGH,
+            StructuralSwingLabel.LOWER_LOW,
+        ): StructuralSequenceStateType.EXPANDED,
+        # inward on one or both sides, outward on neither
+        (
+            StructuralSwingLabel.LOWER_HIGH,
+            StructuralSwingLabel.HIGHER_LOW,
+        ): StructuralSequenceStateType.CONTRACTED,
+        (
+            StructuralSwingLabel.LOWER_HIGH,
+            StructuralSwingLabel.EQUAL_LOW,
+        ): StructuralSequenceStateType.CONTRACTED,
+        (
+            StructuralSwingLabel.EQUAL_HIGH,
+            StructuralSwingLabel.HIGHER_LOW,
+        ): StructuralSequenceStateType.CONTRACTED,
+        # neither side moved
+        (
+            StructuralSwingLabel.EQUAL_HIGH,
+            StructuralSwingLabel.EQUAL_LOW,
+        ): StructuralSequenceStateType.UNCHANGED,
+    }
+)
+
+
+def _sequence_state_for(
+    latest_high: "StructuralSwing | None", latest_low: "StructuralSwing | None"
+) -> StructuralSequenceStateType:
+    """The state implied by the two latest sides — the one authoritative rule.
+
+    Either side missing gives `INSUFFICIENT_STRUCTURE`: a state is a statement
+    about *both* sides, and inventing one from a single side would be fabricating
+    the half that is not there. Which half is missing stays visible on the
+    `StructuralSequenceState` itself, so no extra enum member is needed to say it.
+
+    Deliberately **private**, following `_relation_for` and `_label_for`. A public
+    ``state_for(high_label, low_label)`` would let a caller classify a pairing
+    that no validated pair of `StructuralSwing` objects produced.
+    """
+    if latest_high is None or latest_low is None:
+        return StructuralSequenceStateType.INSUFFICIENT_STRUCTURE
+    return _STATE_BY_LABEL_PAIR[(latest_high.label, latest_low.label)]
+
+
+@dataclass(frozen=True, slots=True)
+class StructuralSequenceState:
+    """The latest HIGH-side and LOW-side structural facts, and their state.
+
+    Exactly three fields. ``latest_high`` and ``latest_low`` are the two source
+    `StructuralSwing` objects — kept whole, so every underlying fact (both
+    points, their indices, timestamps and prices, the relation, the label) stays
+    reachable and none of it is copied here. Either may be ``None`` when no swing
+    of that side has been labelled yet.
+
+    ``state`` is **validated against those two sides**, not trusted: an object
+    claiming `EXPANDED` for a pair that contracted cannot be constructed, and
+    neither can one claiming a complete state with a side missing.
+
+    The state groups the nine complete combinations into five, so it is
+    deliberately lossy — which is exactly why both sides are retained. A consumer
+    that needs to tell `HIGHER_HIGH` + `EQUAL_LOW` from `HIGHER_HIGH` +
+    `LOWER_LOW` reads ``latest_high.label`` and ``latest_low.label`` and gets the
+    exact pair back.
+
+    Unlike a `StructuralSwing`, which is settled forever once emitted, an
+    instance of this type describes *the latest known pair* and is expected to be
+    superseded when a newer swing on either side is confirmed. The object itself
+    is still immutable; a later call simply returns a different one. See ADR-0015.
+
+    Frozen, slotted and hashable, matching every other value type here.
+    """
+
+    latest_high: "StructuralSwing | None"
+    latest_low: "StructuralSwing | None"
+    state: StructuralSequenceStateType
+
+    def __post_init__(self) -> None:
+        for name, value, side in (
+            ("latest_high", self.latest_high, SwingType.HIGH),
+            ("latest_low", self.latest_low, SwingType.LOW),
+        ):
+            if value is None:
+                continue
+            if not isinstance(value, StructuralSwing):
+                raise TypeError(
+                    f"{name} must be a StructuralSwing or None, got "
+                    f"{type(value).__name__}"
+                )
+            if value.comparison.current.type is not side:
+                raise ValueError(
+                    f"{name} must hold a {side.value!r} swing, got "
+                    f"{value.comparison.current.type.value!r}"
+                )
+        if not isinstance(self.state, StructuralSequenceStateType):
+            raise TypeError(
+                "state must be a StructuralSequenceStateType, got "
+                f"{type(self.state).__name__}"
+            )
+        expected = _sequence_state_for(self.latest_high, self.latest_low)
+        if self.state is not expected:
+            raise ValueError(
+                f"state {self.state.value!r} does not match the latest sides; "
+                f"expected {expected.value!r}"
             )

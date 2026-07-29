@@ -725,6 +725,8 @@ def test_public_api_is_exactly_the_declared_surface() -> None:
         "StructuralSwingLabel", "StructuralSwing",
         "detect_swings", "compare_swings", "compare_swing_sequence",
         "label_swing", "label_swing_sequence",
+        "StructuralSequenceStateType", "StructuralSequenceState",
+        "derive_structural_sequence_state",
         "required_candles", "DEFAULT_LEFT_BARS", "DEFAULT_RIGHT_BARS",
     }
     for name in ms.__all__:
@@ -735,7 +737,8 @@ def test_no_submodule_shares_a_name_with_a_public_object() -> None:
     import pkgutil
 
     submodules = {m.name for m in pkgutil.iter_modules(ms.__path__)}
-    assert submodules == {"labels", "models", "relationships", "swings"}
+    assert submodules == {"labels", "models", "relationships", "sequence_state",
+                          "swings"}
     assert submodules & set(ms.__all__) == set()
 
 
@@ -759,6 +762,7 @@ def test_imports_only_canonical_data_and_own_modules() -> None:
         "fmis.market_structure.labels",
         "fmis.market_structure.models",
         "fmis.market_structure.relationships",
+        "fmis.market_structure.sequence_state",
         "fmis.market_structure.swings",
     }
 

@@ -4,15 +4,39 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone X — Structural Swing Label Foundation v1 (2026-07-28).
-**Latest commit at time of writing:** `153f930` — `Merge Swing Relationship Foundation v1`
-(the Milestone X commit is created by this milestone; update this line to its hash after commit).
+**Last updated for:** Milestone Y — Structural Sequence State Foundation v1 (2026-07-28).
+**Latest commit at time of writing:** `b5f8723` — `Merge Structural Swing Label Foundation v1`
+(the Milestone Y commit is created by this milestone; update this line to its hash after commit).
 
 ---
 
 ## Current milestone
 
-- **X — Structural Swing Label Foundation v1** (implementation): `fmis.market_structure` gains
+- **Y — Structural Sequence State Foundation v1** (implementation): `fmis.market_structure` gains
+  `StructuralSequenceStateType` (six members), the frozen/slotted/hashable `StructuralSequenceState`
+  (`latest_high`, `latest_low`, `state`), and the pure function `derive_structural_sequence_state`.
+  Contracts fixed in [ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md).
+
+  **A complete nine-cell matrix**, classified by whether each side moved outward from its own previous
+  swing, inward, or not at all: `SHIFTED_HIGHER`, `SHIFTED_LOWER`, `EXPANDED`, `CONTRACTED`, `UNCHANGED`,
+  plus `INSUFFICIENT_STRUCTURE` when either side has no labelled swing. The partition is exhaustive and
+  disjoint, so there is **no catch-all member**. `ADVANCING_*` and `BALANCED` were rejected as
+  interpretive.
+
+  **The grouping is lossy on purpose, so both source facts are retained.** Five states over nine
+  combinations cannot distinguish `HIGHER_HIGH` + `LOWER_LOW` from `HIGHER_HIGH` + `EQUAL_LOW`; the two
+  `StructuralSwing` objects stay on the result, so a consumer recovers the exact cell.
+
+  **Aggregate state evolves, and that is not repainting.** Swings, comparisons and labels remain
+  prefix-stable; the aggregate is by construction a statement about the *latest* pair and is superseded
+  when a newer swing is confirmed on either side. Prefix stability is explicitly **not** claimed for it.
+
+  **Outside bars resolve atomically** — the whole run is evaluated and one final state derived, so no
+  intermediate half-applied state is exposed. One shared ordering rule
+  (`models._validate_current_point_order`) now serves both this layer and labelling. State history is
+  postponed ([ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md) §11).
+
+- **X — Structural Swing Label Foundation v1** (merged `b5f8723`): `fmis.market_structure` gained
   `StructuralSwingLabel` (six members), the frozen/slotted/hashable `StructuralSwing`
   (`comparison`, `label`), and the pure functions `label_swing` / `label_swing_sequence`. Contracts fixed
   in [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md).
@@ -71,19 +95,21 @@ Reconstructed from git history (`git log --oneline`):
 | Evidence namespace hygiene fix | `6e098cf`, merged `352bf45` | `descriptors.py` -> `descriptor.py`; no API or taxonomy change |
 | Market Structure Foundation v1 (V) | `b91c3d1`, merged `e7dbbb9` | `fmis.market_structure` — deterministic swing detection; see [ADR-0012](../adr/ADR-0012-market-structure-foundation.md) |
 | Swing Relationship Foundation v1 (W) | `90ae358`, merged `153f930` | `SwingRelation`, `SwingComparison`, `compare_swings`, `compare_swing_sequence`; see [ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md) |
-| Structural Swing Label Foundation v1 (X) | _this commit_ | `StructuralSwingLabel`, `StructuralSwing`, `label_swing`, `label_swing_sequence`; see [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) |
+| Structural Swing Label Foundation v1 (X) | `5a25f39`, merged `b5f8723` | `StructuralSwingLabel`, `StructuralSwing`, `label_swing`, `label_swing_sequence`; see [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) |
+| Structural Sequence State Foundation v1 (Y) | _this commit_ | `StructuralSequenceStateType`, `StructuralSequenceState`, `derive_structural_sequence_state`; see [ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**1458 passing** (`uv run pytest`, ~0.74 s). Per module:
+**1773 passing** (`uv run pytest`, ~0.9 s). Per module:
 
 | Module | Tests |
 |---|---|
-| `tests/test_market_structure_labels.py` | 190 |
-| `tests/test_market_structure_relationships.py` | 227 |
+| `tests/test_market_structure_sequence_state.py` | 312 |
+| `tests/test_market_structure_relationships.py` | 228 |
 | `tests/test_market_structure_swings.py` | 194 |
+| `tests/test_market_structure_labels.py` | 193 |
 | `tests/test_evidence_taxonomy.py` | 77 |
 | `tests/test_features_volume.py` | 81 |
 | `tests/test_decision_support_evidence.py` | 93 |
@@ -104,7 +130,7 @@ Reconstructed from git history (`git log --oneline`):
 | `tests/test_ema_math.py` | 5 |
 | `tests/test_trading_context.py` | 51 |
 | `tests/test_smoke.py` | 2 |
-| **Total** | **1458** |
+| **Total** | **1773** |
 
 ## Implemented indicators (Tier-1)
 
@@ -137,7 +163,12 @@ R5 — relevant to future backtesting).
   `StructuralSwingLabel` members. Exact price comparison, validated/preserved order, full names canonical,
   EQUAL first-class, and naming that stops short of interpretation
   ([ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md),
-  [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md)). Strict-left / `>=`-right comparison; plateaus collapse to one
+  [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md)); and
+  `derive_structural_sequence_state`, which reads the latest HIGH-side label beside the latest LOW-side
+  label as one of five states over a complete nine-cell matrix — or `INSUFFICIENT_STRUCTURE` when a side
+  is missing — while retaining both source facts. Its aggregate output is **expected to evolve** as newer
+  swings are confirmed, which is not repainting and is the one thing in this package that is not
+  prefix-stable ([ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md)). Strict-left / `>=`-right comparison; plateaus collapse to one
   point, separated equal highs stay distinct; insufficient history returns `()`. Located facts only, no
   structural interpretation ([ADR-0012](../adr/ADR-0012-market-structure-foundation.md)).
 - **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` + `EvidenceDescriptor` + an immutable
@@ -215,10 +246,12 @@ src/fmis/
 │   ├── __init__.py                 package rules + public surface
 │   ├── models.py                   SwingType, SwingPoint, SwingRelation,
 │   │                               SwingComparison, StructuralSwingLabel,
-│   │                               StructuralSwing
+│   │                               StructuralSwing, StructuralSequenceStateType,
+│   │                               StructuralSequenceState
 │   ├── swings.py                   detect_swings, required_candles
 │   ├── relationships.py            compare_swings, compare_swing_sequence
-│   └── labels.py                   label_swing, label_swing_sequence
+│   ├── labels.py                   label_swing, label_swing_sequence
+│   └── sequence_state.py           derive_structural_sequence_state
 ├── evidence/
 │   ├── __init__.py                 taxonomy rules + public surface
 │   ├── families.py                 EvidenceFamily
@@ -288,13 +321,21 @@ Not yet chosen. With named structural facts available, the natural next steps ar
 
 - **Break of structure / change of character** — the first rule *over a sequence* of labels. It needs an
   explicit definition of what counts as a break, including whether an `EQUAL_HIGH` breaks anything, before
-  any code ([ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) §10).
+  any code ([ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) §11).
+- **Structural sequence state history** — deliberately postponed from Milestone Y. It needs one decision
+  first: whether an outside bar updating both sides at one index emits one transition or two
+  ([ADR-0015](../adr/ADR-0015-structural-sequence-state-foundation.md) §11).
 - **Trend classification** — how many swings constitute a trend, and what an interleaved
   `HIGHER_HIGH` / `LOWER_LOW` run means. Its own decision record.
 - **Support / resistance candidates** — `fmis.features.support_resistance` already names swing points as
   its input, and `EQUAL_HIGH`/`EQUAL_LOW` are the obvious seed.
 - **Volume Evidence v1b** — still the deferred half of Milestone T.
 - **Trading reasoning v1** — first consumer of `TradingAnalysisContext`.
+
+**Known follow-ups from Milestone Y** (each small, none blocking): the package now has two kinds of
+output with different stability guarantees, so any interface built on top must not describe the aggregate
+state as non-repainting; and the five states are deliberately coarser than their inputs, so a consumer
+needing more detail reads `latest_high.label` / `latest_low.label` rather than growing the enum.
 
 **Known follow-ups from Milestone X** (each small, none blocking): `StructuralSwing` is a thin wrapper, so
 a consumer reaching through `swing.comparison.current.price` repeatedly wants a projection rather than

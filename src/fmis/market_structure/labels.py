@@ -34,7 +34,9 @@ not a rule here — `compare_swing_sequence` accepts a valid run in either order
 so a LOW-before-HIGH pair is legitimate input and is labelled in that order.
 
 Ordering contract, mirroring what `compare_swing_sequence` produces, checked on
-each comparison's ``current`` point:
+each comparison's ``current`` point by the shared `models._validate_current_point_order`
+so that every layer consuming an ordered run inherits one rule rather than
+growing a second, subtly different one:
 
   * ``current.index`` is **non-decreasing** across the whole input;
   * ``current.timestamp`` is non-decreasing with it;
@@ -56,8 +58,8 @@ from collections.abc import Iterable
 from fmis.market_structure.models import (
     StructuralSwing,
     SwingComparison,
-    SwingType,
     _label_for,
+    _validate_current_point_order,
 )
 
 __all__ = ["label_swing", "label_swing_sequence"]
@@ -130,52 +132,6 @@ def label_swing_sequence(
                 f"got {type(comparison).__name__}"
             )
 
-    latest: dict[SwingType, SwingComparison] = {}
-
-    for position, comparison in enumerate(ordered):
-        current = comparison.current
-        if position > 0:
-            earlier = ordered[position - 1].current
-            if current.index < earlier.index:
-                raise ValueError(
-                    f"comparisons must be ordered by current index; "
-                    f"comparisons[{position}] has index {current.index} after "
-                    f"{earlier.index}"
-                )
-            if current.timestamp < earlier.timestamp:
-                raise ValueError(
-                    f"comparisons must be ordered by current timestamp; "
-                    f"comparisons[{position}] has "
-                    f"{current.timestamp.isoformat()} after "
-                    f"{earlier.timestamp.isoformat()}"
-                )
-            # Two comparisons may share a current index only when both came from
-            # one candle, in which case they share its timestamp too.
-            shared_index = current.index == earlier.index
-            if shared_index and current.timestamp != earlier.timestamp:
-                raise ValueError(
-                    f"comparisons[{position}] shares current index "
-                    f"{current.index} with the previous comparison but carries a "
-                    "different timestamp"
-                )
-
-        previous = latest.get(current.type)
-        if previous is not None:
-            # Strict within a type: one candle cannot be the current point of two
-            # comparisons of the same type, so a repeat here — including an
-            # identical comparison object — is a real inconsistency.
-            if current.index <= previous.current.index:
-                raise ValueError(
-                    f"comparisons[{position}] repeats or precedes current index "
-                    f"{previous.current.index} for swing type "
-                    f"{current.type.value!r}"
-                )
-            if current.timestamp <= previous.current.timestamp:
-                raise ValueError(
-                    f"comparisons[{position}] repeats or precedes current "
-                    f"timestamp {previous.current.timestamp.isoformat()} for "
-                    f"swing type {current.type.value!r}"
-                )
-        latest[current.type] = comparison
+    _validate_current_point_order(ordered, "comparisons")
 
     return tuple(label_swing(comparison) for comparison in ordered)

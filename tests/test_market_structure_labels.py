@@ -678,6 +678,8 @@ def test_public_api_is_exactly_the_declared_surface() -> None:
         "StructuralSwingLabel", "StructuralSwing",
         "detect_swings", "compare_swings", "compare_swing_sequence",
         "label_swing", "label_swing_sequence",
+        "StructuralSequenceStateType", "StructuralSequenceState",
+        "derive_structural_sequence_state",
         "required_candles", "DEFAULT_LEFT_BARS", "DEFAULT_RIGHT_BARS",
     }
     for name in ms.__all__:
@@ -702,11 +704,56 @@ def test_the_label_mapping_is_internal_and_immutable() -> None:
         models._LABEL_BY_TYPE_AND_RELATION[("x", "y")] = None  # type: ignore[index]
 
 
+@pytest.mark.parametrize(
+    "run_kind, expected",
+    [
+        ("decreasing index",
+         "comparisons must be ordered by current index; comparisons[1] has "
+         "index 4 after 8"),
+        ("shared index, different timestamp",
+         "comparisons[1] shares current index 6 with the previous comparison "
+         "but carries a different timestamp"),
+        ("repeat within a type",
+         "comparisons[1] repeats or precedes current index 4 for swing type "
+         "'high'"),
+    ],
+)
+def test_ordering_error_messages_are_exact(run_kind: str, expected: str) -> None:
+    """The wording is a shipped contract, not an implementation detail.
+
+    The ordering rule now lives in the shared `models._validate_current_point_order`
+    so a second consumer cannot grow a divergent contract. Only the caller's
+    parameter name is substituted into these messages; extracting or re-homing the
+    rule again must not reword them, and a substring match would not notice if it
+    did.
+    """
+    if run_kind == "decreasing index":
+        run = [
+            compare_swings(sp(4, 1.0), sp(8, 2.0)),
+            compare_swings(sp(0, 1.0, SwingType.LOW), sp(4, 2.0, SwingType.LOW)),
+        ]
+    elif run_kind == "shared index, different timestamp":
+        run = [
+            compare_swings(sp(0, 1.0), sp(6, 2.0)),
+            compare_swings(
+                SwingPoint(0, _BASE, 9.0, SwingType.LOW),
+                SwingPoint(6, _BASE + timedelta(hours=999), 8.0, SwingType.LOW),
+            ),
+        ]
+    else:
+        run = [compare_swings(sp(0, 1.0), sp(4, 2.0))] * 2
+
+    with pytest.raises(ValueError) as caught:
+        label_swing_sequence(run)
+    assert str(caught.value) == expected
+
+
 def test_no_submodule_shares_a_name_with_a_public_object() -> None:
     import pkgutil
 
     submodules = {m.name for m in pkgutil.iter_modules(ms.__path__)}
-    assert submodules == {"labels", "models", "relationships", "swings"}
+    assert submodules == {"labels", "models", "relationships", "sequence_state",
+                          "swings"}
     assert submodules & set(ms.__all__) == set()
 
 
@@ -730,6 +777,7 @@ def test_imports_only_canonical_data_and_own_modules() -> None:
         "fmis.market_structure.labels",
         "fmis.market_structure.models",
         "fmis.market_structure.relationships",
+        "fmis.market_structure.sequence_state",
         "fmis.market_structure.swings",
     }
 

@@ -311,7 +311,7 @@ Two further measurements taken during the experiments and carried into the desig
 | context-aware API policy | the safe boundary; delegates, never reimplements |
 | compatibility strategy | **purely additive.** No existing type, signature, message or export is modified. One additive projection on `CandleSeries`; one new export in `fmis.data` |
 | prohibited dependency directions | `fmis.data` imports nothing of ours; `fmis.series_context` imports `fmis.data`, `fmis.market_structure`, `fmis.structural_trend` and nothing else; **nothing imports `fmis.series_context`** |
-| public export impact | +1 in `fmis.data` (105 → 106), +6 in `fmis.series_context` (→ 112), 0 collisions |
+| public export impact | +1 in `fmis.data` (105 → 106), **+7** in `fmis.series_context` (→ **113**), 0 collisions. *(Corrected during implementation: the design first said +6/112, miscounting the four public functions plus three public types as six names.)* |
 
 ### 8.1 Dependency direction
 

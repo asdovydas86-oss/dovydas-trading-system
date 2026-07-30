@@ -4,13 +4,45 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AA — Trend Foundation v1 (2026-07-29).
-**Latest commit at time of writing:** `0c845d6` — `Merge Structural Sequence State History Review v1`
-(the Milestone AA commits are created by this milestone).
+**Last updated for:** Milestone AB — Series Identity & Context Contract v1 (2026-07-30).
+**Latest commit at time of writing:** `238691b` — `Merge Trend Foundation v1 Review`
+(the Milestone AB commits are created by this milestone).
 
 ---
 
 ## Current milestone
+
+- **AB — Series Identity & Context Contract v1**: closes the integrity risk the Trend Foundation review
+  recorded as P3-2. Contracts in [ADR-0018](../adr/ADR-0018-series-identity-and-context-contract.md);
+  design in [the design document](../design/SERIES_IDENTITY_CONTEXT_CONTRACT_V1.md).
+
+  **The risk, measured:** a BTCUSDT 4h series and an ETHUSDT 4h series built from identical OHLC rows
+  produce **byte-identical** trend histories. Derived facts carried no symbol or timeframe, so nothing
+  downstream could tell them apart. A test pins that fact permanently.
+
+  **The audit changed the answer.** Identity already existed: `CandleSeries` has always held `symbol` and
+  `timeframe` and validated every candle against them, `fmis.ingest` already called that pair "series
+  identity" and already rejected mixed identity, and the evidence-descriptor and trading-context layers
+  already fixed the reject-never-normalize and opaque-timeframe policies. **The gap was propagation, not
+  definition** — `detect_swings` receives a series with both and reads neither.
+
+  **What shipped:** `SeriesIdentity` in `fmis.data` (where identity is owned), with
+  `CandleSeries.identity` as a **projection, not a stored field**; and a new sibling package
+  `fmis.series_context` holding the generic immutable `ContextualSeries` envelope, the
+  `SeriesIdentityMismatchError` contract, the single choke point `require_same_identity`, and three
+  identity-preserving wrappers that delegate entirely to the existing derivations.
+
+  **Context sits beside the values, never inside them** — one identity per series, not one per element —
+  so adding it provably changes no analytical result. Equivalence is tested across ten fixture classes
+  covering every sequence-state member, every trend member, and outside-bar structure.
+
+  **No normalization; the contract deliberately over-rejects.** `"BTCUSDT"` != `"btcusdt"` != `" BTCUSDT"`;
+  `"4h"` != `"4H"`. Over-rejection is safe; under-rejection is the silent mixing being prevented.
+
+  **Purely additive:** no existing type, signature, exception message or export was modified. `fmis.data`
+  gained one export (`SeriesIdentity`), `fmis.series_context` adds seven. 15/15 mutation probes detected.
+
+### Previous milestone
 
 - **AA — Trend Foundation v1** (implementation): a new sibling package `fmis.structural_trend`, the first
   deterministic **consumer** of the structural sequence state history, and the first layer in the
@@ -163,17 +195,19 @@ Reconstructed from git history (`git log --oneline`):
 | Structural Sequence Ordering Unification (Z0) | `682ca31` | one `_validate_key_order` core; closes review P2-1/P2-2; no API change |
 | Structural Sequence State History Foundation v1 (Z1) | `d1c0b3b` | `StructuralSequenceStateSnapshot`, `derive_structural_sequence_state_history`; see [ADR-0016](../adr/ADR-0016-structural-sequence-state-history-foundation.md) |
 | Trend Foundation v1 (AA) | see final report | `fmis.structural_trend` — `StructuralTrendType`, `StructuralTrendSnapshot`, `MINIMUM_DIRECTIONAL_SHIFTS`, `derive_structural_trend`, `derive_structural_trend_history`; see [ADR-0017](../adr/ADR-0017-structural-trend-foundation.md) |
+| Series Identity & Context Contract v1 (AB) | see final report | `SeriesIdentity` + `CandleSeries.identity` in `fmis.data`; `fmis.series_context` — `ContextualSeries`, `require_same_identity`, `SeriesIdentityMismatchError` and three identity-preserving wrappers; see [ADR-0018](../adr/ADR-0018-series-identity-and-context-contract.md) |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**2425 passing** (`uv run pytest`, ~1.7 s). Per module:
+**2607 passing** (`uv run pytest`, ~1.7 s). Per module:
 
 | Module | Tests |
 |---|---|
 | `tests/test_market_structure_sequence_state.py` | 312 |
-| `tests/test_structural_trend.py` | 352 |
+| `tests/test_structural_trend.py` | 353 |
+| `tests/test_series_context.py` | 181 |
 | `tests/test_market_structure_state_history.py` | 267 |
 | `tests/test_market_structure_ordering.py` | 33 |
 | `tests/test_market_structure_relationships.py` | 228 |
@@ -329,6 +363,14 @@ src/fmis/
 │   │                               MINIMUM_DIRECTIONAL_SHIFTS
 │   └── trend.py                    derive_structural_trend,
 │                                   derive_structural_trend_history
+├── series_context/
+│   ├── __init__.py                 package rules + public surface
+│   ├── models.py                   ContextualSeries, SeriesContextError,
+│   │                               SeriesIdentityMismatchError,
+│   │                               require_same_identity
+│   └── pipeline.py                 contextual_structural_swings,
+│                                   contextual_structural_state_history,
+│                                   contextual_structural_trend_history
 ├── evidence/
 │   ├── __init__.py                 taxonomy rules + public surface
 │   ├── families.py                 EvidenceFamily
@@ -397,8 +439,12 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 Not yet chosen. Structural facts, their sequence history, and a first summary of that sequence all now
 exist. The natural next steps are:
 
-- **Level-crossing foundation** (the precursor to break of structure) — BOS needs a "price crossed level
-  L at bar *i*" fact that **no layer above `detect_swings` can currently produce**. It requires a new
+- **Level-Crossing Foundation v1** (the precursor to break of structure) — BOS needs a "price crossed
+  level L at bar *i*" fact that **no layer above `detect_swings` can currently produce**. The identity
+  contract it needs now exists: one `require_same_identity(candle_series, contextual_swings)` call proves
+  candles and derived facts describe the same series, and `fmis.series_context.models` imports neither
+  `market_structure` nor `structural_trend`, so this package can consume the contract without depending
+  on trend (ADR-0018 §14). It requires a new
   input contract reading *both* swing levels and candles, and its own ADR deciding close-versus-wick,
   which level is protected and when it stops being, whether an `EQUAL_HIGH` breaks anything, and how an
   outside bar crossing both sides is grouped. Recommended as a **sibling package**, so
@@ -411,6 +457,13 @@ exist. The natural next steps are:
   its input, and `EQUAL_HIGH`/`EQUAL_LOW` are the obvious seed.
 - **Volume Evidence v1b** — still the deferred half of Milestone T.
 - **Trading reasoning v1** — first consumer of `TradingAnalysisContext`.
+
+**Known follow-ups from Milestone AB** (each small, none blocking): the context-free primitives remain
+public and cannot tell whether their input came from one series — that is a deliberate compatibility
+choice, and the mitigation is that the safe path is now also the easy path; the contract **over-rejects**,
+so `" BTCUSDT"` and `"BTCUSDT"` will not combine and anything wanting them unified must normalize before
+building candles; and `SeriesIdentity`'s value validation is deliberately no stricter than
+`CandleSeries`', so tightening whitespace handling is a breaking change needing its own ADR.
 
 **Known follow-ups from Milestone AA** (each small, none blocking): `MINIMUM_DIRECTIONAL_SHIFTS` is a
 **policy no test can validate as correct**, only as correctly implemented — any disagreement with it is a

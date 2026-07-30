@@ -1227,11 +1227,31 @@ def test_uses_only_stdlib() -> None:
 
 
 def test_nothing_below_imports_this_package() -> None:
+    """Only a layer strictly *above* trend may depend on it.
+
+    `fmis.series_context` is that layer and the only permitted consumer: it sits
+    above trend, wraps its output with a series identity, and re-derives none of
+    its logic (ADR-0018). Every other package must stay independent of trend, and
+    in particular `fmis.market_structure` must never import upward.
+
+    The exemption is named rather than pattern-matched, so a second consumer
+    appearing anywhere fails this test and has to justify itself in an ADR.
+    """
     root = Path(st.__file__).parent.parent
+    permitted = {root / "series_context"}
     for py in root.rglob("*.py"):
-        if py.parent == PACKAGE_DIR:
+        if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue
         assert "fmis.structural_trend" not in py.read_text(), py
+
+
+def test_the_only_permitted_consumer_does_not_reach_into_private_internals() -> None:
+    """`fmis.series_context` may use the public surface and nothing else."""
+    root = Path(st.__file__).parent.parent
+    for py in (root / "series_context").glob("*.py"):
+        for node in ast.walk(ast.parse(py.read_text())):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                assert not node.module.startswith("fmis.structural_trend."), py
 
 
 # ===================== 17. nothing upstream changed ========================

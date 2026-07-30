@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (2073 tests) + fixtures
+├── tests/                  pytest suite (2607 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -44,7 +44,13 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 - **Purpose:** the domain **kernel** — the canonical, validated, immutable representation of market data.
 - **Responsibilities today:**
   - `models.py` — `Candle` and `CandleSeries` (frozen dataclasses; non-negative validated OHLCV;
-    strictly increasing canonical-UTC timestamps; `closed()` to drop the forming bar).
+    strictly increasing canonical-UTC timestamps; `closed()` to drop the forming bar), plus
+    `SeriesIdentity` (`symbol` + `timeframe`) and `CandleSeries.identity`, which exposes it as a
+    **computed projection, not a stored field**. Identity was always *owned* here — `CandleSeries` has
+    always validated every candle against its own symbol and timeframe — and `SeriesIdentity` merely
+    extracts it so derived facts can carry it. Equality is exact with **no normalization**: `"BTCUSDT"`,
+    `"btcusdt"` and `" BTCUSDT"` are three identities. Propagating it through derived histories belongs to
+    `fmis.series_context`. See [ADR-0018](adr/ADR-0018-series-identity-and-context-contract.md).
   - `observation.py` — `ObservationSeries`, the canonical **non-OHLC** numeric series (macro, on-chain,
     derivatives, sentiment, breadth, benchmark levels). Parallel `timestamps`/`values` tuples; values may
     be negative but never `bool`; empty series are valid.
@@ -213,6 +219,49 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   `fmis.decision_support`, `fmis.evidence`, `fmis.providers`, `fmis.pipeline`, `fmis.ingest`,
   `fmis.trading_context`, `fmis.relative_value`, `fmis.features`, `fmis.alignment`. **Nothing below
   imports this package**, and trend is never an input to a break (architecture review §15).
+
+## `src/fmis/series_context/` — series identity & context contract
+
+- **Purpose:** carry a series' identity through the deterministic candle-derived pipeline, and refuse to
+  combine two of them. Contracts: [ADR-0018](adr/ADR-0018-series-identity-and-context-contract.md); design
+  in [design/SERIES_IDENTITY_CONTEXT_CONTRACT_V1.md](design/SERIES_IDENTITY_CONTEXT_CONTRACT_V1.md).
+- **The risk it closes:** a BTCUSDT 4h series and an ETHUSDT 4h series built from identical OHLC rows
+  produce **byte-identical** trend histories. Before this package nothing downstream could tell them
+  apart, because derived facts carried no identity at all (Trend Foundation review P3-2). A test pins the
+  fact permanently.
+- **Identity is not defined here.** It is defined by `CandleSeries`, which has always held `symbol` and
+  `timeframe` and validated every candle against them. `SeriesIdentity` lives in `fmis.data` and
+  `CandleSeries.identity` is a **projection, not a stored field**. The gap this package fills is
+  *propagation*: `detect_swings` receives a series with both and reads neither.
+- **Responsibilities today:** `models.py` — `ContextualSeries` (a generic immutable envelope: one
+  `identity`, one `values` tuple), `SeriesContextError`, `SeriesIdentityMismatchError`,
+  `require_same_identity`, plus the private `_identity_of` / `_carry`; `pipeline.py` — the three
+  identity-preserving wrappers `contextual_structural_swings`,
+  `contextual_structural_state_history`, `contextual_structural_trend_history`. **Seven public names.**
+- **Context sits beside the values, never inside them.** Identity is stored **once per series**, not once
+  per element, and no analytical function ever sees an envelope — so adding context provably changes no
+  result. Equivalence is tested across ten fixture classes covering every `StructuralSequenceStateType`
+  member, every `StructuralTrendType` member, and outside-bar structure.
+- **Nothing analytical is re-implemented.** The wrappers unwrap, delegate, re-wrap. AST guards forbid
+  arithmetic, any OHLC field read, and naming any state or trend member. Ordering errors surface from the
+  delegate with the exact original message.
+- **No normalization, and the contract deliberately over-rejects.** `"BTCUSDT"` != `"btcusdt"` !=
+  `" BTCUSDT"`; `"4h"` != `"4H"` != `"240m"`. Inherited policy, not a new decision. Over-rejection is safe;
+  under-rejection is the silent mixing being prevented. Normalize before building candles.
+- **Two API categories.** Context-free primitives (`detect_swings`, `derive_structural_trend_history`, …)
+  stay **public and unchanged** — they are the arithmetic, and arithmetic does not need a passport; their
+  scope is values already known to come from one series. The safe pipeline boundary is everything exported
+  here, and a future candle-derived module enters through it.
+- **How Level-Crossing consumes it:** `require_same_identity(candle_series, contextual_swings)` — one call
+  spans both sides, because the check accepts a `CandleSeries` (via its projection) and a
+  `ContextualSeries` (via its field). `models.py` imports neither `market_structure` nor
+  `structural_trend`, so that consumer needs no dependency on trend.
+- **No global state.** No registry, no cache, no ambient current series, no thread-local; identity is
+  passed, not looked up. Frozen throughout, so one identity object is safe to share.
+- **Allowed dependencies:** `fmis.data`, `fmis.market_structure`, `fmis.structural_trend` — public
+  surfaces only — and the standard library.
+- **Forbidden dependencies:** private submodules of any of the three; every other `fmis` package.
+  **Nothing imports this package.**
 
 ## `src/fmis/evidence/` — evidence taxonomy
 
@@ -490,7 +539,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **2425 tests** across 27 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **2607 tests** across 28 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

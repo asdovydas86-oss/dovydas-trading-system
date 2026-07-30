@@ -263,6 +263,18 @@ achievable.
   the trend suite now names `fmis.series_context` as the single permitted consumer *above* trend, and a
   companion test asserts that consumer touches no private submodule. A second consumer appearing anywhere
   fails the suite and must justify itself.
+- **Found and fixed by the independent review (P2-1):** `ContextualSeries` originally defined `__len__`,
+  which made an *empty but perfectly valid* series **falsy** — `if not envelope` read as "no envelope" while
+  meaning "no values", in direct tension with §10. The container protocol was removed entirely; callers
+  write `len(envelope.values)`, matching `CandleSeries`, which exposes no container protocol either. Two
+  regression tests pin it, including one asserting the two types agree on `__len__`, `__iter__`,
+  `__getitem__` and `__contains__`.
+- **A payload can still be paired with a foreign identity** (review P3-1). `ContextualSeries(identity=BTC,
+  values=eth_history)` is constructible and undetectable, because derived elements carry no identity — which
+  is the entire point of storing it beside the values rather than inside them (§5). The mitigations: the
+  wrappers never produce such an envelope (identity always comes from the input, and there is no parameter
+  to override it), and combining a forged envelope with an honest one is still refused, which is tested.
+  Hand-constructing a lie remains possible in Python, as it does for every value type here.
 - **Still deliberately absent:** level crossing, protected levels, BOS, CHoCH, regime, signals, entries,
   exits, sizing, downloads, exchange integration, symbol mapping across exchanges, futures resolution,
   corporate actions, session/calendar logic, resampling, gap detection, portfolio identity, and any

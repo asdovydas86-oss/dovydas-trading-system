@@ -85,6 +85,13 @@ class ContextualSeries(Generic[T]):
     provenance, any default identity, and any method that combines two series. The
     last one is the point — combining is `require_same_identity`'s job, and it
     refuses more often than it agrees.
+
+    **No container protocol is implemented, deliberately.** An earlier draft defined
+    ``__len__``, which made an *empty but perfectly valid* series **falsy** — so
+    ``if not envelope`` read as "no envelope" while meaning "no values", directly at
+    odds with the rule that empty data still possesses a full identity. `CandleSeries`
+    has no ``__len__`` either; callers write ``len(series.candles)``. Callers here
+    write ``len(envelope.values)``, which cannot be misread.
     """
 
     identity: SeriesIdentity
@@ -106,10 +113,6 @@ class ContextualSeries(Generic[T]):
         # Accept any non-string iterable at construction; store an immutable
         # tuple, matching `CandleSeries`' own normalisation of `candles`.
         object.__setattr__(self, "values", tuple(self.values))
-
-    def __len__(self) -> int:
-        """The number of payload elements. An empty series is legal and keeps its identity."""
-        return len(self.values)
 
 
 def _identity_of(subject: object, *, position: int) -> SeriesIdentity:

@@ -368,7 +368,7 @@ def test_an_empty_candle_series_still_has_an_identity() -> None:
 
 def test_an_empty_contextual_series_is_legal_and_keeps_its_identity() -> None:
     envelope = ContextualSeries(identity=SeriesIdentity(*BTC4), values=())
-    assert envelope.values == () and len(envelope) == 0
+    assert envelope.values == () and len(envelope.values) == 0
     assert envelope.identity == SeriesIdentity(*BTC4)
 
 
@@ -381,6 +381,30 @@ def test_an_empty_series_keeps_identity_through_every_stage() -> None:
         assert stage.values == ()
         assert stage.identity is empty.identity or stage.identity == empty.identity
     assert trend.identity == SeriesIdentity(*BTC4)
+
+
+def test_an_empty_envelope_is_never_falsy() -> None:
+    """Regression, review P2-1.
+
+    An earlier draft defined `__len__`, which made an empty-but-valid series
+    falsy — so ``if not envelope`` read as "no envelope" while meaning "no
+    values", contradicting the rule that empty data still possesses a full
+    identity. The container protocol was removed; callers read
+    ``len(envelope.values)``, which cannot be misread.
+    """
+    empty = ContextualSeries(identity=SeriesIdentity(*BTC4), values=())
+    assert bool(empty) is True
+    assert empty.values == () and len(empty.values) == 0
+    assert not hasattr(empty, "__len__")
+    assert not hasattr(empty, "__iter__")
+
+
+def test_the_envelope_matches_candle_series_container_conventions() -> None:
+    """The sibling type exposes no container protocol either; neither does this one."""
+    plain = CandleSeries(symbol="BTCUSDT", timeframe="4h", candles=())
+    envelope = ContextualSeries(identity=SeriesIdentity(*BTC4), values=())
+    for protocol in ("__len__", "__iter__", "__getitem__", "__contains__"):
+        assert hasattr(plain, protocol) == hasattr(envelope, protocol), protocol
 
 
 def test_two_empty_series_with_different_identities_are_not_equal() -> None:
@@ -417,7 +441,7 @@ def test_one_identity_object_is_reused_across_many_transformations() -> None:
 
 def test_identity_is_stored_once_per_series_not_once_per_element() -> None:
     trend = full_context(*BTC4, FIXTURES["sustained_higher"])
-    assert len(trend) > 0
+    assert len(trend.values) > 0
     for element in trend.values:
         assert not hasattr(element, "identity")
         assert not hasattr(element, "symbol")

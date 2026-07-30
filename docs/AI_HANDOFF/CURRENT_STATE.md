@@ -40,7 +40,9 @@ update this file.
   `"4h"` != `"4H"`. Over-rejection is safe; under-rejection is the silent mixing being prevented.
 
   **Purely additive:** no existing type, signature, exception message or export was modified. `fmis.data`
-  gained one export (`SeriesIdentity`), `fmis.series_context` adds seven. 15/15 mutation probes detected.
+  gained one export (`SeriesIdentity`), `fmis.series_context` adds seven. 15/15 mutation probes detected, and the independent
+  review found and fixed one P2 (an empty-but-valid contextual series was falsy because the
+  envelope defined `__len__`); no P0 or P1.
 
 ### Previous milestone
 
@@ -201,13 +203,13 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**2607 passing** (`uv run pytest`, ~1.7 s). Per module:
+**2609 passing** (`uv run pytest`, ~1.7 s). Per module:
 
 | Module | Tests |
 |---|---|
 | `tests/test_market_structure_sequence_state.py` | 312 |
 | `tests/test_structural_trend.py` | 353 |
-| `tests/test_series_context.py` | 181 |
+| `tests/test_series_context.py` | 183 |
 | `tests/test_market_structure_state_history.py` | 267 |
 | `tests/test_market_structure_ordering.py` | 33 |
 | `tests/test_market_structure_relationships.py` | 228 |

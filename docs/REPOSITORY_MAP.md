@@ -309,8 +309,45 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 - **Allowed dependencies:** `fmis.data`, `fmis.market_structure`, `fmis.series_context` — public surfaces
   only — and the standard library.
 - **Forbidden dependencies:** `fmis.structural_trend` (trend must never be an input to a level fact),
-  private submodules of its three dependencies, and every other `fmis` package. **Nothing imports this
-  package.**
+  private submodules of its three dependencies, and every other `fmis` package. **Only
+  `fmis.structure_break` imports this package** — named, not pattern-matched, so a second consumer must
+  justify itself in an ADR.
+
+## `src/fmis/structure_break/` — break of structure (first layer built purely on derived facts)
+
+- **Purpose:** report where structure broke, from the level set and the crossing history. Contracts:
+  [ADR-0020](adr/ADR-0020-break-of-structure-foundation-v1.md); design in
+  [design/BREAK_OF_STRUCTURE_FOUNDATION_V1.md](design/BREAK_OF_STRUCTURE_FOUNDATION_V1.md).
+- **It cannot read a candle.** The package does not import `fmis.data` at all, so `Candle` is not a name it
+  can reach — the mission enforced structurally rather than by discipline, with two AST guards.
+- **What a break is:** the **first close beyond the reference structural level for its side, at a bar where
+  that level was already knowable**. Five conjuncts: the crossing is a `CLOSE_BREACH`; its mechanism is not
+  `ALREADY_BEYOND`; the level has provenance and the bar is at or after its confirmation bar; the level
+  **is** the reference for its side; and it is the **first** such crossing for that level.
+- **Only a close breaks structure.** A `TOUCH` reached the level without passing it; a `WICK_BREACH` passed
+  it and closed back inside — a rejection, not a break, and a wick rule cannot be non-repainting on a
+  forming bar. One policy, **not configurable**.
+- **The label decides nothing.** All six `StructuralSwingLabel` members can produce a reference level; the
+  label is carried on `StructureBreak.label` so a consumer can weigh an `EQUAL_HIGH` break differently in
+  its own layer. Filtering here would silently discard breaks.
+- **The reference is the most recent eligible level**, never the most extreme — that is protected-level
+  logic. Eligibility begins at ``origin.index + confirmation_bars``, because pivot-bar eligibility is
+  **prefix-unstable** (30 violating prefixes across 40 fixtures, against 0 for this rule).
+- **`confirmation_bars` is required, with no default.** The confirmation delay is recorded on no derived
+  fact in the repository — the milestone's one missing primitive, documented rather than invented — and a
+  default would silently be wrong for any caller who chose a different lookback.
+- **Structure breaks once** per level, and a break is **never invalidated**. That is the level lifecycle
+  ADR-0019 deliberately kept out of the crossing primitive.
+- **Order-invariant on both inputs** and on duplicated crossings, so no second ordering contract is grown;
+  output is ordered by ``(bar index, level side)``, total because at most one break exists per bar per side.
+- **Responsibilities today:** `models.py` — `StructureBreak` (two stored fields, six projections),
+  `StructureBreakError`, `StructureBreakInputError`; `breaks.py` — `derive_structure_breaks` plus the
+  private `_levels_by_side`, `_reference`, `_break_key`; `pipeline.py` —
+  `contextual_structure_breaks`. **Five public names.**
+- **Allowed dependencies:** `fmis.level_crossing`, `fmis.series_context`, and `fmis.market_structure` for
+  one label type — public surfaces only — and the standard library.
+- **Forbidden dependencies:** **`fmis.data`**, `fmis.structural_trend`, private submodules of its
+  dependencies, and every other `fmis` package. **Nothing imports this package.**
 
 ## `src/fmis/evidence/` — evidence taxonomy
 

@@ -906,7 +906,7 @@ def test_does_not_reach_into_private_submodules_of_its_dependencies() -> None:
 
 
 def test_nothing_below_imports_series_context() -> None:
-    """Only `fmis.level_crossing`, which sits *above* this contract, may consume it.
+    """Only `fmis.level_crossing` and `fmis.structure_break`, both *above* this contract.
 
     Narrowed from "nothing in `fmis`" when Level-Crossing Foundation v1 shipped.
     That widening was designed here, not discovered later: ADR-0018 §6.1 and this
@@ -921,17 +921,18 @@ def test_nothing_below_imports_series_context() -> None:
     matching `test_structural_trend.py`'s treatment of its own single consumer.
     """
     root = PACKAGE_DIR.parent
-    permitted = {root / "level_crossing"}
+    permitted = {root / "level_crossing", root / "structure_break"}
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue
         assert "fmis.series_context" not in py.read_text(), py
 
 
-def test_the_only_permitted_consumer_does_not_reach_into_private_internals() -> None:
-    """`fmis.level_crossing` may use the public surface of this package and nothing else."""
+@pytest.mark.parametrize("consumer", ["level_crossing", "structure_break"])
+def test_permitted_consumers_do_not_reach_into_private_internals(consumer: str) -> None:
+    """A consumer may use this package's public surface and nothing else."""
     root = PACKAGE_DIR.parent
-    for py in (root / "level_crossing").glob("*.py"):
+    for py in (root / consumer).glob("*.py"):
         for node in ast.walk(ast.parse(py.read_text())):
             if isinstance(node, ast.ImportFrom) and node.module:
                 assert not node.module.startswith("fmis.series_context."), py

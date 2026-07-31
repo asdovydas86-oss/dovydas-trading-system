@@ -4,13 +4,56 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AC — Level-Crossing Foundation v1 (2026-07-31).
-**Latest commit at time of writing:** `c71d79e` — `Merge Series Identity & Context Contract v1 Review`
-(the Milestone AC commits are created by this milestone).
+**Last updated for:** Milestone AD — Break of Structure Foundation v1 (2026-07-31).
+**Latest commit at time of writing:** `2e6d8f9` — `Merge Level-Crossing Foundation v1 Review`
+(the Milestone AD commits are created by this milestone).
 
 ---
 
 ## Current milestone
+
+- **AD — Break of Structure Foundation v1**: the first layer built **entirely on derived facts**. It
+  consumes the structural level set and the crossing history and reads **no candle at all** — the package
+  does not import `fmis.data`, so `Candle` is not a name it can reach. Contracts in
+  [ADR-0020](../adr/ADR-0020-break-of-structure-foundation-v1.md); design in
+  [the design document](../design/BREAK_OF_STRUCTURE_FOUNDATION_V1.md).
+
+  **What a break is:** the **first close beyond the reference structural level for its side, at a bar where
+  that level was already knowable**. Five conjuncts, each decided separately: the crossing is a
+  `CLOSE_BREACH`; its mechanism is not `ALREADY_BEYOND`; the level has provenance and the bar is at or
+  after its confirmation bar; the level **is** the reference for its side; and it is the **first** such
+  crossing for that level.
+
+  **The audit found one missing primitive and documented it rather than inventing behaviour.** The
+  confirmation delay (`right_bars`) is recorded on **no derived fact** — every dataclass from `SwingPoint`
+  to `LevelCrossingEvent` carries only the *pivot* index. Yet BOS needs it: with pivot-bar eligibility the
+  result is **prefix-unstable**, measured at **30 violating prefixes across 40 seeded fixtures** with a
+  minimal reproduction now shipped as a test fixture, against **0** for confirmation-bar eligibility. So
+  `confirmation_bars` is a **required keyword argument with no default** — a default would silently bind
+  this layer to `DEFAULT_RIGHT_BARS` and be wrong for anyone who chose otherwise. Carrying it on
+  `LevelOrigin` changes a shipped model and is deferred to its own milestone (D1).
+
+  A property that makes the rule safe rather than merely stable: **no breach can occur inside a level's own
+  confirmation window** — 11,608 in-window crossings inspected, every one a `TOUCH` — so
+  confirmation-based eligibility discards no reachable break.
+
+  **Only a close breaks structure**, and the policy is **not configurable**. A `TOUCH` reached the level
+  without passing it; a `WICK_BREACH` passed it and closed back inside — a rejection, and a wick rule
+  cannot be non-repainting on a forming bar.
+
+  **The label decides nothing.** All six labels can produce a reference level; `EQUAL_HIGH` is carried
+  through on `StructureBreak.label` so a consumer can weigh it in its own layer rather than have breaks
+  silently discarded here.
+
+  **Structure breaks once** per level, and a break is **never invalidated** — that is a later reading over
+  the break *sequence*, and change-of-character adjacent.
+
+  **Purely additive to production:** no existing type, signature, exception message or export was modified.
+  The only changes outside the new package are **two test guards**, each narrowed by design to name its
+  single permitted consumer. 40/40 mutation probes detected with zero survivors; the independent review
+  found no P0 or P1.
+
+### Previous milestone
 
 - **AC — Level-Crossing Foundation v1**: the first layer to read **both** candles and derived structure,
   closing the gap the market-structure architecture review recorded as §15. Contracts in
@@ -61,7 +104,7 @@ update this file.
   not total. `LevelOrigin` now requires a timezone-aware timestamp and the key carries the `datetime`
   itself, making both defects unrepresentable. 45/45 adversarial cases pass.
 
-### Previous milestone
+### Earlier milestone
 
 - **AB — Series Identity & Context Contract v1**: closes the integrity risk the Trend Foundation review
   recorded as P3-2. Contracts in [ADR-0018](../adr/ADR-0018-series-identity-and-context-contract.md);
@@ -252,18 +295,21 @@ Reconstructed from git history (`git log --oneline`):
 
 | Level-Crossing Foundation v1 (AC) | see final report | `fmis.level_crossing` — `LevelSide`, `CrossingKind`, `CrossingMechanism`, `LevelOrigin`, `PriceLevel`, `LevelCrossingEvent`, `LevelCrossingError`, `DuplicateLevelError`, `crossing_kind`, `derive_level_crossings`, `structural_levels`, `contextual_structural_levels`, `contextual_level_crossings`; see [ADR-0019](../adr/ADR-0019-level-crossing-foundation-v1.md) |
 
+| Break of Structure Foundation v1 (AD) | see final report | `fmis.structure_break` — `StructureBreak`, `StructureBreakError`, `StructureBreakInputError`, `derive_structure_breaks`, `contextual_structure_breaks`; see [ADR-0020](../adr/ADR-0020-break-of-structure-foundation-v1.md) |
+
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**2856 passing** (`uv run pytest`, ~2.2 s). Per module:
+**3031 passing** (`uv run pytest`, ~2.4 s). Per module:
 
 | Module | Tests |
 |---|---|
-| `tests/test_level_crossing.py` | 246 |
+| `tests/test_structure_break.py` | 173 |
+| `tests/test_level_crossing.py` | 247 |
 | `tests/test_market_structure_sequence_state.py` | 312 |
 | `tests/test_structural_trend.py` | 353 |
-| `tests/test_series_context.py` | 184 |
+| `tests/test_series_context.py` | 185 |
 | `tests/test_market_structure_state_history.py` | 267 |
 | `tests/test_market_structure_ordering.py` | 33 |
 | `tests/test_market_structure_relationships.py` | 228 |
@@ -436,6 +482,12 @@ src/fmis/
 │   ├── levels.py                   structural_levels
 │   └── pipeline.py                 contextual_structural_levels,
 │                                   contextual_level_crossings
+├── structure_break/
+│   ├── __init__.py                 package rules + public surface
+│   ├── models.py                   StructureBreak, StructureBreakError,
+│   │                               StructureBreakInputError
+│   ├── breaks.py                   derive_structure_breaks
+│   └── pipeline.py                 contextual_structure_breaks
 ├── evidence/
 │   ├── __init__.py                 taxonomy rules + public surface
 │   ├── families.py                 EvidenceFamily
@@ -501,31 +553,45 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-**Break of Structure Foundation v1** is now unblocked and is the recommended next step. The precondition
-it was waiting on is met: `LevelCrossingEvent` carries the level, its provenance and label, the crossing
-bar's index and timestamp, the crossing `kind` and the `mechanism`, so BOS can be defined **entirely over
-crossing events** without re-reading candle OHLC and without re-implementing the crossing rule.
+**Change of Character Foundation v1** is now unblocked and is the recommended next step. The precondition
+is met and verified rather than asserted: a CHoCH is *the first break opposing the direction of the
+previous break*, which is
 
-What BOS must decide, and what this milestone deliberately did not:
+    tuple(b for a, b in zip(breaks, breaks[1:]) if a.side is not b.side)
 
-- **which level is protected**, and when it stops being protected;
-- **activation** — whether a crossing before a level's origin (or before that pivot's *confirmation*)
-  counts (ADR-0019 deferred question D1);
-- whether a `TOUCH` or a `WICK_BREACH` breaks anything, or only a `CLOSE_BREACH`;
-- whether an `EQUAL_HIGH`-derived level breaks anything;
-- how the two events of an outside bar are treated, given that **their order is not a time claim**.
+— computed from the break sequence alone, touching **no level, no crossing and no candle**. That is the
+market-structure review §15 ordering completed: BOS on levels, CHoCH over the BOS sequence, and trend a
+summary of both, defining neither.
 
-Each of those reads a field already present on the event. None requires a candle.
+What CHoCH must decide, and what this milestone deliberately did not:
 
-Then, in the order review §15 fixed and ADR-0019 §1.2 restates:
+- whether a single opposing break constitutes a change of character, or a run of them;
+- how the **first** break of a series is treated, having no predecessor to oppose;
+- whether an `EQUAL_HIGH`- or `EQUAL_LOW`-derived break counts, using the label BOS carries but does not
+  read;
+- whether two breaks sharing a bar (one upper, one lower) can constitute a change, **given that their
+  order is not a time claim**;
+- whether a change of character is ever invalidated — BOS deliberately has no such notion.
 
-- **Change of character** — defined over the *BOS sequence*, never over trend. BOS on levels, CHoCH over
-  BOS, trend as a summary consuming both and defining neither. Any definition making trend an input to a
-  break is rejected on sight.
-- **Support / resistance candidates** — `fmis.features.support_resistance` already names swing points as
-  its input, and `PriceLevel` is now the obvious vocabulary.
+Then, in the order review §15 fixed:
+
+- **Trend as a summary of the BOS/CHoCH history**, consuming both and defining neither — which would let
+  `fmis.structural_trend` gain a second, level-derived input rather than replace its current one.
+- **Support / resistance candidates** — `PriceLevel` plus break history is now the natural vocabulary.
 - **Volume Evidence v1b** — still the deferred half of Milestone T.
 - **Trading reasoning v1** — first consumer of `TradingAnalysisContext`.
+
+**A prerequisite worth scheduling before either:** carrying the **confirmation delay** on `LevelOrigin`
+(D1). Today `confirmation_bars` must be supplied to `derive_structure_breaks` and matched by hand to the
+`right_bars` used for detection, and a mismatch is **undetectable**. It changes a shipped model, so it
+needs its own milestone and ADR.
+
+**Known follow-ups from Milestone AD** (each small, none blocking): the reference level is the **most
+recent**, not the most extreme, so a run of lower highs makes each successive lower high the reference
+(D5); a break is **never invalidated**, so anything wanting "failed break" builds it over the sequence
+(D3); breaks are derived **per side independently**, with no cross-side reading, because that is CHoCH's
+job (D6); and the first swing of each type still yields no level (ADR-0019 D2), so the earliest reference
+on each side is missing.
 
 **Known follow-ups from Milestone AC** (each small, none blocking): `derive_level_crossings` has **no
 activation policy**, so it will report a crossing of a level whose origin is later — deliberate, since

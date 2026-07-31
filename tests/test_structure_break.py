@@ -597,6 +597,56 @@ def test_before_any_level_is_eligible_there_is_no_reference() -> None:
     ) is None
 
 
+def test_the_reference_lookup_matches_an_exhaustive_linear_reference() -> None:
+    """Review P2-1: `_reference` became a binary search; prove it found the same element.
+
+    Compared against a deliberately naive linear implementation over every
+    arrangement of up to four levels and every as-of index around them, so the
+    optimisation is verified rather than asserted.
+    """
+
+    def linear(ranked, index):
+        found = None
+        for eligible_from, lvl in ranked:
+            if eligible_from > index:
+                break
+            found = lvl
+        return found
+
+    checked = 0
+    for count in range(0, 5):
+        for origins in itertools.combinations(range(0, 9), count):
+            levels = [level(100.0 + i, LevelSide.UPPER, o) for i, o in enumerate(origins)]
+            for bars in (0, 1, 2, 3):
+                ranked = breaks_mod._levels_by_side(levels, bars)[LevelSide.UPPER]
+                for index in range(-1, 16):
+                    assert breaks_mod._reference(ranked, index) is linear(ranked, index)
+                    checked += 1
+    assert checked > 5000
+
+
+def test_the_reference_lookup_is_sublinear_in_the_level_count() -> None:
+    """A scan would grow with the level count; a binary search does not."""
+    counts = []
+    for size in (16, 1024):
+        levels = [level(100.0 + i, LevelSide.UPPER, i + 1) for i in range(size)]
+        ranked = breaks_mod._levels_by_side(levels, RB)[LevelSide.UPPER]
+        probes = 0
+        original = ranked.__getitem__
+
+        class Counting(list):
+            def __getitem__(self, item):
+                nonlocal probes
+                probes += 1
+                return list.__getitem__(self, item)
+
+        counted = Counting(ranked)
+        breaks_mod._reference(counted, size + 10)
+        counts.append(probes)
+    # 64x more levels must not cost 64x more probes
+    assert counts[1] < counts[0] * 4, counts
+
+
 def test_sides_are_tracked_independently() -> None:
     upper = level(110.0, LevelSide.UPPER, 3)
     lower = level(90.0, LevelSide.LOWER, 8)

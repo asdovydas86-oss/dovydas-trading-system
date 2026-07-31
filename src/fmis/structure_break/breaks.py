@@ -57,6 +57,7 @@ tuple. "Structure did not break" is a true answer to a well-formed question.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 
@@ -180,14 +181,21 @@ def _reference(
     "most extreme unbroken" is protected-level logic and belongs to a layer that
     does not exist.
 
+    **Binary search, not a scan.** An earlier version walked the list, making the
+    derivation O(crossings x levels-per-side) — 125 million inner iterations at
+    5,000 levels and 50,000 crossings, which the independent review measured. The
+    list is sorted by ``eligible_from`` and those values are **strictly
+    increasing** within a side (two levels sharing an origin index are rejected by
+    `_levels_by_side`), so `bisect_right` finds the same element the scan did,
+    exactly, in O(log n). The equivalence is not merely argued: a test compares
+    this against a reference linear implementation over an exhaustive small space.
+
     Deliberately **private**, for the same reason `_levels_by_side` is.
     """
-    found: PriceLevel | None = None
-    for eligible_from, level in ranked:
-        if eligible_from > index:
-            break
-        found = level
-    return found
+    position = bisect_right(ranked, index, key=lambda pair: pair[0])
+    if position == 0:
+        return None
+    return ranked[position - 1][1]
 
 
 def derive_structure_breaks(

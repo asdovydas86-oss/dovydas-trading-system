@@ -145,7 +145,19 @@ it as a state observation with no arrival, and claiming a break requires an arri
 excluded** — it can only occur at bar 0, where no structural level is eligible — and both exclusions are
 tested, since relying on the second alone would make the rule invisible to a reader and to a mutant.
 
-### 3.6 Ordering and input invariance
+### 3.6 Reference lookup
+
+`_reference` uses `bisect_right` over the side's list, not a scan. The list is sorted by `eligible_from` and
+those values are **strictly increasing within a side** — two levels sharing an origin index are rejected —
+which is what makes the binary search return the *same element* a scan would, exactly.
+
+The scan shipped first and the independent review measured what it cost: **125,000,000 inner iterations**
+for 5,000 levels against 50,000 crossings, because a crossing's index is usually beyond every level's
+eligibility so the loop's early exit almost never fired. The replacement cut that case from ~1.3 s to
+0.026 s and made runtime independent of the level count. Equivalence is proved against a naive linear
+implementation over an exhaustive small space, not argued.
+
+### 3.7 Ordering and input invariance
 
 Output order is `(breaking bar index, level side)` from an explicit rank mapping — total, because at most
 one break exists per (bar, side). **The full level ordering key is deliberately not restated**; it is
@@ -155,7 +167,7 @@ BOS is **invariant to the order of both inputs** and to **duplicated crossing ev
 the earliest qualifying crossing per level rather than assuming one. Re-validating the crossing run's
 canonical order would be that forbidden second implementation.
 
-### 3.7 The model
+### 3.8 The model
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -175,7 +187,7 @@ recover it — and recovering it is what makes the break auditable.
 **No direction enum.** `side` projects the level's side, which already carries the only sense this layer
 knows — ADR-0019 §D unchanged. `UPPER` is not "bullish".
 
-### 3.8 Prefix stability and context
+### 3.9 Prefix stability and context
 
 **Exact**, in the pipeline-wide form: levels and crossings derived from a candle prefix give exactly the
 full run's breaks whose index falls inside that prefix, in the same order. Measured at **0 violations**
@@ -242,6 +254,8 @@ No existing message was changed.
 | re-validating the crossing run's order | a second implementation of a rule `level_crossing` owns |
 | silently ignoring unrankable levels or unknown-level crossings | repairs instead of validating, and changes every later reference |
 | a redundant eligibility check beside the reference test | **removed during mutation validation** — provably unreachable, an equivalent mutant by construction |
+| a linear scan for reference lookup | **replaced during review** — O(crossings x levels-per-side), measured at 125M inner iterations |
+| a `confirmation_bars` default, or a partial mismatch check | a default is silently wrong for a different `right_bars`; the check is only possible in one direction and would reject valid hand-built level sets |
 
 ---
 
@@ -290,6 +304,13 @@ neither.**
 
 ## 8. Validation
 
-3031 tests pass (2856 baseline + 173 new + 2 narrowed guards), identically with `-W error`.
-**40/40 mutation probes detected, 0 no-ops, 0 survivors, all sources restored byte-for-byte with SHA-256
-verification.** 0 export collisions. `pyproject.toml` and `uv.lock` unchanged.
+3033 tests pass (2856 baseline + 175 new + 2 narrowed guards), identically with `-W error`.
+**42/42 mutation probes detected, 0 no-ops, 0 survivors, all sources restored byte-for-byte with SHA-256
+verification.** 0 export collisions. `pyproject.toml` and `uv.lock` unchanged; `bisect` is standard library,
+so no runtime dependency was added.
+
+The independent review
+([`docs/reviews/BREAK_OF_STRUCTURE_FOUNDATION_V1_REVIEW.md`](../reviews/BREAK_OF_STRUCTURE_FOUNDATION_V1_REVIEW.md))
+found **no P0 and no P1**, one **P2** — the linear reference lookup described in §3.6 — and three P3, one
+fixed and two documented. 48/48 adversarial cases pass. After the fix, 20,000 levels against 200,000
+crossings derive in 0.089 s.

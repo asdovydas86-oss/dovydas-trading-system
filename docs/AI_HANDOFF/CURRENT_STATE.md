@@ -50,8 +50,11 @@ update this file.
 
   **Purely additive to production:** no existing type, signature, exception message or export was modified.
   The only changes outside the new package are **two test guards**, each narrowed by design to name its
-  single permitted consumer. 40/40 mutation probes detected with zero survivors; the independent review
-  found no P0 or P1.
+  single permitted consumer. 42/42 mutation probes detected with zero survivors. The independent review
+  found **no P0 and no P1**, and one **P2**: the reference lookup was a linear scan per crossing, measured
+  at **125,000,000 inner iterations** for 5,000 levels against 50,000 crossings. An exact binary search cut
+  that case from ~1.3 s to 0.026 s and made runtime independent of the level count, with equivalence proved
+  against a naive implementation over an exhaustive small space. 48/48 adversarial cases pass.
 
 ### Previous milestone
 
@@ -301,11 +304,11 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**3031 passing** (`uv run pytest`, ~2.4 s). Per module:
+**3033 passing** (`uv run pytest`, ~2.4 s). Per module:
 
 | Module | Tests |
 |---|---|
-| `tests/test_structure_break.py` | 173 |
+| `tests/test_structure_break.py` | 175 |
 | `tests/test_level_crossing.py` | 247 |
 | `tests/test_market_structure_sequence_state.py` | 312 |
 | `tests/test_structural_trend.py` | 353 |

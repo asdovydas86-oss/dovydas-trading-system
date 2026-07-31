@@ -66,7 +66,11 @@ update this file.
   gaps, not equivalent mutants** — duplicate collapse was compared with `==` rather than `is`, and no test
   asserted a submodule's `__all__`; both are now closed. Growth is measured as effectively linear: 20,000
   breaks in 0.0113 s, 100,000 in 0.103 s, a realistic 5,000-candle chain in 91 µs. The independent review
-  found **no P0 and no P1**.
+  found **no P0, no P1 and no P2**, and three P3 observations, all documented rather than fixed; it
+  re-derived the rule as an independent reimplementation (0 mismatches over 4,479 exhaustive + 3,000
+  randomised + 60 candle-derived cases), proved every narrowed guard still rejects what it claims to by
+  injecting forbidden imports, and confirmed replay determinism across four `PYTHONHASHSEED` values in
+  fresh processes.
 
 ### Previous milestone
 

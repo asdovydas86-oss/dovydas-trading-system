@@ -1604,12 +1604,42 @@ def test_does_not_reach_into_private_submodules_of_its_dependencies() -> None:
         assert not internal.startswith("fmis.market_structure."), internal
 
 
-def test_nothing_imports_structure_break() -> None:
+def test_only_change_of_character_imports_structure_break() -> None:
+    """Only `fmis.change_of_character`, which sits *above* this package, may consume it.
+
+    Narrowed from "nothing imports this package" when Change of Character
+    Foundation v1 shipped. That widening was designed here, not discovered later:
+    §19 below and ADR-0020 §7 both specify a consumer that reads the break
+    sequence alone, which is exactly what CHoCH does. What matters — and what
+    this test still enforces — is the *direction*: nothing below may import
+    upward, so `fmis.data`, `fmis.market_structure`, `fmis.structural_trend`,
+    `fmis.series_context` and `fmis.level_crossing` remain unable to see this
+    package.
+
+    The exemption is named rather than pattern-matched, so a second consumer
+    appearing anywhere fails this test and has to justify itself in an ADR.
+    """
     root = PACKAGE_DIR.parent
+    permitted = {root / "change_of_character"}
     for py in root.rglob("*.py"):
-        if py.parent == PACKAGE_DIR:
+        if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue
         assert "fmis.structure_break" not in py.read_text(), py
+
+
+def test_the_only_permitted_consumer_does_not_reach_into_private_internals() -> None:
+    """`fmis.change_of_character` may use this package's public surface and nothing else.
+
+    In particular it must not import `_break_key`, `_reference` or
+    `_levels_by_side`: the reference rule, the eligibility arithmetic and the
+    break ordering each have exactly one implementation, and a consumer restating
+    one is the drift this guard exists to prevent.
+    """
+    root = PACKAGE_DIR.parent
+    for py in (root / "change_of_character").glob("*.py"):
+        for node in ast.walk(ast.parse(py.read_text())):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                assert not node.module.startswith("fmis.structure_break."), py
 
 
 def test_no_import_cycle_exists() -> None:

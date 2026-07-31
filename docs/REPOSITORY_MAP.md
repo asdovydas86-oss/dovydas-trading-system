@@ -310,8 +310,9 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
   only — and the standard library.
 - **Forbidden dependencies:** `fmis.structural_trend` (trend must never be an input to a level fact),
   private submodules of its three dependencies, and every other `fmis` package. **Only
-  `fmis.structure_break` imports this package** — named, not pattern-matched, so a second consumer must
-  justify itself in an ADR.
+  `fmis.structure_break` and `fmis.change_of_character` import this package** — each named, not
+  pattern-matched, so a third consumer must justify itself in an ADR. `fmis.change_of_character` is held
+  tighter still: a guard asserts it takes the single type name `LevelSide` and nothing else.
 
 ## `src/fmis/structure_break/` — break of structure (first layer built purely on derived facts)
 
@@ -347,6 +348,44 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 - **Allowed dependencies:** `fmis.level_crossing`, `fmis.series_context`, and `fmis.market_structure` for
   one label type — public surfaces only — and the standard library.
 - **Forbidden dependencies:** **`fmis.data`**, `fmis.structural_trend`, private submodules of its
+  dependencies, and every other `fmis` package. **Only `fmis.change_of_character` imports this package** —
+  named, not pattern-matched, so a second consumer must justify itself in an ADR.
+
+## `src/fmis/change_of_character/` — change of character (the top of the deterministic structural chain)
+
+- **Purpose:** report where structure broke the *other way*, from the break sequence alone. Contracts:
+  [ADR-0021](adr/ADR-0021-change-of-character-foundation-v1.md); design in
+  [design/CHOCH_FOUNDATION_V1.md](design/CHOCH_FOUNDATION_V1.md).
+- **It cannot read a candle, a level or a crossing.** The package does not import `fmis.data` at all, and
+  takes exactly one name — the type `LevelSide` — from `fmis.level_crossing`, pinned by AST guards in two
+  test suites. `PriceLevel`, `LevelCrossingEvent`, `CrossingKind` and `CrossingMechanism` are all
+  unreachable by name.
+- **What a change of character is:** a **break of structure whose side differs from the side broken at the
+  most recent strictly earlier break-bearing bar, when that bar broke exactly one side**. Four conjuncts:
+  the subject is a `StructureBreak`; a break-bearing bar exists **strictly earlier**; that bar broke
+  **exactly one** side; and the subject's side **differs** from it.
+- **The predecessor is chosen by bar, not by adjacency.** ADR-0020 §7's `zip(breaks, breaks[1:])` sketch is
+  **superseded**: two breaks may share a bar, and their order is the *level* ordering, not a claim about
+  which happened first, so adjacency would infer a change from an ordering the layer below refuses to read
+  as temporal.
+- **A two-sided break bar leaves character indeterminate**, so no change is claimed at the next break bar —
+  choosing one of that bar's two breaks would be the intrabar claim reintroduced one step later.
+  Indeterminacy **suppresses without persisting**.
+- **Character is the last break bar only**, never an accumulated run — accumulation is trend's idea, and
+  `MINIMUM_DIRECTIONAL_SHIFTS` already owns it one package over.
+- **This layer adds no primitive and takes no configuration.** `StructureBreak.index` and `.side` are
+  everything it reads, so there is nothing to misconfigure and no `confirmation_bars` argument to mismatch.
+- **At most one change per bar**, so output is ordered by the changing bar index **alone** — total and
+  strictly increasing, and **no side ordering exists anywhere in the package**. Order-invariant on its
+  input; duplicated equal breaks collapse; two *distinct* breaks at one (bar, side) are **rejected**.
+- **Responsibilities today:** `models.py` — `ChangeOfCharacter` (two stored fields, three projections),
+  `ChangeOfCharacterError`, `ChangeOfCharacterInputError`; `changes.py` — `derive_changes_of_character`
+  plus the private `_breaks_by_bar`; `pipeline.py` — `contextual_changes_of_character`. **Five public
+  names.**
+- **Allowed dependencies:** `fmis.structure_break`, `fmis.series_context`, and `fmis.level_crossing` for
+  the single type name `LevelSide` — public surfaces only — and the standard library.
+- **Forbidden dependencies:** **`fmis.data`**, **`fmis.market_structure`**, `fmis.structural_trend`
+  (trend is a summary of this layer and must never be an input to it), private submodules of its
   dependencies, and every other `fmis` package. **Nothing imports this package.**
 
 ## `src/fmis/evidence/` — evidence taxonomy

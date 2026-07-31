@@ -1827,39 +1827,65 @@ def test_does_not_reach_into_private_submodules_of_its_dependencies() -> None:
 
 
 def test_nothing_below_imports_level_crossing() -> None:
-    """Only `fmis.structure_break`, which sits *above* this package, may consume it.
+    """Only `fmis.structure_break` and `fmis.change_of_character`, both *above* this.
 
     Narrowed from "nothing in `fmis`" when Break of Structure Foundation v1
-    shipped. That widening was designed here, not discovered later: this package's
-    own docstring specifies a consumer that reads level and crossing facts
-    *without candle re-evaluation*, which is exactly what BOS does. What matters —
-    and what this test still enforces — is the *direction*: nothing below may
-    import upward, so `fmis.data`, `fmis.market_structure`, `fmis.structural_trend`
-    and `fmis.series_context` remain unable to see this package.
+    shipped, and narrowed again for Change of Character Foundation v1. Each
+    widening was designed rather than discovered: this package's own docstring
+    specifies a consumer that reads level and crossing facts *without candle
+    re-evaluation*, which is what BOS does; and CHoCH takes exactly one **type
+    name** from here, `LevelSide`, which the guard below pins. What matters — and
+    what this test still enforces — is the *direction*: nothing below may import
+    upward, so `fmis.data`, `fmis.market_structure`, `fmis.structural_trend` and
+    `fmis.series_context` remain unable to see this package.
 
-    The exemption is named rather than pattern-matched, so a second consumer
+    Each exemption is named rather than pattern-matched, so a third consumer
     appearing anywhere fails this test and has to justify itself in an ADR.
     """
     root = PACKAGE_DIR.parent
-    permitted = {root / "structure_break"}
+    permitted = {root / "structure_break", root / "change_of_character"}
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue
         assert "fmis.level_crossing" not in py.read_text(), py
 
 
-def test_the_only_permitted_consumer_does_not_reach_into_private_internals() -> None:
-    """`fmis.structure_break` may use the public surface of this package and nothing else.
+@pytest.mark.parametrize("consumer", ["structure_break", "change_of_character"])
+def test_permitted_consumers_do_not_reach_into_private_internals(
+    consumer: str,
+) -> None:
+    """A consumer may use this package's public surface and nothing else.
 
     In particular it must not import `_event_key` or `_level_key`: the crossing
     ordering contract has exactly one implementation, and a consumer restating it
     is the drift this guard exists to prevent.
     """
     root = PACKAGE_DIR.parent
-    for py in (root / "structure_break").glob("*.py"):
+    for py in (root / consumer).glob("*.py"):
         for node in ast.walk(ast.parse(py.read_text())):
             if isinstance(node, ast.ImportFrom) and node.module:
                 assert not node.module.startswith("fmis.level_crossing."), py
+
+
+def test_change_of_character_takes_only_the_level_side_type() -> None:
+    """The second consumer is a *type* consumer, and is held to that.
+
+    `fmis.change_of_character` needs `LevelSide` to annotate one projection and
+    to key one mapping. It must not reach `CrossingKind`, `CrossingMechanism`,
+    `PriceLevel`, `LevelCrossingEvent` or either derivation function — every one
+    of which would mean a change-of-character rule reading a fact two layers
+    below the one it consumes.
+    """
+    root = PACKAGE_DIR.parent
+    taken: set[str] = set()
+    for py in (root / "change_of_character").glob("*.py"):
+        for node in ast.walk(ast.parse(py.read_text())):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "fmis.level_crossing"
+            ):
+                taken |= {alias.name for alias in node.names}
+    assert taken == {"LevelSide"}
 
 
 def test_no_import_cycle_exists() -> None:

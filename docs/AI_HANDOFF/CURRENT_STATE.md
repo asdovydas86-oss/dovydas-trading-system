@@ -4,13 +4,71 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AD — Break of Structure Foundation v1 (2026-07-31).
-**Latest commit at time of writing:** `2e6d8f9` — `Merge Level-Crossing Foundation v1 Review`
-(the Milestone AD commits are created by this milestone).
+**Last updated for:** Milestone AE — Change of Character Foundation v1 (2026-07-31).
+**Latest commit at time of writing:** `5aac1a3` — `Merge Break of Structure Foundation v1 Review`
+(the Milestone AE commits are created by this milestone).
 
 ---
 
 ## Current milestone
+
+- **AE — Change of Character Foundation v1**: the layer that completes the deterministic structural chain
+  `CandleSeries → Swings → Relationships → Labels → Sequence State → Trend → Context → Level Crossing →
+  Break of Structure → **Change of Character**`. Contracts in
+  [ADR-0021](../adr/ADR-0021-change-of-character-foundation-v1.md); design in
+  [the design document](../design/CHOCH_FOUNDATION_V1.md).
+
+  **What a change of character is:** a **break of structure whose side differs from the side broken at the
+  most recent strictly earlier break-bearing bar, when that bar broke exactly one side**. Four conjuncts,
+  each decided separately: the subject is a `StructureBreak`; a break-bearing bar exists **strictly
+  earlier**; that bar broke **exactly one** side; and the subject's side **differs** from it.
+
+  **The audit's headline: this is the first milestone in the chain that adds no primitive and requests
+  none.** `StructureBreak` already exposes `index` and `side`, which is everything the rule reads —
+  re-derived by inspecting the dataclass directly rather than trusting ADR-0020. That is the strongest
+  available evidence that the layering below is correct. ADR-0020's D1 (the confirmation delay is on no
+  derived fact) is inherited and **not made worse**: eligibility was resolved one layer down, so this layer
+  takes **no configuration of any kind** and cannot be misconfigured.
+
+  **The audit's finding: ADR-0020 §7's CHoCH sketch is superseded.** The sketched
+  `zip(breaks, breaks[1:])` adjacency rule infers a change of character from an ordering that ADR-0019 §2.6
+  and ADR-0020 §3.5 both explicitly refuse to read as temporal — the order of two breaks sharing a bar is
+  the *level* ordering, not a claim about which happened first. On a run the shipped break layer produces,
+  `upper@4 · upper@12 · lower@12`, the sketch pairs `upper@12 → lower@12` (a predecessor on the **same
+  bar**) where this milestone pairs `upper@4 → lower@12`. Both agree bar 12 changed character; only one can
+  say what it changed *from* without fabricating an intrabar path. Notably this is **not** a
+  prefix-stability argument — both rules measure 0 violations over 6,400 prefixes — and the design says so
+  rather than borrowing a stronger-sounding justification. `fmis.structure_break` was **not modified**: the
+  sketch was prose in a "future" section and no production logic depended on it; the disagreement is pinned
+  by a test.
+
+  **A two-sided break bar leaves character indeterminate**, so no change is claimed at the next break bar.
+  Choosing one of that bar's two breaks to be "the" prior character is the intrabar claim reintroduced one
+  step later. Indeterminacy **suppresses without persisting** — the next single-sided break bar restores a
+  determinate character. This is the milestone's principal limitation (E1); resolving it needs sub-bar data
+  the repository does not ingest.
+
+  **At most one change per bar**, so output is ordered by the changing bar index **alone** — total and
+  strictly increasing. The consequence is deliberate: **no side ordering exists anywhere in the package**,
+  so `fmis.structure_break`'s private side rank is neither imported nor restated. The one ordering rule
+  this layer could plausibly have duplicated is structurally absent.
+
+  **No trend is consulted, in either direction**, and a test pins it from both sides:
+  `fmis.structural_trend` imports neither `fmis.structure_break` nor `fmis.change_of_character`. Review §15
+  is now satisfied end to end — BOS on levels, CHoCH over the BOS sequence, trend a summary of both,
+  defining neither.
+
+  **Purely additive to production:** no existing type, signature, exception message or export was modified,
+  and no existing production source byte was changed. The only changes outside the new package are **three
+  test guards**, each narrowed by design to name its permitted consumers, plus a new guard asserting that
+  `LevelSide` is the **only** name this package takes from `fmis.level_crossing`. **59/59 mutation probes
+  detected, zero survivors, zero no-ops.** Two probes survived the first round and both were **test-suite
+  gaps, not equivalent mutants** — duplicate collapse was compared with `==` rather than `is`, and no test
+  asserted a submodule's `__all__`; both are now closed. Growth is measured as effectively linear: 20,000
+  breaks in 0.0113 s, 100,000 in 0.103 s, a realistic 5,000-candle chain in 91 µs. The independent review
+  found **no P0 and no P1**.
+
+### Previous milestone
 
 - **AD — Break of Structure Foundation v1**: the first layer built **entirely on derived facts**. It
   consumes the structural level set and the crossing history and reads **no candle at all** — the package
@@ -56,7 +114,7 @@ update this file.
   that case from ~1.3 s to 0.026 s and made runtime independent of the level count, with equivalence proved
   against a naive implementation over an exhaustive small space. 48/48 adversarial cases pass.
 
-### Previous milestone
+### Earlier milestone
 
 - **AC — Level-Crossing Foundation v1**: the first layer to read **both** candles and derived structure,
   closing the gap the market-structure architecture review recorded as §15. Contracts in
@@ -300,19 +358,22 @@ Reconstructed from git history (`git log --oneline`):
 
 | Break of Structure Foundation v1 (AD) | see final report | `fmis.structure_break` — `StructureBreak`, `StructureBreakError`, `StructureBreakInputError`, `derive_structure_breaks`, `contextual_structure_breaks`; see [ADR-0020](../adr/ADR-0020-break-of-structure-foundation-v1.md) |
 
+| Change of Character Foundation v1 (AE) | see final report | `fmis.change_of_character` — `ChangeOfCharacter`, `ChangeOfCharacterError`, `ChangeOfCharacterInputError`, `derive_changes_of_character`, `contextual_changes_of_character`; supersedes ADR-0020 §7's CHoCH sketch; see [ADR-0021](../adr/ADR-0021-change-of-character-foundation-v1.md) |
+
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**3033 passing** (`uv run pytest`, ~2.4 s). Per module:
+**3221 passing** (`uv run pytest`, ~3.9 s), identically with `-W error`. Per module:
 
 | Module | Tests |
 |---|---|
-| `tests/test_structure_break.py` | 175 |
-| `tests/test_level_crossing.py` | 247 |
+| `tests/test_change_of_character.py` | 184 |
+| `tests/test_structure_break.py` | 176 |
+| `tests/test_level_crossing.py` | 249 |
 | `tests/test_market_structure_sequence_state.py` | 312 |
 | `tests/test_structural_trend.py` | 353 |
-| `tests/test_series_context.py` | 185 |
+| `tests/test_series_context.py` | 186 |
 | `tests/test_market_structure_state_history.py` | 267 |
 | `tests/test_market_structure_ordering.py` | 33 |
 | `tests/test_market_structure_relationships.py` | 228 |
@@ -491,6 +552,12 @@ src/fmis/
 │   │                               StructureBreakInputError
 │   ├── breaks.py                   derive_structure_breaks
 │   └── pipeline.py                 contextual_structure_breaks
+├── change_of_character/
+│   ├── __init__.py                 package rules + public surface
+│   ├── models.py                   ChangeOfCharacter, ChangeOfCharacterError,
+│   │                               ChangeOfCharacterInputError
+│   ├── changes.py                  derive_changes_of_character
+│   └── pipeline.py                 contextual_changes_of_character
 ├── evidence/
 │   ├── __init__.py                 taxonomy rules + public surface
 │   ├── families.py                 EvidenceFamily
@@ -556,38 +623,44 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-**Change of Character Foundation v1** is now unblocked and is the recommended next step. The precondition
-is met and verified rather than asserted: a CHoCH is *the first break opposing the direction of the
-previous break*, which is
+The **deterministic structural chain is complete**:
 
-    tuple(b for a, b in zip(breaks, breaks[1:]) if a.side is not b.side)
+    CandleSeries -> Swings -> Relationships -> Labels -> Sequence State -> Structural Trend
+                 -> Series Context -> Level Crossing -> Break of Structure -> Change of Character
 
-— computed from the break sequence alone, touching **no level, no crossing and no candle**. That is the
-market-structure review §15 ordering completed: BOS on levels, CHoCH over the BOS sequence, and trend a
-summary of both, defining neither.
+Every stage is pure, non-repainting, exactly prefix-stable, identity-carrying and single-implementation.
+Nothing in the chain remains to be built before a consumer can read structure end to end.
 
-What CHoCH must decide, and what this milestone deliberately did not:
+**Recommended next: carry the confirmation delay on `LevelOrigin` (ADR-0020 D1).** This is now the single
+largest correctness hazard left in the chain, and it is the only one a caller can trip without any error
+being raised. Today `confirmation_bars` must be supplied to `derive_structure_breaks` and matched **by
+hand** to the `right_bars` used for detection, and **a mismatch is undetectable** — it silently changes
+which level is the reference at every bar, and therefore which breaks and which changes of character
+exist. It changes a shipped model (`LevelOrigin` gains a field, and `structural_levels` must populate it),
+so it needs its own milestone and ADR. Milestone AE did **not** make it worse — CHoCH takes no
+configuration at all — but it also did not fix it, and every layer above will inherit it.
 
-- whether a single opposing break constitutes a change of character, or a run of them;
-- how the **first** break of a series is treated, having no predecessor to oppose;
-- whether an `EQUAL_HIGH`- or `EQUAL_LOW`-derived break counts, using the label BOS carries but does not
-  read;
-- whether two breaks sharing a bar (one upper, one lower) can constitute a change, **given that their
-  order is not a time claim**;
-- whether a change of character is ever invalidated — BOS deliberately has no such notion.
+Then, in the order the market-structure architecture review §15 fixed:
 
-Then, in the order review §15 fixed:
-
-- **Trend as a summary of the BOS/CHoCH history**, consuming both and defining neither — which would let
-  `fmis.structural_trend` gain a second, level-derived input rather than replace its current one.
-- **Support / resistance candidates** — `PriceLevel` plus break history is now the natural vocabulary.
+- **Trend as a summary of the BOS and CHoCH histories**, consuming both and defining neither. This is the
+  last clause of review §15 and is now fully unblocked: both inputs exist, and a test in Milestone AE pins
+  that `fmis.structural_trend` currently imports neither, so the new dependency will be a deliberate,
+  reviewable widening rather than a drift. What it must decide: whether trend reads changes of character,
+  the break sequence, or both; how it reconciles a `StructuralTrendType` derived from swing labels with one
+  derived from breaks; and what it reports when the two disagree.
+- **Support / resistance candidates** — `PriceLevel`, break history and change-of-character history are now
+  the natural vocabulary.
 - **Volume Evidence v1b** — still the deferred half of Milestone T.
 - **Trading reasoning v1** — first consumer of `TradingAnalysisContext`.
 
-**A prerequisite worth scheduling before either:** carrying the **confirmation delay** on `LevelOrigin`
-(D1). Today `confirmation_bars` must be supplied to `derive_structure_breaks` and matched by hand to the
-`right_bars` used for detection, and a mismatch is **undetectable**. It changes a shipped model, so it
-needs its own milestone and ADR.
+**Known follow-ups from Milestone AE** (each small, none blocking): a **two-sided break bar leaves
+character indeterminate**, so no change is claimed at the next break bar — deliberate, since the
+alternative is an intrabar claim, and resolving it needs sub-bar data the repository does not ingest (E1);
+a change of character is **never invalidated**, so anything wanting "failed CHoCH" builds it over the
+sequence (E2); **no trend interaction** exists in either direction, because reconciliation sits above both
+(E3); character is the **last break bar only**, not an accumulated run, because accumulation is trend's
+idea and `MINIMUM_DIRECTIONAL_SHIFTS` already owns it (E4); and there is **no minimum spacing** between
+changes, because a threshold would make historical results unreproducible without its setting (E8).
 
 **Known follow-ups from Milestone AD** (each small, none blocking): the reference level is the **most
 recent**, not the most extreme, so a run of lower highs makes each successive lower high the reference
@@ -640,8 +713,11 @@ accepted before any macroeconomic, fundamental-release, revised, or vintage-data
 
 ## Repository status
 
-- Working tree clean; `main` in sync with `origin/main` at the last completed (pushed) milestone.
+- Working tree clean. **Milestone AE is merged locally and deliberately NOT pushed**, so `main` is ahead
+  of `origin/main` by the six Milestone AE commits (design, implementation, review — three branches, three
+  `--no-ff` merges). Nothing about the milestone is on the remote.
 - TradingView MCP workflow is external to the Python package — **zero coupling to `src/`**.
+- `pyproject.toml` and `uv.lock` unchanged since Milestone AD; still **zero runtime dependencies**.
 
 ## Latest architecture commit
 

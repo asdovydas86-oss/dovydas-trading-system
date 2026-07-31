@@ -4,13 +4,60 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AB — Series Identity & Context Contract v1 (2026-07-30).
-**Latest commit at time of writing:** `238691b` — `Merge Trend Foundation v1 Review`
-(the Milestone AB commits are created by this milestone).
+**Last updated for:** Milestone AC — Level-Crossing Foundation v1 (2026-07-31).
+**Latest commit at time of writing:** `c71d79e` — `Merge Series Identity & Context Contract v1 Review`
+(the Milestone AC commits are created by this milestone).
 
 ---
 
 ## Current milestone
+
+- **AC — Level-Crossing Foundation v1**: the first layer to read **both** candles and derived structure,
+  closing the gap the market-structure architecture review recorded as §15. Contracts in
+  [ADR-0019](../adr/ADR-0019-level-crossing-foundation-v1.md); design in
+  [the design document](../design/LEVEL_CROSSING_FOUNDATION_V1.md).
+
+  **The gap, as the review stated it:** after `detect_swings` **no layer reads a candle**, so no fact of
+  the form *"price traded above level L at bar i"* existed anywhere. `SwingPoint` stores only the extreme,
+  so close-versus-wick was not derivable from swings. And a swing carries the *pivot's* timestamp, while a
+  crossing happens at a different bar that nothing recorded.
+
+  **A crossing is a fact; a break is a reading.** Break of Structure additionally requires deciding which
+  level is protected, when protection ends, and whether an `EQUAL_HIGH`-derived level breaks anything —
+  none of which follows from the data. Separating them buys a specific property: a BOS layer that
+  *disagrees* with any particular protected-level policy can still use these events unchanged.
+
+  **What shipped:** a new sibling package `fmis.level_crossing` with thirteen public names — `LevelSide`,
+  `CrossingKind`, `CrossingMechanism`, `LevelOrigin`, `PriceLevel`, `LevelCrossingEvent`,
+  `LevelCrossingError`, `DuplicateLevelError`, `crossing_kind`, `derive_level_crossings`,
+  `structural_levels`, `contextual_structural_levels`, `contextual_level_crossings`.
+
+  **One canonical crossing policy, deliberately not configurable.** `high == L` is a `TOUCH`; only strict
+  `>` / `<` is a breach; wick and close are two *facts on the event*, not two settings. A configurable rule
+  would make every historical event non-reproducible without its setting. Comparison is **exact on floats**
+  with no tolerance, inheriting ADR-0013 §4.
+
+  **Gaps and outside bars are represented honestly.** `CrossingMechanism` separates price *reaching* a
+  level from *arriving beyond* it and from a series that simply *starts* beyond it; `open` is never
+  consulted, because an open beyond a level whose low came back through it did trade at the level. An
+  outside bar yields two events sharing one index, and their order is the *level* ordering, not a time
+  claim — there is **no path field and no "order unknown" flag**, because intrabar order is never known
+  and a flag that never varies carries no information.
+
+  **No lifecycle at all**, and that is the decision: no activation, no first-cross-only, no invalidation.
+  Both are BOS policies, applied by a consumer filtering fields the event already carries.
+
+  **Prefix stability is exact with no exceptions** — nothing reads forward and there is no confirmation
+  delay — measured at 0 violations over 121 prefixes × 22 levels, the real fixture, and an exhaustive
+  two-candle space.
+
+  **Purely additive to production:** no existing type, signature, exception message or export was
+  modified. The only change outside the new package is one **test guard**, narrowed by design
+  (ADR-0018 §6.1) so `fmis.series_context` may be imported by `fmis.level_crossing` and nothing else.
+  35/35 mutation probes detected with zero survivors; the independent review found and fixed
+  no P0 or P1.
+
+### Previous milestone
 
 - **AB — Series Identity & Context Contract v1**: closes the integrity risk the Trend Foundation review
   recorded as P3-2. Contracts in [ADR-0018](../adr/ADR-0018-series-identity-and-context-contract.md);
@@ -44,7 +91,7 @@ update this file.
   review found and fixed one P2 (an empty-but-valid contextual series was falsy because the
   envelope defined `__len__`); no P0 or P1.
 
-### Previous milestone
+### Earlier milestone
 
 - **AA — Trend Foundation v1** (implementation): a new sibling package `fmis.structural_trend`, the first
   deterministic **consumer** of the structural sequence state history, and the first layer in the
@@ -199,17 +246,20 @@ Reconstructed from git history (`git log --oneline`):
 | Trend Foundation v1 (AA) | see final report | `fmis.structural_trend` — `StructuralTrendType`, `StructuralTrendSnapshot`, `MINIMUM_DIRECTIONAL_SHIFTS`, `derive_structural_trend`, `derive_structural_trend_history`; see [ADR-0017](../adr/ADR-0017-structural-trend-foundation.md) |
 | Series Identity & Context Contract v1 (AB) | see final report | `SeriesIdentity` + `CandleSeries.identity` in `fmis.data`; `fmis.series_context` — `ContextualSeries`, `require_same_identity`, `SeriesIdentityMismatchError` and three identity-preserving wrappers; see [ADR-0018](../adr/ADR-0018-series-identity-and-context-contract.md) |
 
+| Level-Crossing Foundation v1 (AC) | see final report | `fmis.level_crossing` — `LevelSide`, `CrossingKind`, `CrossingMechanism`, `LevelOrigin`, `PriceLevel`, `LevelCrossingEvent`, `LevelCrossingError`, `DuplicateLevelError`, `crossing_kind`, `derive_level_crossings`, `structural_levels`, `contextual_structural_levels`, `contextual_level_crossings`; see [ADR-0019](../adr/ADR-0019-level-crossing-foundation-v1.md) |
+
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**2609 passing** (`uv run pytest`, ~1.7 s). Per module:
+**2849 passing** (`uv run pytest`, ~2.2 s). Per module:
 
 | Module | Tests |
 |---|---|
+| `tests/test_level_crossing.py` | 239 |
 | `tests/test_market_structure_sequence_state.py` | 312 |
 | `tests/test_structural_trend.py` | 353 |
-| `tests/test_series_context.py` | 183 |
+| `tests/test_series_context.py` | 184 |
 | `tests/test_market_structure_state_history.py` | 267 |
 | `tests/test_market_structure_ordering.py` | 33 |
 | `tests/test_market_structure_relationships.py` | 228 |
@@ -373,6 +423,15 @@ src/fmis/
 │   └── pipeline.py                 contextual_structural_swings,
 │                                   contextual_structural_state_history,
 │                                   contextual_structural_trend_history
+├── level_crossing/
+│   ├── __init__.py                 package rules + public surface
+│   ├── models.py                   LevelSide, CrossingKind, CrossingMechanism,
+│   │                               LevelOrigin, PriceLevel, LevelCrossingEvent,
+│   │                               LevelCrossingError, DuplicateLevelError
+│   ├── crossing.py                 crossing_kind, derive_level_crossings
+│   ├── levels.py                   structural_levels
+│   └── pipeline.py                 contextual_structural_levels,
+│                                   contextual_level_crossings
 ├── evidence/
 │   ├── __init__.py                 taxonomy rules + public surface
 │   ├── families.py                 EvidenceFamily
@@ -438,27 +497,39 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-Not yet chosen. Structural facts, their sequence history, and a first summary of that sequence all now
-exist. The natural next steps are:
+**Break of Structure Foundation v1** is now unblocked and is the recommended next step. The precondition
+it was waiting on is met: `LevelCrossingEvent` carries the level, its provenance and label, the crossing
+bar's index and timestamp, the crossing `kind` and the `mechanism`, so BOS can be defined **entirely over
+crossing events** without re-reading candle OHLC and without re-implementing the crossing rule.
 
-- **Level-Crossing Foundation v1** (the precursor to break of structure) — BOS needs a "price crossed
-  level L at bar *i*" fact that **no layer above `detect_swings` can currently produce**. The identity
-  contract it needs now exists: one `require_same_identity(candle_series, contextual_swings)` call proves
-  candles and derived facts describe the same series, and `fmis.series_context.models` imports neither
-  `market_structure` nor `structural_trend`, so this package can consume the contract without depending
-  on trend (ADR-0018 §14). It requires a new
-  input contract reading *both* swing levels and candles, and its own ADR deciding close-versus-wick,
-  which level is protected and when it stops being, whether an `EQUAL_HIGH` breaks anything, and how an
-  outside bar crossing both sides is grouped. Recommended as a **sibling package**, so
-  `fmis.market_structure` keeps the property that only its first stage touches a candle
-  ([the architecture review](../reviews/MARKET_STRUCTURE_ARCHITECTURE_REVIEW_V1.md) §15).
-- **Change of character** — defined over the *BOS sequence*, never over trend. The ordering is fixed:
-  BOS on levels, CHoCH over BOS, trend as a summary consuming both and defining neither. Any definition
-  making trend an input to a break is rejected on sight (§15, [ADR-0017](../adr/ADR-0017-structural-trend-foundation.md) §18).
+What BOS must decide, and what this milestone deliberately did not:
+
+- **which level is protected**, and when it stops being protected;
+- **activation** — whether a crossing before a level's origin (or before that pivot's *confirmation*)
+  counts (ADR-0019 deferred question D1);
+- whether a `TOUCH` or a `WICK_BREACH` breaks anything, or only a `CLOSE_BREACH`;
+- whether an `EQUAL_HIGH`-derived level breaks anything;
+- how the two events of an outside bar are treated, given that **their order is not a time claim**.
+
+Each of those reads a field already present on the event. None requires a candle.
+
+Then, in the order review §15 fixed and ADR-0019 §1.2 restates:
+
+- **Change of character** — defined over the *BOS sequence*, never over trend. BOS on levels, CHoCH over
+  BOS, trend as a summary consuming both and defining neither. Any definition making trend an input to a
+  break is rejected on sight.
 - **Support / resistance candidates** — `fmis.features.support_resistance` already names swing points as
-  its input, and `EQUAL_HIGH`/`EQUAL_LOW` are the obvious seed.
+  its input, and `PriceLevel` is now the obvious vocabulary.
 - **Volume Evidence v1b** — still the deferred half of Milestone T.
 - **Trading reasoning v1** — first consumer of `TradingAnalysisContext`.
+
+**Known follow-ups from Milestone AC** (each small, none blocking): `derive_level_crossings` has **no
+activation policy**, so it will report a crossing of a level whose origin is later — deliberate, since
+filtering is BOS's decision, but a naive consumer must apply it (D1); `structural_levels` omits the
+**first swing of each type**, which has no `StructuralSwing` and therefore no label (2 of 5 points on the
+real fixture, D2); event volume is **O(candles × levels)**, so a wide level set over a long series is
+large by design; and `GAPPED_BEYOND` versus `ALREADY_BEYOND` is the one distinction an event cannot
+self-validate, because it depends on the predecessor the event does not carry (D4).
 
 **Known follow-ups from Milestone AB** (each small, none blocking): the context-free primitives remain
 public and cannot tell whether their input came from one series — that is a deliberate compatibility

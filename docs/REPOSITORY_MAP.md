@@ -15,7 +15,7 @@ Everything below describes what exists **today** unless explicitly marked **Plan
 ```
 .
 ├── src/fmis/               Python package (the system)
-├── tests/                  pytest suite (2609 tests) + fixtures
+├── tests/                  pytest suite (2849 tests) + fixtures
 ├── docs/                   all documentation (this file lives here)
 ├── prompts/                AI prompt prototypes (not wired to Python)
 ├── scripts/                operational scripts (TradingView launcher)
@@ -261,7 +261,56 @@ depends on a later stage of the pipeline** (architecture doc §5.1).
 - **Allowed dependencies:** `fmis.data`, `fmis.market_structure`, `fmis.structural_trend` — public
   surfaces only — and the standard library.
 - **Forbidden dependencies:** private submodules of any of the three; every other `fmis` package.
-  **Nothing imports this package.**
+  **Only `fmis.level_crossing` imports this package** — the widening ADR-0018 §6.1 designed. The exemption
+  is *named*, not pattern-matched, so a second consumer must justify itself in an ADR; `fmis.data`,
+  `fmis.market_structure` and `fmis.structural_trend` still cannot see it.
+
+## `src/fmis/level_crossing/` — level crossing (first layer reading both candles and structure)
+
+- **Purpose:** answer *"did price cross a specific structural price level, when, how, and under which
+  explicit policy?"* — and refuse the next question. Contracts:
+  [ADR-0019](adr/ADR-0019-level-crossing-foundation-v1.md); design in
+  [design/LEVEL_CROSSING_FOUNDATION_V1.md](design/LEVEL_CROSSING_FOUNDATION_V1.md).
+- **The gap it closes:** the market-structure architecture review §15 found that after `detect_swings`
+  **no layer reads a candle**, so no fact of the form *"price traded above level L at bar i"* existed;
+  `SwingPoint` stores only the extreme, so close-vs-wick was not derivable; and a swing carries the
+  *pivot's* timestamp while a crossing happens at a different bar.
+- **A crossing is a fact; a break is a reading.** BOS additionally needs decisions about which level is
+  protected and when protection ends. Review §15's ordering stands: BOS on levels, CHoCH over the BOS
+  sequence, trend a summary of both. This package therefore imports **no trend**, enforced by a test.
+- **Responsibilities today:** `models.py` — `LevelSide`, `CrossingKind`, `CrossingMechanism`,
+  `LevelOrigin`, `PriceLevel`, `LevelCrossingEvent`, `LevelCrossingError`, `DuplicateLevelError`, plus the
+  private `_crossing_kind`, `_is_wholly_beyond`, `_level_key`, `_extreme_for` and three
+  `MappingProxyType` rank/side mappings; `crossing.py` — `crossing_kind`, `derive_level_crossings`;
+  `levels.py` — `structural_levels`; `pipeline.py` — `contextual_structural_levels`,
+  `contextual_level_crossings`. **Thirteen public names.**
+- **One canonical crossing policy, not a setting.** `high == L` is a `TOUCH`; `high > L` with the close
+  inside is a `WICK_BREACH`; a close beyond is a `CLOSE_BREACH` — mirrored on `low`. Exact equality is
+  never a breach, and comparison is **exact on floats** with no tolerance (ADR-0013 §4). A configurable
+  rule was rejected: it would make historical events non-reproducible without their setting.
+- **Gaps and outside bars are represented honestly.** `CrossingMechanism` separates price *reaching* a
+  level from *arriving beyond it* and from a series that simply *starts* beyond it; `open` is never
+  consulted. An outside bar yields two events sharing one index, and **their order is the level ordering,
+  not a time claim** — there is deliberately no path field and no "order unknown" flag, because intrabar
+  order is never known.
+- **No lifecycle at all.** No level is active, spent, protected or invalidated, and no candle is skipped
+  for preceding a level's origin. Activation is a BOS policy, applied by filtering fields the event
+  already carries. All interactions are emitted; first-cross is a consumer's one-pass filter.
+- **Ordering is explicit, total and self-validated** — `(candle index, level side, level price, level
+  origin, origin label)` from explicit rank mappings, never enum or hash order. Permuting levels changes
+  nothing; exact-duplicate levels are **rejected**, not deduplicated.
+- **Prefix stability is exact, with no exceptions.** An event depends on candle `i`, candle `i-1` and the
+  levels; nothing reads forward and there is no confirmation delay, so a prefix's events are exactly the
+  full run's events inside that prefix. Measured at 0 violations over 121 prefixes × 22 levels, the real
+  fixture, and an exhaustive two-candle space.
+- **Identity is checked once**, via `require_same_identity(series, levels)` — one call spanning a
+  `CandleSeries` and a `ContextualSeries`. Mixed instruments and timeframes raise before any arithmetic;
+  empty data retains a full identity; no API accepts an identity argument.
+- **Allowed dependencies:** `fmis.data`, `fmis.market_structure`, `fmis.series_context` — public surfaces
+  only — and the standard library.
+- **Forbidden dependencies:** `fmis.structural_trend` (trend must never be an input to a level fact),
+  private submodules of its three dependencies, and every other `fmis` package. **Nothing imports this
+  package.**
 
 ## `src/fmis/evidence/` — evidence taxonomy
 
@@ -539,7 +588,7 @@ cmp.relative_value.alignment.aligned_observation_count
 
 ## `tests/`
 
-- **Purpose:** the correctness contract. **2609 tests** across 28 modules, plus `tests/fixtures/` (a small
+- **Purpose:** the correctness contract. **2849 tests** across 29 modules, plus `tests/fixtures/` (a small
   committed OHLCV dataset) and `conftest.py`.
 - **Responsibilities:** verify every deterministic calculation against independently derived expected
   values; test warm-up boundaries on both sides; test immutability and validation.

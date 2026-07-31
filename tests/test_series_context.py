@@ -906,11 +906,35 @@ def test_does_not_reach_into_private_submodules_of_its_dependencies() -> None:
 
 
 def test_nothing_below_imports_series_context() -> None:
+    """Only `fmis.level_crossing`, which sits *above* this contract, may consume it.
+
+    Narrowed from "nothing in `fmis`" when Level-Crossing Foundation v1 shipped.
+    That widening was designed here, not discovered later: ADR-0018 §6.1 and this
+    package's own docstring both specify a candle-consuming sibling entering the
+    pipeline through `require_same_identity`. What matters — and what this test
+    still enforces — is the *direction*: nothing below may import upward, so
+    `fmis.data`, `fmis.market_structure` and `fmis.structural_trend` remain unable
+    to see this package.
+
+    The exemption is named rather than pattern-matched, so a second consumer
+    appearing anywhere fails this test and has to justify itself in an ADR —
+    matching `test_structural_trend.py`'s treatment of its own single consumer.
+    """
     root = PACKAGE_DIR.parent
+    permitted = {root / "level_crossing"}
     for py in root.rglob("*.py"):
-        if py.parent == PACKAGE_DIR:
+        if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue
         assert "fmis.series_context" not in py.read_text(), py
+
+
+def test_the_only_permitted_consumer_does_not_reach_into_private_internals() -> None:
+    """`fmis.level_crossing` may use the public surface of this package and nothing else."""
+    root = PACKAGE_DIR.parent
+    for py in (root / "level_crossing").glob("*.py"):
+        for node in ast.walk(ast.parse(py.read_text())):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                assert not node.module.startswith("fmis.series_context."), py
 
 
 def test_no_import_cycle_exists() -> None:

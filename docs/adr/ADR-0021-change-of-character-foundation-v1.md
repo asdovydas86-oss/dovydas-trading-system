@@ -355,5 +355,10 @@ work, zero output — derives 20,000 breaks in 0.0028 s. The `O(n log n)` bound 
 invisible at every size measured. No optimisation is recommended; there is nothing to optimise.
 
 The independent review
-([`docs/reviews/CHOCH_FOUNDATION_V1_REVIEW.md`](../reviews/CHOCH_FOUNDATION_V1_REVIEW.md)) found **no P0 and
-no P1**.
+([`docs/reviews/CHOCH_FOUNDATION_V1_REVIEW.md`](../reviews/CHOCH_FOUNDATION_V1_REVIEW.md)) re-derived the
+rule from this ADR's prose as an independent `O(n²)` reimplementation and cross-checked it over 939 + 540
+exhaustive cases, 3,000 randomised cases with injected duplicates and shuffles, and 60 candle-derived
+chains: **0 mismatches**. It found **no P0, no P1 and no P2**, and three P3 observations, all documented
+rather than fixed. It additionally proved every narrowed guard still rejects what it claims to — by
+injecting a forbidden import and confirming the suite fails — and confirmed replay determinism across four
+`PYTHONHASHSEED` values in fresh processes, which the package earns by iterating **no set anywhere**.

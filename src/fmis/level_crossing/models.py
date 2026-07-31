@@ -28,7 +28,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from types import MappingProxyType
 
@@ -215,12 +215,33 @@ class LevelOrigin:
       * ``index`` — the pivot's position in the closed-candle sequence.
       * ``timestamp`` — the **pivot candle's** timestamp, matching
         `SwingPoint.timestamp`. Not a confirmation time, not an emission time.
+        Must be **timezone-aware**; see below.
       * ``label`` — the swing's own `StructuralSwingLabel`, carried verbatim.
 
     Nothing here marks the level protected, active, spent, or BOS-relevant, and
     nothing in this package reads an origin except the ordering key. An
     `EQUAL_HIGH`-derived level stays an `EQUAL_HIGH`-derived level; this package
     never renames a swing.
+
+    **The timestamp must be timezone-aware, and this is deliberately stricter than
+    `SwingPoint`**, which accepts any `datetime`. The reason is that this
+    timestamp is an **ordering key**: `_level_key` sorts levels by it, and the
+    event ordering is a public, mutation-tested contract. Two naive datetimes
+    cannot be compared against an aware one at all, and any projection that made
+    them comparable — notably `datetime.timestamp()`, which interprets a naive
+    value in the **host's local time zone** — would make the published order
+    depend on the machine that computed it. This package promises no
+    environment-dependent output, so the stricter rule is what keeps that promise.
+
+    Being stricter costs nothing reachable: `structural_levels` builds every
+    origin from `SwingPoint.timestamp`, which comes from `Candle.timestamp`,
+    which `fmis.data` has already validated as canonical UTC. No level derived
+    from real candles can be rejected here. Only a hand-built naive origin is,
+    and that one has no correct ordering to give it.
+
+    Awareness is required; UTC specifically is **not**. A `+05:00` origin sorts
+    chronologically and unambiguously, and demanding UTC would restate
+    `fmis.data`'s contract in a second place.
 
     Frozen, slotted and hashable, so provenance cannot drift and a level stays
     usable as a dict key.
@@ -239,6 +260,11 @@ class LevelOrigin:
         if not isinstance(self.timestamp, datetime):
             raise TypeError(
                 f"timestamp must be a datetime, got {type(self.timestamp).__name__}"
+            )
+        if self.timestamp.utcoffset() is None:
+            raise ValueError(
+                "timestamp must be timezone-aware; a naive origin timestamp has "
+                "no machine-independent ordering"
             )
         if not isinstance(self.label, StructuralSwingLabel):
             raise TypeError(
@@ -303,7 +329,13 @@ class PriceLevel:
                 )
 
 
-def _level_key(level: PriceLevel) -> tuple[int, float, int, int, float, int]:
+#: Sorts before every real `LevelOrigin.timestamp`. Placed in the key only where
+#: the preceding ``has-origin`` element has already made it unreachable, so it
+#: cannot collide with a real value however early that value is.
+_NO_TIMESTAMP = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _level_key(level: PriceLevel) -> tuple[int, float, int, int, datetime, int]:
     """The one authoritative canonical order for levels.
 
     A **total** key derived entirely from level content, so input order is not
@@ -321,24 +353,30 @@ def _level_key(level: PriceLevel) -> tuple[int, float, int, int, float, int]:
     after it are unreachable for an origin-less level, because ``has-origin``
     has already separated it.
 
-    The timestamp is projected to a POSIX float so the key is a tuple of plain
-    numbers, which is comparable, deterministic, and free of any dependence on
-    `datetime` comparison semantics across time zones. Every timestamp in this
-    repository is canonical UTC, so the projection is lossless in ordering.
+    The timestamp enters the key **as a `datetime`, never as a POSIX float**. An
+    earlier draft projected it with `datetime.timestamp()`, which has two defects
+    the independent review measured. It interprets a *naive* value in the host's
+    **local time zone**, so the published order changed with `TZ` — an
+    environment-dependent output this package forbids. And it loses resolution as
+    the epoch offset grows: two origins one microsecond apart in the year 3000
+    projected to the **same** float, making the key non-total and the order
+    dependent on input order after all. `LevelOrigin` now requires an aware
+    timestamp, which makes direct `datetime` comparison total, exact and
+    chronological, and both defects unrepresentable.
 
-    Deliberately **private**, following `_relation_for` and `_label_for`. A public
-    key function would invite a caller to sort levels by hand and grow a second,
-    conflicting ordering contract.
+    Deliberately **private**, following the market-structure package's
+    `_relation_for` and `_label_for`. A public key function would invite a caller
+    to sort levels by hand and grow a second, conflicting ordering contract.
     """
     origin = level.origin
     if origin is None:
-        return (_SIDE_RANK[level.side], level.price, 0, 0, 0.0, 0)
+        return (_SIDE_RANK[level.side], level.price, 0, 0, _NO_TIMESTAMP, 0)
     return (
         _SIDE_RANK[level.side],
         level.price,
         1,
         origin.index,
-        origin.timestamp.timestamp(),
+        origin.timestamp,
         _LABEL_RANK[origin.label],
     )
 

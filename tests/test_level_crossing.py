@@ -1206,6 +1206,114 @@ def test_level_origin_type_validation(kwargs: dict, message: str) -> None:
     assert str(excinfo.value) == message
 
 
+def test_a_naive_origin_timestamp_is_rejected() -> None:
+    """Review P1-1. A naive timestamp has no machine-independent ordering."""
+    with pytest.raises(ValueError) as excinfo:
+        LevelOrigin(
+            index=1,
+            timestamp=datetime(2024, 1, 1, 12, 0, 0),
+            label=StructuralSwingLabel.HIGHER_HIGH,
+        )
+    assert str(excinfo.value) == (
+        "timestamp must be timezone-aware; a naive origin timestamp has no "
+        "machine-independent ordering"
+    )
+
+
+def test_a_non_utc_aware_origin_timestamp_is_accepted() -> None:
+    """Awareness is required; UTC specifically is not — that is `fmis.data`'s contract."""
+    offset = timezone(timedelta(hours=5))
+    got = LevelOrigin(
+        index=1,
+        timestamp=datetime(2024, 1, 1, 17, 0, tzinfo=offset),
+        label=StructuralSwingLabel.HIGHER_HIGH,
+    )
+    assert got.timestamp.utcoffset() == timedelta(hours=5)
+
+
+def test_every_swing_derived_origin_is_accepted() -> None:
+    """The stricter rule costs nothing reachable: candle timestamps are already UTC."""
+    real = real_series()
+    got = structural_levels(contextual_structural_swings(real).values)
+    assert got
+    for level in got:
+        assert level.origin.timestamp.utcoffset() is not None
+
+
+def test_the_ordering_key_is_independent_of_the_host_time_zone() -> None:
+    """Review P1-1. `datetime.timestamp()` on a naive value read `TZ`; the key no longer can."""
+    import os
+    import time as _time
+
+    level = PriceLevel(
+        100.0, LevelSide.UPPER, origin(3, StructuralSwingLabel.HIGHER_HIGH)
+    )
+    saved = os.environ.get("TZ")
+    keys = []
+    try:
+        for zone in ("UTC", "America/New_York", "Asia/Tokyo"):
+            os.environ["TZ"] = zone
+            _time.tzset()
+            keys.append(models_mod._level_key(level))
+    finally:
+        if saved is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = saved
+        _time.tzset()
+    assert len(set(keys)) == 1, keys
+
+
+def test_the_ordering_key_is_total_for_far_future_timestamps() -> None:
+    """Review P2-1. A POSIX-float projection collapsed microseconds beyond ~year 2900."""
+    far = datetime(3000, 1, 1, tzinfo=timezone.utc)
+    a = PriceLevel(
+        100.0,
+        LevelSide.UPPER,
+        LevelOrigin(3, far, StructuralSwingLabel.HIGHER_HIGH),
+    )
+    b = PriceLevel(
+        100.0,
+        LevelSide.UPPER,
+        LevelOrigin(
+            3, far + timedelta(microseconds=1), StructuralSwingLabel.HIGHER_HIGH
+        ),
+    )
+    assert a != b
+    assert models_mod._level_key(a) != models_mod._level_key(b)
+    assert models_mod._level_key(a) < models_mod._level_key(b)
+    forward = derive_level_crossings(series([(95, 105, 94, 104)]), [a, b])
+    assert derive_level_crossings(series([(95, 105, 94, 104)]), [b, a]) == forward
+    assert [e.level for e in forward] == [a, b]
+
+
+def test_the_no_origin_sentinel_cannot_collide_with_a_real_timestamp() -> None:
+    """It sits behind the `has-origin` element, so it is unreachable for comparison."""
+    earliest = PriceLevel(
+        100.0,
+        LevelSide.UPPER,
+        LevelOrigin(
+            0, datetime.min.replace(tzinfo=timezone.utc), StructuralSwingLabel.HIGHER_HIGH
+        ),
+    )
+    bare = PriceLevel(100.0, LevelSide.UPPER)
+    assert models_mod._level_key(bare) < models_mod._level_key(earliest)
+    events = derive_level_crossings(
+        series([(95, 105, 94, 104)]), [earliest, bare]
+    )
+    assert [e.level for e in events] == [bare, earliest]
+
+
+def test_the_internal_order_guard_actually_fires() -> None:
+    """Unreachable by construction, so it is exercised directly rather than assumed."""
+    event = derive_level_crossings(series([(95, 105, 94, 104)]), [UPPER_100])[0]
+    with pytest.raises(ValueError) as excinfo:
+        crossing_mod._validate_event_order([event, event])
+    assert str(excinfo.value) == (
+        "events must be in canonical order; events[1] repeats or precedes events[0]"
+    )
+
+
 def test_a_negative_origin_index_is_rejected() -> None:
     with pytest.raises(ValueError) as excinfo:
         LevelOrigin(index=-1, timestamp=_BASE, label=StructuralSwingLabel.HIGHER_HIGH)
@@ -1772,10 +1880,31 @@ def test_no_global_mutable_state() -> None:
 
 
 def test_no_wall_clock_access() -> None:
+    """AST-based, not a text scan.
+
+    A substring scan for ``time.time`` matches inside ``datetime.timestamp()``,
+    so a docstring explaining *why* that projection was rejected would fail a
+    guard about *using* a clock. The guard means "this package must not read the
+    current time", and reading the current time is a call, not a spelling.
+    """
     for py in PACKAGE_DIR.glob("*.py"):
-        source = py.read_text()
-        for banned in ("datetime.now", "utcnow", "time.time", "time.monotonic"):
-            assert banned not in source, (py, banned)
+        tree = ast.parse(py.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                assert not any(
+                    a.name.split(".")[0] in ("time", "calendar") for a in node.names
+                ), py
+            if isinstance(node, ast.ImportFrom) and node.module:
+                assert node.module.split(".")[0] not in ("time", "calendar"), py
+            if isinstance(node, ast.Attribute):
+                assert node.attr not in (
+                    "now",
+                    "utcnow",
+                    "today",
+                    "monotonic",
+                    "perf_counter",
+                    "time_ns",
+                ), (py, node.attr)
 
 
 def test_no_randomness_in_production() -> None:

@@ -167,7 +167,17 @@ Deferred question **D1**.
 ```
 
 `UPPER` before `LOWER`, from **explicit rank mappings** — never enum definition order, `.value` string
-order, set order or hash order. A level without an origin sorts before one with an origin. Timestamp is
+order, set order or hash order. A level without an origin sorts before one with an origin.
+
+The origin timestamp enters the key **as a `datetime`, never as a POSIX float**, and `LevelOrigin`
+therefore requires a **timezone-aware** timestamp — deliberately stricter than `SwingPoint`, because this
+timestamp is an *ordering key* and `SwingPoint`'s is not. The independent review measured both defects the
+earlier float projection had: `datetime.timestamp()` interprets a naive value in the **host's local time
+zone**, so the published order changed with `TZ`; and it loses resolution as the epoch offset grows, so two
+origins one microsecond apart in the year 3000 produced an **equal** key and the order fell back to input
+order. The stricter rule costs nothing reachable — every swing-derived origin comes from a UTC-validated
+`Candle` — and makes both defects unrepresentable. Awareness is required; UTC specifically is not, so
+`fmis.data`'s contract is not restated here. Timestamp is
 absent from the key because `CandleSeries` guarantees timestamps increase strictly with index; kind and
 mechanism are absent because at most one event exists per (candle, level) pair.
 
@@ -348,6 +358,12 @@ whether an `EQUAL_HIGH`-derived level breaks anything. Each reads a field alread
 
 ## 8. Validation
 
-2849 tests pass (2609 baseline + 239 new + 1 added guard), identically with `-W error`.
-**35/35 mutation probes detected, 0 no-ops, 0 survivors, all sources restored byte-for-byte with SHA-256
+2856 tests pass (2609 baseline + 246 new + 1 added guard), identically with `-W error`.
+**38/38 mutation probes detected, 0 no-ops, 0 survivors, all sources restored byte-for-byte with SHA-256
 verification.** 0 export collisions. `pyproject.toml` and `uv.lock` unchanged.
+
+The independent review
+([`docs/reviews/LEVEL_CROSSING_FOUNDATION_V1_REVIEW.md`](../reviews/LEVEL_CROSSING_FOUNDATION_V1_REVIEW.md))
+found **1 P1 and 2 P2, all fixed** — the environment-dependent and non-total ordering key described in
+§2.8, and a wall-clock guard that was a substring scan. 45/45 adversarial cases pass; no P0. Performance
+is linear in candles × levels: 1.69 s and 51.5 MB for 10,000 candles × 100 levels.

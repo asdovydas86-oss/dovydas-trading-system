@@ -54,8 +54,12 @@ update this file.
   **Purely additive to production:** no existing type, signature, exception message or export was
   modified. The only change outside the new package is one **test guard**, narrowed by design
   (ADR-0018 §6.1) so `fmis.series_context` may be imported by `fmis.level_crossing` and nothing else.
-  35/35 mutation probes detected with zero survivors; the independent review found and fixed
-  no P0 or P1.
+  38/38 mutation probes detected with zero survivors. The independent review found **no P0**, one **P1**
+  and two **P2**, all fixed: the level ordering key projected the origin timestamp with
+  `datetime.timestamp()`, which reads the **host's local time zone** for a naive value and loses
+  microsecond resolution beyond about the year 2900 — so the published order was environment-dependent and
+  not total. `LevelOrigin` now requires a timezone-aware timestamp and the key carries the `datetime`
+  itself, making both defects unrepresentable. 45/45 adversarial cases pass.
 
 ### Previous milestone
 
@@ -252,11 +256,11 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**2849 passing** (`uv run pytest`, ~2.2 s). Per module:
+**2856 passing** (`uv run pytest`, ~2.2 s). Per module:
 
 | Module | Tests |
 |---|---|
-| `tests/test_level_crossing.py` | 239 |
+| `tests/test_level_crossing.py` | 246 |
 | `tests/test_market_structure_sequence_state.py` | 312 |
 | `tests/test_structural_trend.py` | 353 |
 | `tests/test_series_context.py` | 184 |

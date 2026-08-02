@@ -4,13 +4,61 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AF — First Light / Structural Fact Sheet v1 (2026-08-02).
-**Latest commit at time of writing:** `d132cea` — `Merge Change of Character Foundation v1 Review`
-(the Milestone AF changes are uncommitted at time of writing).
+**Last updated for:** Milestone AG — Multi-Timeframe Fact Sheet v1 (2026-08-02).
+**Latest commit at time of writing:** `20b7331` — `docs(product): add product backlog and changelog`
+(Milestone AF is committed and pushed; the Milestone AG changes are uncommitted at time of writing).
 
 ---
 
 ## Current milestone
+
+- **AG — Multi-Timeframe Fact Sheet v1**: the second milestone that adds **no engine**. Contracts in
+  [ADR-0023](../adr/ADR-0023-multi-timeframe-composition.md); design in
+  [the design document](../design/MULTI_TIMEFRAME_FACT_SHEET_V1.md); independent review in
+  [the review record](../reviews/MULTI_TIMEFRAME_FACT_SHEET_V1_REVIEW.md).
+
+  **The problem it solved, measured.** AF's single-timeframe sheet can mislead. Live on BTCUSDT the
+  same day: 1W `sustained_higher`, 1D `neutral`, 4H `sustained_lower` — the exact combination
+  `PROJECT_SPECIFICATION_V1.md` §5 says "is different from simply calling the asset bullish". A user
+  running `fmits facts BTCUSDT` saw the 4H row alone.
+
+  **What shipped:** `fmis.pipeline.multi_timeframe` — a third composition root calling
+  `structural_facts_for_symbol` once per timeframe — plus `render_multi_timeframe_sheet`, the `fmits
+  mtf SYMBOL` command, and a declared **command registry** replacing hand-written dispatch. Roles are
+  `CONTEXT`/`SETUP`/`EXECUTION`, defaulting to 1W/1D/4H and settable per role.
+
+  **No cross-timeframe synthesis, and that is the load-bearing decision.** No agreement, alignment,
+  conflict, consensus or score. A `TrendAgreement` field was considered and rejected: classifying the
+  *combination* is the Market Regime Engine's job, and emitting it here would put the first
+  interpretation into the application layer. Four tests hold it, including a scan of rendered output.
+
+  **Views are not aligned in time.** Each keeps its own `as_of` — the weekly view's newest bar
+  measured **13 days old** live, because the week had not closed. `newest_as_of` is named to prevent
+  it reading as a shared instant. `fmis.alignment` is deliberately unused: it serves arithmetic, and
+  nothing here computes across timeframes.
+
+  **ADR-0020 D1 stays contained.** One `DetectionSettings` reaches every view — asserted by AST *and*
+  by object identity across all three calls. AG adds no second caller of `derive_structure_breaks`, so
+  the containment holds; the fix is still owed to its own milestone.
+
+  **`default_features()` unchanged.** `swing_features()` adds EMA(200) — the swing workflow's headline
+  trend reference — without breaking `test_pipeline_market_analysis.py:128`, whose 60-candle fixture
+  EMA(200)'s 200-bar warm-up would fail.
+
+  **Quality.** 3,305 → **3,404 tests** (+99), identically under `-W error`. Coverage:
+  `multi_timeframe.py` 100 %, `cli.py` 100 %, `render.py` 100 %. **42/42 mutation probes detected,
+  zero survivors, zero no-ops**, with byte-identical restoration. Composition overhead 0.004 ms;
+  live wall time ~1.9 s for three views including network. Determinism verified across four
+  `PYTHONHASHSEED` values.
+
+  **The review found two P2s, both fixed.** The renderer carried **26 identical lines** across
+  `render_fact_sheet` and `_view_block` — surfaced because a mutation anchor matched both copies —
+  now extracted into one `_structure_rows` helper. And row order in the single-timeframe sheet was
+  **asserted by nothing**: a probe swapping two rows survived the full suite. Both closed. It also
+  recorded a defect in the harness itself: same-size mutations were served **stale bytecode**, so the
+  harness now purges `__pycache__` and sets `PYTHONDONTWRITEBYTECODE` before every probe.
+
+### Previous milestone
 
 - **AF — First Light / Structural Fact Sheet v1**: the first milestone that adds **no engine**. It
   connects what already existed. Contracts in
@@ -63,7 +111,7 @@ update this file.
   **Verified live** against real Binance data: 199 closed candles, 50 swings, `sustained_lower` trend,
   18 breaks, 8 changes of character, 48 levels, 1,355 crossings.
 
-### Previous milestone
+### Earlier milestone
 
 - **AE — Change of Character Foundation v1**: the layer that completes the deterministic structural chain
   `CandleSeries → Swings → Relationships → Labels → Sequence State → Trend → Context → Level Crossing →
@@ -125,7 +173,7 @@ update this file.
   injecting forbidden imports, and confirmed replay determinism across four `PYTHONHASHSEED` values in
   fresh processes.
 
-### Earlier milestone
+### Earlier still
 
 - **AD — Break of Structure Foundation v1**: the first layer built **entirely on derived facts**. It
   consumes the structural level set and the crossing history and reads **no candle at all** — the package
@@ -419,11 +467,13 @@ Reconstructed from git history (`git log --oneline`):
 
 | First Light / Structural Fact Sheet v1 (AF) | see final report | `fmis.pipeline.structural_facts` — `build_structural_facts`, `structural_facts_for_symbol`, `StructuralFactSheet`, `StructureFacts`, `NearestLevels`, `DetectionSettings`, `Limitation`, `LIMITATIONS`; plus `fmis.pipeline.render.render_fact_sheet` and the `fmits` CLI. First consumer of the structural chain; ADR-0020 D1 contained, not fixed; see [ADR-0022](../adr/ADR-0022-structural-fact-sheet-composition-root.md) |
 
+| Multi-Timeframe Fact Sheet v1 (AG) | uncommitted at time of writing | `fmis.pipeline.multi_timeframe` — `TimeframeRole`, `TimeframeView`, `MultiTimeframeFactSheet`, `DEFAULT_TIMEFRAMES`, `MULTI_TIMEFRAME_LIMITATIONS`, `swing_features`, `build_multi_timeframe_facts`, `multi_timeframe_facts_for_symbol`; plus `render_multi_timeframe_sheet`, the `fmits mtf` command and a declared CLI command registry. No engine added; no cross-timeframe synthesis; see [ADR-0023](../adr/ADR-0023-multi-timeframe-composition.md) |
+
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**3305 passing** (`uv run pytest`, ~3.9 s), identically with `-W error`. Per module:
+**3404 passing** (`uv run pytest`, ~4.9 s), identically with `-W error`. Per module:
 
 | Module | Tests |
 |---|---|
@@ -690,14 +740,16 @@ The **deterministic structural chain is complete**:
 Every stage is pure, non-repainting, exactly prefix-stable, identity-carrying and single-implementation.
 Nothing in the chain remains to be built before a consumer can read structure end to end.
 
-**Recommended next: Milestone AG — carry the confirmation delay on `LevelOrigin` (ADR-0020 D1).**
+**Recommended next: Milestone AH — carry the confirmation delay on `LevelOrigin` (ADR-0020 D1).**
+*(Renumbered: AG became the Multi-Timeframe Fact Sheet, which reuses AF's single caller and therefore
+kept the hazard contained rather than reopening it.)*
 Still the single largest correctness hazard in the chain, and still the only one a caller can trip
 without any error being raised — but the case is now **measured rather than argued**. Milestone AF's
 review ran 300 seeded series x 5 wrong delays: **36.1 % of mismatched calls produced materially
 different breaks**, 155 of those also changed the number of changes of character, and **not one raised
 an error**. Comparing break *counts* finds nothing; only comparing break *identity* exposes it.
 
-Milestone AF **contained** the hazard for the one caller that now exists — `DetectionSettings`
+Milestones AF and AG **contain** the hazard for the only caller that exists — `DetectionSettings`
 single-sources the delay, so a mismatch is unrepresentable through the fact sheet — but containment is
 per-caller and does not generalise. The second consumer of `derive_structure_breaks` reopens it.
 

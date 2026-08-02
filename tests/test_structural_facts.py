@@ -874,6 +874,28 @@ def test_render_shows_the_actual_break_when_one_exists() -> None:
     assert "none in this window" not in line
 
 
+def test_render_emits_structure_rows_in_a_fixed_order() -> None:
+    """Row order is part of the contract, not an accident of the code layout.
+
+    Found by the Milestone AG review: extracting `_structure_rows` made the three
+    rows swappable as a unit, and a probe that reordered them survived the **full**
+    3,403-test suite. Nothing asserted order while the code was inline, so the gap
+    existed before the refactor — it was simply unreachable by mutation.
+    """
+    text = render_module.render_fact_sheet(build_structural_facts(fixture_series()))
+    labels = [
+        line.strip().split("  ")[0]
+        for line in text.splitlines()
+        if line.startswith(" ") and line.strip()
+    ]
+    order = [l for l in labels if l in {
+        "Structural trend", "Latest label", "Break of structure",
+        "Breaks in window", "Change of character", "Changes in window"}]
+    assert order == [
+        "Structural trend", "Latest label", "Break of structure",
+        "Breaks in window", "Change of character", "Changes in window"], order
+
+
 def test_render_shows_none_when_no_break_exists() -> None:
     series = synthetic([(100.0 + i, 95.0 + i) for i in range(12)])
     sheet = build_structural_facts(series)

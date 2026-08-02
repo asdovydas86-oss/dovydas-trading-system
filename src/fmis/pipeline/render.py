@@ -23,9 +23,10 @@ import textwrap
 from datetime import datetime
 
 from fmis.level_crossing import PriceLevel
+from fmis.pipeline.multi_timeframe import MultiTimeframeFactSheet, TimeframeView
 from fmis.pipeline.structural_facts import StructuralFactSheet
 
-__all__ = ["render_fact_sheet"]
+__all__ = ["render_fact_sheet", "render_multi_timeframe_sheet"]
 
 _WIDTH = 66
 _ABSENT = "—"
@@ -79,6 +80,60 @@ def _age(as_of: datetime, reference: datetime | None) -> str:
     if hours:
         return f"age {hours}h {minutes:02d}m"
     return f"age {minutes}m"
+
+
+def _structure_rows(structure) -> list[str]:
+    """The latest label, break and change of character, rendered once.
+
+    Shared by `render_fact_sheet` and `_view_block`, which previously carried
+    near-identical copies. The duplication was found by an independent review and
+    proved by a mutation probe: an anchor matching one copy silently mutated the
+    other, reporting a false survivor. One implementation makes that
+    unrepresentable.
+
+    Counts are deliberately **not** included. The single-timeframe sheet adds
+    "Breaks in window" and "Changes in window" after these rows; the
+    multi-timeframe view block omits them to stay readable across three views.
+    That is the only difference between the two callers, and it stays at the
+    call site rather than becoming a flag on this function.
+    """
+    rows: list[str] = []
+    latest_label = structure.labelled[-1] if structure.labelled else None
+    if latest_label is None:
+        rows.append(_row("Latest label", _ABSENT, "no labelled swing yet"))
+    else:
+        rows.append(
+            _row(
+                "Latest label",
+                latest_label.label.value,
+                f"@ bar {latest_label.comparison.current.index}",
+            )
+        )
+
+    latest_break = structure.latest_break
+    if latest_break is None:
+        rows.append(_row("Break of structure", _ABSENT, "none in this window"))
+    else:
+        rows.append(
+            _row(
+                "Break of structure",
+                f"{latest_break.side.value} @ bar {latest_break.index}",
+                latest_break.timestamp.isoformat(),
+            )
+        )
+
+    latest_change = structure.latest_change
+    if latest_change is None:
+        rows.append(_row("Change of character", _ABSENT, "none in this window"))
+    else:
+        rows.append(
+            _row(
+                "Change of character",
+                f"{latest_change.side.value} @ bar {latest_change.index}",
+                latest_change.timestamp.isoformat(),
+            )
+        )
+    return rows
 
 
 def render_fact_sheet(
@@ -148,44 +203,11 @@ def render_fact_sheet(
         )
     )
     lines.append(_row("Structural trend", structure.trend.value))
-    latest_label = (
-        structure.labelled[-1] if structure.labelled else None
-    )
-    if latest_label is not None:
-        lines.append(
-            _row(
-                "Latest label",
-                latest_label.label.value,
-                f"@ bar {latest_label.comparison.current.index}",
-            )
-        )
-    else:
-        lines.append(_row("Latest label", _ABSENT, "no labelled swing yet"))
-
-    latest_break = structure.latest_break
-    if latest_break is None:
-        lines.append(_row("Break of structure", _ABSENT, "none in this window"))
-    else:
-        lines.append(
-            _row(
-                "Break of structure",
-                f"{latest_break.side.value} @ bar {latest_break.index}",
-                latest_break.timestamp.isoformat(),
-            )
-        )
+    label_row, break_row, change_row = _structure_rows(structure)
+    lines.append(label_row)
+    lines.append(break_row)
     lines.append(_row("Breaks in window", str(len(structure.breaks))))
-
-    latest_change = structure.latest_change
-    if latest_change is None:
-        lines.append(_row("Change of character", _ABSENT, "none in this window"))
-    else:
-        lines.append(
-            _row(
-                "Change of character",
-                f"{latest_change.side.value} @ bar {latest_change.index}",
-                latest_change.timestamp.isoformat(),
-            )
-        )
+    lines.append(change_row)
     lines.append(_row("Changes in window", str(len(structure.changes))))
 
     lines.append("")
@@ -226,6 +248,130 @@ def render_fact_sheet(
             subsequent_indent=" " * len(head),
         )
         lines.extend(wrapped)
+
+    lines.append("")
+    lines.append(_rule())
+    lines.append(
+        " These are measurements, not conclusions. No direction, ranking or"
+    )
+    lines.append(" recommendation is expressed or implied.")
+    lines.append(_rule())
+    return "\n".join(lines)
+
+
+def _view_block(view: TimeframeView, reference: datetime | None) -> list[str]:
+    """One timeframe's compact block: freshness, structure, indicators, levels.
+
+    Compact by design. The single-timeframe sheet is the place to read one
+    timeframe exhaustively; this is the place to read three at once, and a
+    three-times-full-sheet page is not readable. Nothing is *computed* differently
+    — the same fields are read, fewer are shown.
+    """
+    sheet = view.sheet
+    structure = sheet.structure
+    near = sheet.nearest_levels
+    window = sheet.window
+    lines = [_rule(f"{view.role.value.upper()} · {view.interval}")]
+
+    age = _age(sheet.as_of, reference)
+    lines.append(_row("As of", sheet.as_of.isoformat(), age or "last closed candle"))
+    lines.append(
+        _row(
+            "Window",
+            f"{window.closed_count} closed",
+            f"{window.excluded_forming_count} forming excluded",
+        )
+    )
+    lines.append(_row("Last close", _number(window.last_close)))
+
+    lines.append(_row("Structural trend", structure.trend.value))
+    lines.extend(_structure_rows(structure))
+
+    for name, result in sheet.features.features.items():
+        value = result.value
+        if isinstance(value, dict) or hasattr(value, "keys"):
+            for key in sorted(value):  # type: ignore[union-attr]
+                lines.append(_row(f"{name}.{key}", _number(value[key])))  # type: ignore[index]
+            continue
+        lines.append(
+            _row(name, _number(value), "warming up" if value is None else "")
+        )
+
+    above_value, above_note = _level(near.above)
+    below_value, below_note = _level(near.below)
+    lines.append(
+        _row(
+            "Levels",
+            str(len(structure.levels)),
+            f"{near.upper_count} upper, {near.lower_count} lower",
+        )
+    )
+    lines.append(_row("Nearest above close", above_value, above_note))
+    lines.append(_row("Nearest below close", below_value, below_note))
+    return lines
+
+
+def render_multi_timeframe_sheet(
+    sheet: MultiTimeframeFactSheet, *, reference_time: datetime | None = None
+) -> str:
+    """Render several role-labelled timeframe views as one plain-text page.
+
+    Args:
+        sheet: the multi-timeframe sheet to render.
+        reference_time: instant to measure each view's age against. Omitted by
+            default, because a renderer that read the clock would make its output
+            non-reproducible.
+
+    Returns:
+        A newline-joined report: a header, one block per view in role order, a
+        side-by-side structural-trend summary, and the limitations.
+
+    **The trend summary restates, it does not synthesise.** It lists each view's
+    trend beside its role and derives nothing from the combination — no agreement
+    flag, no count of matches, no verdict. Reconciling timeframes that disagree is
+    a later layer's decision, and pre-empting it here would be an interpretation
+    in the one layer that must not hold any.
+    """
+    lines: list[str] = []
+    lines.append(_rule())
+    lines.append(" FMITS MULTI-TIMEFRAME FACT SHEET — deterministic facts only")
+    lines.append(_rule())
+    lines.append(_row("Asset", sheet.symbol))
+    lines.append(_row("Exchange / source", sheet.source))
+    lines.append(
+        _row("Timeframes", " · ".join(sheet.intervals), f"{len(sheet.views)} views")
+    )
+    lines.append(
+        _row("Newest data", sheet.newest_as_of.isoformat(), "not a shared instant")
+    )
+
+    for view in sheet.views:
+        lines.append("")
+        lines.extend(_view_block(view, reference_time))
+
+    lines.append("")
+    lines.append(_rule("STRUCTURAL TREND BY ROLE"))
+    for view in sheet.views:
+        lines.append(
+            _row(
+                f"{view.role.value} · {view.interval}",
+                view.sheet.structure.trend.value,
+            )
+        )
+    lines.append(" Reported side by side. Nothing is derived from the combination.")
+
+    lines.append("")
+    lines.append(_rule("LIMITATIONS OF THESE FACTS"))
+    for limitation in sheet.limitations:
+        head = f" [{limitation.code}] "
+        lines.extend(
+            textwrap.wrap(
+                limitation.text,
+                width=_WIDTH,
+                initial_indent=head,
+                subsequent_indent=" " * len(head),
+            )
+        )
 
     lines.append("")
     lines.append(_rule())

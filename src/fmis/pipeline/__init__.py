@@ -11,13 +11,16 @@ about more than one engine at once. Everything below it stays independent:
                                        |
                                   fmis.pipeline   (this package — imports all of them)
 
-Implemented, two composition roots:
+Implemented, three composition roots:
   * `market_analysis` — one symbol, optionally compared with one benchmark,
     returning a structured `AnalysisSnapshot`.
   * `structural_facts` — one symbol through **every** deterministic engine,
     measurement *and* structure, returning a `StructuralFactSheet`. Milestone AF.
+  * `multi_timeframe` — one symbol across several **role-labelled** timeframes,
+    returning a `MultiTimeframeFactSheet`. Composes `structural_facts` per view
+    and derives nothing from their combination. Milestone AG.
 
-`cli` and `render` sit above both: a command-line surface and a plain-text
+`cli` and `render` sit above all three: a command-line surface and a plain-text
 renderer. They are presentation, hold no logic, and are the only place a wall
 clock is read.
 
@@ -48,7 +51,17 @@ from fmis.pipeline.market_analysis import (
     analyze_symbol,
     default_features,
 )
-from fmis.pipeline.render import render_fact_sheet
+from fmis.pipeline.multi_timeframe import (
+    DEFAULT_TIMEFRAMES,
+    MULTI_TIMEFRAME_LIMITATIONS,
+    MultiTimeframeFactSheet,
+    TimeframeRole,
+    TimeframeView,
+    build_multi_timeframe_facts,
+    multi_timeframe_facts_for_symbol,
+    swing_features,
+)
+from fmis.pipeline.render import render_fact_sheet, render_multi_timeframe_sheet
 from fmis.pipeline.structural_facts import (
     LIMITATIONS,
     DetectionSettings,
@@ -77,4 +90,13 @@ __all__ = [
     "DetectionSettings",
     "Limitation",
     "LIMITATIONS",
+    "build_multi_timeframe_facts",
+    "multi_timeframe_facts_for_symbol",
+    "render_multi_timeframe_sheet",
+    "swing_features",
+    "MultiTimeframeFactSheet",
+    "TimeframeView",
+    "TimeframeRole",
+    "DEFAULT_TIMEFRAMES",
+    "MULTI_TIMEFRAME_LIMITATIONS",
 ]

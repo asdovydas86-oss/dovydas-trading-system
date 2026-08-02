@@ -11,7 +11,7 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `ea865bdc3fc98b2d5d2e432c0b6bf4d397d0e7ab` |
+| **Last verified against** | `e589411eb575f91ff017713ffc5ed35c094942bb` (Milestone AG) |
 | **Verified on** | 2026-08-02 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -70,26 +70,31 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **HEAD** | `ea865bdc3fc98b2d5d2e432c0b6bf4d397d0e7ab` |
-| **`origin/main`** | `ea865bdc3fc98b2d5d2e432c0b6bf4d397d0e7ab` — synchronised |
-| **Working tree** | clean · 0 untracked · 0 staged |
-| **Test count** | **3,305 passing**, identically under `-W error` |
-| **Public exports / collisions** | 136 / 0 |
+| **Milestone AG commit** | `e589411eb575f91ff017713ffc5ed35c094942bb` |
+| **HEAD** | this documentation commit, on top of `e589411` |
+| **`origin/main`** | synchronised with HEAD |
+| **Working tree** | clean |
+| **Test count** | **3,404 passing**, identically under `-W error` |
+| **Public exports / collisions** | 154 / 0 (145 before AG) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 |
-| **Latest completed milestone** | **AF — First Light / Structural Fact Sheet v1** (`1505dd8`) |
-| **Product Value Level** | **Level 1 — visible deterministic analysis** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
+| **Latest completed milestone** | **AG — Multi-Timeframe Fact Sheet v1** (`e589411`) |
+| **Product Value Level** | **Level 1.5 — multi-timeframe deterministic analysis** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **AG — Multi-Timeframe Fact Sheet** |
+| **Immediate next milestone** | **AH — LevelOrigin confirmation-delay provenance (ADR-0020 D1)** |
 
 ### Current user-visible capability
 
 ```
-fmits facts BTCUSDT --interval 4h --limit 200
-python -m fmis.pipeline facts BTCUSDT      # works without reinstalling
+fmits mtf   BTCUSDT -n 260                 # 1W context · 1D setup · 4H execution
+fmits facts BTCUSDT --interval 4h          # one timeframe, exhaustively
+python -m fmis.pipeline mtf BTCUSDT        # works without reinstalling
 ```
 
-Returns a deterministic fact sheet for **one instrument on one timeframe**: EMA/RSI/MACD/ATR with
+`mtf` returns three **role-labelled** views of one instrument, each with its own `as_of` and
+staleness, their structural trends side by side and nothing derived from the combination.
+
+`facts` returns a deterministic fact sheet for **one instrument on one timeframe**: EMA/RSI/MACD/ATR with
 warm-up status, relative volume, swing points, structural labels, structural trend, price levels,
 level crossings, break of structure, change of character, nearest level above and below the last
 close, and the inherited limitations — computed from live exchange data.
@@ -102,96 +107,44 @@ close, and the inherited limitations — computed from live exchange data.
 
 Exactly one item.
 
-### `AG` — Multi-Timeframe Fact Sheet
+### `AH` — LevelOrigin / confirmation-delay provenance (ADR-0020 D1)
 
 | Field | Value |
 |---|---|
-| **ID** | AG |
+| **ID** | AH |
 | **Epic** | EP-01 Technical Analysis & Market Structure |
 | **Status** | **NOW** |
 | **Priority** | **Critical** |
-| **Implementation contract** | [`reports/0006`](reports/0006_2026-08-02_MILESTONE_AF_ARCHITECTURE_GATE.md) **§5** — do not redesign |
-| **Estimated size** | 1–2 weeks *(source: reports/0006 §5.12)* |
-| **Confidence** | High — verified live that composition needs no new engine |
+| **Estimated size** | 1–2 weeks *(source: reports/0005 §3, reports/0006 §3.1)* |
+| **Confidence** | Medium — touches five shipped models across three packages |
 
-**Product value.** The owner analyses 1W/1D/4H every day; the fact sheet answers only one timeframe.
-Worse, a single-timeframe reading can mislead: measured live on BTCUSDT, 1W was `sustained_higher`,
-1D `neutral` and 4H `sustained_lower` — precisely the combination `PROJECT_SPECIFICATION_V1.md` §5
-says must not be flattened into "bullish".
+**Product value.** **Blocker removal**, and the blocker is named: the Market Regime Engine (`AI`) is
+the second consumer of `derive_structure_breaks` and cannot be built safely while a mismatched
+confirmation delay is undetectable.
 
-**What the owner can do after this that was impossible before.**
-Run one command and see the structural state of all three timeframes side by side, each labelled with
-its role, each with its own `as_of` and staleness — instead of running three commands and mentally
-reconciling them, or reading one and being misled.
+**What the owner can do after this that was impossible before.** Nothing directly. This is a
+blocker-removal milestone under the product-first rule.
 
-**User capability unlocked.** C-022 multi-timeframe analysis — classified *Core, before-v1* in
-[`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §4.2.
+**Why now, and not before AG.** AF contained the hazard by single-sourcing the delay, and **AG reused
+AF's single caller rather than adding a second**, so containment held through AG. It does not
+generalise: the next consumer reopens it.
 
-**Dependencies.** AF (done). No new engine. No new data source.
+**Measured severity.** 300 seeded series × 5 wrong delays: **36.1 % produced materially different
+breaks**, 155 of those also changed the change-of-character count, **zero raised an error**.
 
-**Acceptance criteria** *(condensed from reports/0006 §5.11 — that section governs)*
-
-- `fmits mtf BTCUSDT` prints a role-labelled 1W/1D/4H sheet from live data
-- Each view shows its own `as_of` and age; no shared timestamp is implied
-- Three structural trends side by side with **no derived agreement field**
-- `ema_200` present via a named `swing_features()`; `default_features()` byte-identical
-- One `DetectionSettings` reaches every view — AST-asserted
-- Zero arithmetic operators in the new module — AST-asserted
-- No clock beneath the CLI — source-asserted
-- A short timeframe raises; no partial sheet is ever returned
-- Full suite green including `-W error`; ≥30 mutation probes, **zero survivors**
-- ADR-0023, design and review records complete
-
-**Out of scope.** Regime or any cross-timeframe verdict · support/resistance naming · scanning ·
-watchlists · persistence · scheduling · alerts · JSON output · AI · portfolio · risk · second
-provider · non-crypto assets · workspace/TUI/GUI · changing `default_features()` · fixing ADR-0020 D1.
-
-**Related ADRs.** ADR-0007 (composition-root boundary) · ADR-0019 (level naming rule) ·
-ADR-0020 (D1, contained) · ADR-0022 (AF, the root being reused). **New:** ADR-0023.
-
-**Related reports.** 0004 §4.2, §18.5 · 0005 Phase 3 · **0006 §4–§6 (contract)**.
-
-**Related repository paths.** `src/fmis/pipeline/multi_timeframe.py` *(new)* ·
-`src/fmis/pipeline/render.py` · `src/fmis/pipeline/cli.py` · `src/fmis/pipeline/__init__.py` ·
-`tests/test_multi_timeframe.py` *(new)*.
-
-**Risks.** Scope creep into regime or a workspace — the contract's out-of-scope list is the control ·
-per-view staleness being presented as a shared timestamp · emitting an agreement/alignment field,
-which would pre-empt the Market Regime Engine.
-
----
+**Dependencies.** AG (done). **Acceptance.** The delay is carried on a derived fact from detection
+through to `LevelOrigin`; a mismatch is impossible or loudly rejected; existing tests pass unchanged
+or with documented widening. **Out of scope.** Any new structural rule; any interpretation.
+**Known cost.** `SwingPoint` alone is constructed at 69 test sites.
+**Explicitly rejected approach.** A `right_bars` parameter on `structural_levels` — it relocates the
+hand-matching while making a wrong value look like recorded provenance.
+**Related.** ADR-0020 D1 · ADR-0022 · ADR-0023 · new ADR required · `reports/0006` §3.1.
 
 ## 6. NEXT
 
 The forced sequence. Each item is blocked on the one above it.
 
-### `AH` — LevelOrigin / confirmation-delay provenance (ADR-0020 D1)
-
-| Field | Value |
-|---|---|
-| **Epic** | EP-01 · **Status** NEXT · **Priority** **Critical** |
-| **Product value** | **Blocker removal** — removes a silent-corruption risk from every future consumer of the structural chain |
-
-**What the owner can do after this that was impossible before.** Nothing directly. This is a
-blocker-removal milestone under the product-first rule, and it states its blocker precisely: the
-Market Regime Engine (`AI`) is the second consumer of `derive_structure_breaks`, and cannot be built
-safely while a mismatched confirmation delay is undetectable.
-
-**Why not sooner.** AF *contained* the hazard — `DetectionSettings` single-sources the delay, so a
-mismatch is unrepresentable through the only caller that exists — and AG reuses that same root, so
-containment holds through AG. The hazard goes live at consumer #2.
-
-**Measured severity.** 300 seeded series × 5 wrong delays: **36.1 % produced materially different
-breaks**, 155 of those also changed the change-of-character count, and **zero raised an error**
-(`docs/reviews/STRUCTURAL_FACT_SHEET_V1_REVIEW.md` §2).
-
-**Dependencies.** AG. **Acceptance.** The delay is carried on a derived fact from detection through
-to `LevelOrigin`; a mismatch is impossible or loudly rejected; all existing tests pass unchanged or
-with documented widening. **Out of scope.** Any new structural rule; any interpretation.
-**Known cost.** Changes shipped models across three packages; `SwingPoint` alone is constructed at 69
-test sites. **Explicitly rejected approach.** A `right_bars` parameter on `structural_levels` — it
-relocates the hand-matching while making a wrong value look like recorded provenance.
-**Related.** ADR-0020 D1 · new ADR required · `reports/0006` §3.1.
+*AG shipped; AH moved to NOW.*
 
 ### `AI` — Market Regime Engine
 
@@ -296,6 +249,32 @@ The **complete** 30-milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the three most recent product-relevant milestones.
 
+### `AG` — Multi-Timeframe Fact Sheet v1 · **DONE**
+
+| Field | Value |
+|---|---|
+| **Commit** | **`e589411eb575f91ff017713ffc5ed35c094942bb`** |
+| **ADR** | [ADR-0023](docs/adr/ADR-0023-multi-timeframe-composition.md) |
+| **Design** | [MULTI_TIMEFRAME_FACT_SHEET_V1.md](docs/design/MULTI_TIMEFRAME_FACT_SHEET_V1.md) |
+| **Review** | [MULTI_TIMEFRAME_FACT_SHEET_V1_REVIEW.md](docs/reviews/MULTI_TIMEFRAME_FACT_SHEET_V1_REVIEW.md) — no P0, no P1, **2 P2 fixed**, 3 P3 |
+| **Tests** | 3,305 → **3,404** (+99). Mutation 42/42, zero survivors |
+
+**Product value delivered.** The daily swing workflow's deterministic step is complete. AF's
+single-timeframe sheet could mislead — live on BTCUSDT, 1W `sustained_higher` while 4H read
+`sustained_lower` — and `PROJECT_SPECIFICATION_V1.md` §5 names that combination as the case that must
+not be flattened.
+
+**What the owner can now do that was impossible before.** Run one command and see 1W context, 1D setup
+and 4H execution side by side, each labelled with its role and carrying its own `as_of` and staleness
+— instead of running three commands and reconciling them mentally, or reading one and being misled.
+
+**Limitations shipped with it.** No cross-timeframe synthesis, deliberately · views are not aligned in
+time · `ema_200` may warm up on a weekly view · plus all six inherited from AF, including ADR-0020 D1
+still contained rather than fixed.
+
+**Status note.** DONE on repository evidence, as §11 rule 3 requires: the commit above exists, the
+full suite is green, mutation is clean and the independent review is complete.
+
 ### `AF` — First Light / Structural Fact Sheet v1 · **DONE**
 
 | Field | Value |
@@ -376,7 +355,7 @@ known before sequencing.
 
 ## 10. Open decisions
 
-Carried, not solved. None of these blocks AG.
+Carried, not solved. None of these blocks AH.
 
 | ID | Decision | Blocks | Source |
 |---|---|---|---|
@@ -428,4 +407,4 @@ not edited.
 
 ---
 
-*Living document · last verified against `ea865bd` on 2026-08-02*
+*Living document · last verified against `e589411` on 2026-08-02*

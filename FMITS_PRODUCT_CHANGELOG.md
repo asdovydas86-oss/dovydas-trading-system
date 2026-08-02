@@ -7,7 +7,7 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `ea865bdc3fc98b2d5d2e432c0b6bf4d397d0e7ab` |
+| **Last verified against** | `e589411eb575f91ff017713ffc5ed35c094942bb` (Milestone AG) |
 | **Verified on** | 2026-08-02 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -67,15 +67,19 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `ea865bd` — what the owner can do today.**
+**As of `e589411` — what the owner can do today.**
 
 ```
-fmits facts BTCUSDT --interval 4h --limit 200
-python -m fmis.pipeline facts BTCUSDT          # works without reinstalling
+fmits mtf   BTCUSDT -n 260                     # 1W context · 1D setup · 4H execution
+fmits facts BTCUSDT --interval 4h --limit 200  # one timeframe, exhaustively
+python -m fmis.pipeline mtf BTCUSDT            # works without reinstalling
 ```
 
 **Delivered:**
 
+- a **multi-timeframe deterministic fact sheet**: three role-labelled views of one instrument, each
+  with its own `as_of` and staleness, structural trends side by side, **nothing derived from their
+  combination**;
 - a **single-timeframe deterministic structural fact sheet** for one instrument;
 - a **CLI entry point** — the only product surface that exists;
 - **real market-data input** from a live exchange endpoint;
@@ -91,7 +95,7 @@ python -m fmis.pipeline facts BTCUSDT          # works without reinstalling
 |---|---|
 | AI interpretation of any kind — the numbers are computed, not read | EP — after regime |
 | Trade signal, direction, ranking, score or recommendation | Strategy layer, `EP-13` |
-| **Multi-timeframe synthesis** — one sheet is one timeframe | **`AG`, NOW** |
+| Cross-timeframe **synthesis** — the views are reported, never reconciled | `AI` Market Regime Engine |
 | Market regime classification | `AI` |
 | Support/resistance naming — levels are reported as *nearest above / below* | `EP-01` |
 | Portfolio or risk context, position sizing | `EP-04`, blocked on **D-02** |
@@ -107,7 +111,59 @@ makes no directional claim. Every rung of the automation ladder remains unstarte
 
 ## 4. Product milestones
 
-Reverse-chronological. Every entry cites a commit verified to exist in this repository.
+Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
+An entry whose milestone is implemented and validated but not yet versioned is marked
+**Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-02 · `AG` — Multi-Timeframe Fact Sheet v1
+
+**Status:** Released · second user-visible product capability
+**Commit:** `e589411eb575f91ff017713ffc5ed35c094942bb`
+Validated before versioning: 3,404 tests green including `-W error`, 42/42 mutation probes with zero
+survivors and byte-identical source restoration, coverage 100 % on all three touched modules, and an
+independent review complete.
+
+**Product capability added.** `fmits mtf SYMBOL` — three role-labelled timeframe views of one
+instrument in a single command: 1W context, 1D setup, 4H execution by default, each role settable.
+
+**What the owner can now do.** See all three timeframes at once, each carrying its own `as_of` and
+staleness, with their structural trends listed side by side — instead of running three separate
+commands and reconciling them mentally.
+
+**Why this matters more than convenience.** The single-timeframe sheet AF shipped could mislead. On
+live BTCUSDT data the same day, 1W read `sustained_higher`, 1D `neutral` and 4H `sustained_lower`;
+`fmits facts BTCUSDT` returned the 4H row alone. `PROJECT_SPECIFICATION_V1.md` §5 names that exact
+combination and states it *"is different from simply calling the asset bullish"*. This entry is
+recorded under two of the four criteria in §1: it adds a capability **and** removes a way the previous
+capability could be read wrongly.
+
+**Limitations.**
+
+- **No cross-timeframe synthesis, deliberately.** The views are reported side by side and nothing is
+  derived from their combination — no agreement, no alignment, no verdict. Reconciling timeframes that
+  disagree is the Market Regime Engine's job, and pre-empting it here would place the first
+  interpretation in the application layer. The sheet states this on every run.
+- **Views are not aligned in time.** Each is fetched independently; a weekly view's newest closed bar
+  measured **13 days old** live because the week had not closed. Each view reports its own timestamp.
+- `ema_200` needs 200 closed bars — roughly four years on a weekly view — and reports as warming up
+  where unavailable.
+- The per-view block is **less complete** than `fmits facts`, which remains the way to read one
+  timeframe exhaustively.
+- All six AF limitations are inherited unchanged, including **ADR-0020 D1 still contained, not fixed**.
+
+**Safety / risk notes.** No order placement, no credentials, no directional output. Three facts, not
+one conclusion.
+
+**Related.** ADR: [ADR-0023](docs/adr/ADR-0023-multi-timeframe-composition.md) ·
+Design: [MULTI_TIMEFRAME_FACT_SHEET_V1](docs/design/MULTI_TIMEFRAME_FACT_SHEET_V1.md) ·
+Review: [MULTI_TIMEFRAME_FACT_SHEET_V1_REVIEW](docs/reviews/MULTI_TIMEFRAME_FACT_SHEET_V1_REVIEW.md)
+— no P0, no P1, two P2 found and fixed, three P3 ·
+Contract: [reports/0006](reports/0006_2026-08-02_MILESTONE_AF_ARCHITECTURE_GATE.md) §5.
+
+**Breaking changes.** None. No engine was modified; `default_features()` is byte-identical, so
+`analyze_symbol` returns exactly what it did before.
 
 ---
 
@@ -228,26 +284,20 @@ fact that matters — the product began on 2026-08-02.
 
 > **Unreleased. Planned. Not available.** Nothing in this section exists in the repository.
 
-### `AG` — Multi-Timeframe Fact Sheet — **UNRELEASED**
+### `AH` — LevelOrigin confirmation-delay provenance — **UNRELEASED**
 
 **Status:** NOW on the [product backlog](FMITS_PRODUCT_BACKLOG.md) · no commit exists
-**Contract:** [`reports/0006`](reports/0006_2026-08-02_MILESTONE_AF_ARCHITECTURE_GATE.md) §5
 
-**Capability it will add.** One command producing a role-labelled 1W/1D/4H fact sheet — structural
-context, primary setup and execution timeframe side by side, each with its own `as_of` and staleness.
+**Capability it will add.** **None user-visible.** It is a blocker-removal milestone, recorded here
+only because the next capability depends on it and because it reduces a correctness risk.
 
-**What the owner will be able to do.** See all three timeframes at once instead of running three
-commands and reconciling them mentally — and stop being exposed to the single-timeframe misreading
-described in the `AF` limitations above.
+**What it will change for the owner.** Nothing they can see. What it removes is a hazard: a mismatched
+confirmation delay currently produces materially different structure breaks in **36.1 %** of measured
+cases while raising no error. AF and AG contain it by using one caller; the Market Regime Engine is
+the second consumer and reopens it.
 
-**What it will deliberately not do.** No cross-timeframe verdict, no agreement or alignment field, no
-regime, no AI. Reconciling disagreement between timeframes is the Market Regime Engine's job, and
-pre-empting it here would repeat the error the architecture gate rejected.
-
-No further capability beyond `AG` is listed. The sequence after it is on the backlog, not here —
-this changelog records what shipped, not what is planned.
-
----
+No further capability is listed. The sequence after it is on the backlog — this changelog records what
+shipped, not what is planned.
 
 ## 6. Entry template
 
@@ -297,4 +347,4 @@ and mark the entry Foundational.
 
 ---
 
-*Living document · last verified against `ea865bd` on 2026-08-02*
+*Living document · last verified against `e589411` on 2026-08-02*

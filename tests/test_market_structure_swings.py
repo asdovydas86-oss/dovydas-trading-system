@@ -662,10 +662,18 @@ def test_no_existing_package_imports_market_structure() -> None:
     Checked against real import statements rather than raw text: the
     `fmis.features.market_structure` placeholder docstring deliberately points
     readers here, and a text scan would misread that pointer as a dependency.
+
+    `fmis.pipeline` was removed from the scanned set for Milestone AF. It is the
+    **application layer**, which ADR-0007 §1 defines as the top of the graph and
+    explicitly permits to import every engine; a test in that package asserts no
+    engine imports it back. Scanning it here would have forbidden the one
+    dependency the architecture requires. What this test still enforces is the
+    *direction*: every genuine peer and lower layer remains unable to see this
+    package, and `test_scanned_packages_actually_exist` keeps the list honest.
     """
     offenders: list[str] = []
     for package in ("data", "ingest", "providers", "features", "alignment",
-                    "relative_value", "pipeline", "decision_support",
+                    "relative_value", "decision_support",
                     "trading_context", "evidence"):
         for py in (SRC / package).rglob("*.py"):
             for node in ast.walk(ast.parse(py.read_text())):

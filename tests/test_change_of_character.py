@@ -1550,9 +1550,24 @@ def test_does_not_reach_into_private_submodules_of_its_dependencies() -> None:
 
 
 def test_nothing_imports_change_of_character() -> None:
+    """Only `fmis.pipeline`, the application layer strictly above this package.
+
+    Widened for Milestone AF to add `fmis.pipeline`, the **application layer**.
+    ADR-0007 §1 defines it as the top of the graph, permits it to import every
+    engine, and a test there asserts no engine imports it back; the Structural
+    Fact Sheet composition root is the first consumer to read this package that
+    way. The widening is designed, not discovered: an application layer that
+    could not reach the structural chain would leave that chain unreachable,
+    which is the milestone's entire purpose.
+
+    The direction rule is unchanged. Every engine below remains unable to see
+    this package, and each exemption is still named rather than pattern-matched,
+    so a further consumer fails this test and must justify itself in an ADR.
+    """
     root = PACKAGE_DIR.parent
+    permitted = {root / "pipeline"}
     for py in root.rglob("*.py"):
-        if py.parent == PACKAGE_DIR:
+        if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue
         assert "fmis.change_of_character" not in py.read_text(), py
 

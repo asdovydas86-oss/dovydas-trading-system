@@ -1236,9 +1236,21 @@ def test_nothing_below_imports_this_package() -> None:
 
     The exemption is named rather than pattern-matched, so a second consumer
     appearing anywhere fails this test and has to justify itself in an ADR.
+
+    Widened for Milestone AF to add `fmis.pipeline`, the **application layer**.
+    ADR-0007 §1 defines it as the top of the graph, permits it to import every
+    engine, and a test there asserts no engine imports it back; the Structural
+    Fact Sheet composition root is the first consumer to read this package that
+    way. The widening is designed, not discovered: an application layer that
+    could not reach the structural chain would leave that chain unreachable,
+    which is the milestone's entire purpose.
+
+    The direction rule is unchanged. Every engine below remains unable to see
+    this package, and each exemption is still named rather than pattern-matched,
+    so a further consumer fails this test and must justify itself in an ADR.
     """
     root = Path(st.__file__).parent.parent
-    permitted = {root / "series_context"}
+    permitted = {root / "series_context", root / "pipeline"}
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue

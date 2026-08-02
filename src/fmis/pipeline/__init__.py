@@ -11,8 +11,15 @@ about more than one engine at once. Everything below it stays independent:
                                        |
                                   fmis.pipeline   (this package — imports all of them)
 
-Implemented: `market_analysis` — one symbol, optionally compared with one
-benchmark, returning a structured `AnalysisSnapshot`.
+Implemented, two composition roots:
+  * `market_analysis` — one symbol, optionally compared with one benchmark,
+    returning a structured `AnalysisSnapshot`.
+  * `structural_facts` — one symbol through **every** deterministic engine,
+    measurement *and* structure, returning a `StructuralFactSheet`. Milestone AF.
+
+`cli` and `render` sit above both: a command-line surface and a plain-text
+renderer. They are presentation, hold no logic, and are the only place a wall
+clock is read.
 
 Rules for anything added here:
   * **Orchestration only.** No formula, no indicator, no metric may be defined in
@@ -41,6 +48,17 @@ from fmis.pipeline.market_analysis import (
     analyze_symbol,
     default_features,
 )
+from fmis.pipeline.render import render_fact_sheet
+from fmis.pipeline.structural_facts import (
+    LIMITATIONS,
+    DetectionSettings,
+    Limitation,
+    NearestLevels,
+    StructuralFactSheet,
+    StructureFacts,
+    build_structural_facts,
+    structural_facts_for_symbol,
+)
 
 __all__ = [
     "analyze_symbol",
@@ -50,4 +68,13 @@ __all__ = [
     "RelativeValueSection",
     "PipelineError",
     "InsufficientDataError",
+    "build_structural_facts",
+    "structural_facts_for_symbol",
+    "render_fact_sheet",
+    "StructuralFactSheet",
+    "StructureFacts",
+    "NearestLevels",
+    "DetectionSettings",
+    "Limitation",
+    "LIMITATIONS",
 ]

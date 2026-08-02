@@ -4,13 +4,66 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AE — Change of Character Foundation v1 (2026-07-31).
-**Latest commit at time of writing:** `5aac1a3` — `Merge Break of Structure Foundation v1 Review`
-(the Milestone AE commits are created by this milestone).
+**Last updated for:** Milestone AF — First Light / Structural Fact Sheet v1 (2026-08-02).
+**Latest commit at time of writing:** `d132cea` — `Merge Change of Character Foundation v1 Review`
+(the Milestone AF changes are uncommitted at time of writing).
 
 ---
 
 ## Current milestone
+
+- **AF — First Light / Structural Fact Sheet v1**: the first milestone that adds **no engine**. It
+  connects what already existed. Contracts in
+  [ADR-0022](../adr/ADR-0022-structural-fact-sheet-composition-root.md); design in
+  [the design document](../design/STRUCTURAL_FACT_SHEET_V1.md); independent review in
+  [the review record](../reviews/STRUCTURAL_FACT_SHEET_V1_REVIEW.md).
+
+  **The problem it solved, measured.** `fmis` was **two dependency islands sharing only the kernel,
+  with zero executable import edges between them**. Island A (measurement: data, ingest, providers,
+  features, alignment, relative_value, pipeline, decision_support) had a provider and an application
+  layer. Island B (structure: market_structure, structural_trend, series_context, level_crossing,
+  structure_break, change_of_character) — **5,695 LOC, 51.2 % of the codebase** — had neither, and two
+  of its packages stated in their own docstrings that nothing imported them. The chain ADR-0021
+  completed was unreachable.
+
+  **What shipped:** a second composition root **inside `fmis.pipeline`** (`structural_facts.py`), a
+  plain-text renderer, a CLI (`fmits facts SYMBOL`, also `python -m fmis.pipeline`), and the repository's
+  **first product surface**. `build_structural_facts` is pure — no clock, no network — and
+  `structural_facts_for_symbol` is the network edge, reusing `_fetch_closed` so the closed-candle policy
+  keeps one implementation.
+
+  **Zero arithmetic**, one stricter than ADR-0007 §2 allows `market_analysis`: `_window_of` is reused
+  rather than restated, and nearest-level selection uses comparison alone rather than a distance.
+
+  **ADR-0020 D1 is contained, not fixed.** A frozen `DetectionSettings.right_bars` is read once and
+  handed to both `detect_swings` and `derive_structure_breaks`, so a mismatch is unrepresentable through
+  this root. The real fix carries the delay from detection through `SwingPoint` to `LevelOrigin` —
+  five shipped models across three packages, 69 `SwingPoint` construction sites in tests — and remains
+  its own milestone, as ADR-0020's limitations table and this document both already said. A
+  `right_bars` parameter on `structural_levels` was **rejected as a fake fix**: it relocates the
+  hand-matching and stays undetectable, while making a wrong value look like recorded provenance.
+
+  **The hazard was quantified in review:** over 300 seeded series × 5 wrong delays, **36.1 % of
+  mismatched calls produced materially different breaks** and 155 of those also changed the number of
+  changes of character — with **zero errors raised**. Comparing break *counts* finds nothing; comparing
+  break *identity* is required.
+
+  **Levels are reported as nearest above / nearest below, never support and resistance** (ADR-0019 §I).
+  The live BTCUSDT run shows why: the nearest level *below* the close is an **UPPER** level, a former
+  swing high price has traded through.
+
+  **Purely additive to the engines:** no engine's source was modified. Six pre-existing import guards
+  were widened to name `fmis.pipeline`, each documented in its own docstring, with the direction rule
+  unchanged. **39/39 mutation probes detected, zero survivors, zero no-ops** — six survived the first
+  round and all six were test-suite gaps, closed rather than tolerated. The independent review found
+  **no P0, no P1, one P2** (a render branch no fixture reached — fixed, coverage now 100 %) and four
+  P3s. Runtime is quadratic and **inherited**: `derive_level_crossings` is 90.6 % of total at 1,000
+  candles rising to 97.2 % at 4,000, exactly ADR-0019's documented `O(candles x levels)`.
+
+  **Verified live** against real Binance data: 199 closed candles, 50 swings, `sustained_lower` trend,
+  18 breaks, 8 changes of character, 48 levels, 1,355 crossings.
+
+### Previous milestone
 
 - **AE — Change of Character Foundation v1**: the layer that completes the deterministic structural chain
   `CandleSeries → Swings → Relationships → Labels → Sequence State → Trend → Context → Level Crossing →
@@ -72,7 +125,7 @@ update this file.
   injecting forbidden imports, and confirmed replay determinism across four `PYTHONHASHSEED` values in
   fresh processes.
 
-### Previous milestone
+### Earlier milestone
 
 - **AD — Break of Structure Foundation v1**: the first layer built **entirely on derived facts**. It
   consumes the structural level set and the crossing history and reads **no candle at all** — the package
@@ -118,7 +171,7 @@ update this file.
   that case from ~1.3 s to 0.026 s and made runtime independent of the level count, with equivalence proved
   against a naive implementation over an exhaustive small space. 48/48 adversarial cases pass.
 
-### Earlier milestone
+### Earlier still
 
 - **AC — Level-Crossing Foundation v1**: the first layer to read **both** candles and derived structure,
   closing the gap the market-structure architecture review recorded as §15. Contracts in
@@ -364,11 +417,13 @@ Reconstructed from git history (`git log --oneline`):
 
 | Change of Character Foundation v1 (AE) | see final report | `fmis.change_of_character` — `ChangeOfCharacter`, `ChangeOfCharacterError`, `ChangeOfCharacterInputError`, `derive_changes_of_character`, `contextual_changes_of_character`; supersedes ADR-0020 §7's CHoCH sketch; see [ADR-0021](../adr/ADR-0021-change-of-character-foundation-v1.md) |
 
+| First Light / Structural Fact Sheet v1 (AF) | see final report | `fmis.pipeline.structural_facts` — `build_structural_facts`, `structural_facts_for_symbol`, `StructuralFactSheet`, `StructureFacts`, `NearestLevels`, `DetectionSettings`, `Limitation`, `LIMITATIONS`; plus `fmis.pipeline.render.render_fact_sheet` and the `fmits` CLI. First consumer of the structural chain; ADR-0020 D1 contained, not fixed; see [ADR-0022](../adr/ADR-0022-structural-fact-sheet-composition-root.md) |
+
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**3221 passing** (`uv run pytest`, ~3.9 s), identically with `-W error`. Per module:
+**3305 passing** (`uv run pytest`, ~3.9 s), identically with `-W error`. Per module:
 
 | Module | Tests |
 |---|---|
@@ -635,9 +690,22 @@ The **deterministic structural chain is complete**:
 Every stage is pure, non-repainting, exactly prefix-stable, identity-carrying and single-implementation.
 Nothing in the chain remains to be built before a consumer can read structure end to end.
 
-**Recommended next: carry the confirmation delay on `LevelOrigin` (ADR-0020 D1).** This is now the single
-largest correctness hazard left in the chain, and it is the only one a caller can trip without any error
-being raised. Today `confirmation_bars` must be supplied to `derive_structure_breaks` and matched **by
+**Recommended next: Milestone AG — carry the confirmation delay on `LevelOrigin` (ADR-0020 D1).**
+Still the single largest correctness hazard in the chain, and still the only one a caller can trip
+without any error being raised — but the case is now **measured rather than argued**. Milestone AF's
+review ran 300 seeded series x 5 wrong delays: **36.1 % of mismatched calls produced materially
+different breaks**, 155 of those also changed the number of changes of character, and **not one raised
+an error**. Comparing break *counts* finds nothing; only comparing break *identity* exposes it.
+
+Milestone AF **contained** the hazard for the one caller that now exists — `DetectionSettings`
+single-sources the delay, so a mismatch is unrepresentable through the fact sheet — but containment is
+per-caller and does not generalise. The second consumer of `derive_structure_breaks` reopens it.
+
+What AG must decide: whether the delay rides on `SwingPoint` (flowing to `LevelOrigin` through
+`SwingComparison` and `StructuralSwing`) or is attached later; and what happens to the 69 `SwingPoint`
+construction sites in tests. A `right_bars` parameter on `structural_levels` is **not** an option — AF
+rejected it as a fake fix that relocates the hand-matching while making a wrong value look like
+recorded provenance. Today `confirmation_bars` must be supplied to `derive_structure_breaks` and matched **by
 hand** to the `right_bars` used for detection, and **a mismatch is undetectable** — it silently changes
 which level is the reference at every bar, and therefore which breaks and which changes of character
 exist. It changes a shipped model (`LevelOrigin` gains a field, and `structural_levels` must populate it),

@@ -796,9 +796,16 @@ def test_relationships_module_never_detects_or_reads_candles() -> None:
 
 
 def test_no_existing_package_imports_market_structure() -> None:
+    """No lower or sibling package imports this one.
+
+    `fmis.pipeline` is excluded for Milestone AF: it is the application layer,
+    which ADR-0007 §1 permits to import every engine, and which nothing imports
+    back. The direction rule this test exists for is unchanged for every other
+    package.
+    """
     offenders: list[str] = []
     for package in ("data", "ingest", "providers", "features", "alignment",
-                    "relative_value", "pipeline", "decision_support",
+                    "relative_value", "decision_support",
                     "trading_context", "evidence"):
         for py in (SRC / package).rglob("*.py"):
             for node in ast.walk(ast.parse(py.read_text())):

@@ -10,6 +10,15 @@ Project-level instructions for AI coding agents working in this repository.
 > is known to lag: it predates `series_context`, `structural_trend`, `level_crossing`,
 > `structure_break` and `change_of_character`. The live repository and the ADRs are authoritative.
 
+## Product documents
+
+Two living documents track execution and capability. Keep them current:
+
+- [`FMITS_PRODUCT_BACKLOG.md`](FMITS_PRODUCT_BACKLOG.md) — the execution board. Exactly one NOW item.
+  A status only moves to DONE on evidence from the repository, never from a plan.
+- [`FMITS_PRODUCT_CHANGELOG.md`](FMITS_PRODUCT_CHANGELOG.md) — user-visible capability only. Never
+  record documentation or refactors as a product release.
+
 ## Working principles
 
 **Product first.** The objective is a production-quality system the owner uses daily — not

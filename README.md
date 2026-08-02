@@ -14,6 +14,16 @@ repo — see `.env.example` and `docs/SETUP.md`.
 - `docs/` — setup and usage docs
 - `prompts/` — reusable prompt snippets for chart analysis / Pine Script work
 
+## Product documents
+
+Living operational documents, updated as work moves:
+
+- [FMITS_PRODUCT_BACKLOG.md](FMITS_PRODUCT_BACKLOG.md) — what is being built now, next and later
+- [FMITS_PRODUCT_CHANGELOG.md](FMITS_PRODUCT_CHANGELOG.md) — what the system can actually do, and since when
+
+Architecture, decisions and milestone records live in [docs/](docs/README.md); dated analyses live in
+[reports/](reports/README.md).
+
 ## Quick start
 
 See [docs/SETUP.md](docs/SETUP.md).

@@ -11,8 +11,8 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `cd4bb574e3afbedeeb402fbaf2e254a5a9b5f8ca` (Milestone AI) |
-| **Verified on** | 2026-08-03 |
+| **Last verified against** | `8121050b9d36a22f9a20995c98c5be1206911c33` (Milestone AK) |
+| **Verified on** | 2026-08-04 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -70,28 +70,33 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AI commit** | `cd4bb574e3afbedeeb402fbaf2e254a5a9b5f8ca` |
-| **HEAD** | this documentation commit, on top of `cd4bb57` |
-| **`origin/main`** | `d0a88b5` — **behind local main by four commits (AH and AI); not pushed** |
+| **Milestone AK commit** | `8121050b9d36a22f9a20995c98c5be1206911c33` |
+| **HEAD** | this documentation commit, on top of `8121050` |
+| **`origin/main`** | `44685de` — **behind local main by the two AK commits; not pushed** |
 | **Working tree** | clean |
-| **Test count** | **3,582 passing**, identically under `-W error` |
-| **Public exports / collisions** | 183 / 0 (154 before AI) |
+| **Test count** | **3,702 passing**, identically under `-W error` |
+| **Public exports / collisions** | 212 / 0 (183 before AK) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 |
-| **Latest completed milestone** | **AI — Market Regime Engine v1** (`cd4bb57`) |
-| **Product Value Level** | **Level 2 — deterministic context: multi-timeframe facts plus a classified environment** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
+| **Latest completed milestone** | **AK — Swing Trading Workspace v1** (`8121050`) |
+| **Product Value Level** | **Level 2 — usable swing-analysis assistant: one page carrying facts, regime, evidence and conflicts** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **AJ — Swing Trading Workspace** (not started) |
+| **Immediate next milestone** | **AL — Deterministic daily workflow v1** (not started) |
 
 ### Current user-visible capability
 
 ```
+fmits swing  BTCUSDT                       # the whole page, end to end
 fmits regime BTCUSDT --multi               # the environment, per role, with evidence
-fmits regime BTCUSDT --interval 4h         # one timeframe, classified
 fmits mtf    BTCUSDT -n 260                # 1W context · 1D setup · 4H execution
 fmits facts  BTCUSDT --interval 4h         # one timeframe, exhaustively
-python -m fmis.pipeline regime BTCUSDT     # works without reinstalling
+python -m fmis.pipeline swing BTCUSDT      # works without reinstalling
 ```
+
+`swing` is the **whole page in one command**: data quality, regime per role, structure per role,
+levels, evidence by family, and the disagreements between them — with risk, portfolio, trade plan and
+AI interpretation rendered as explicitly unavailable, each naming the milestone that owns it and the
+inference its absence forbids.
 
 `regime` classifies three **environments** — structure, volatility and participation — each with the
 evidence behind it, the evidence against it, what was unavailable, and the exact policy that produced
@@ -114,54 +119,44 @@ close, and the inherited limitations — computed from live exchange data.
 
 Exactly one item.
 
-### `AJ` — Swing Trading Workspace
+### `AL` — Deterministic daily workflow v1
 
 | Field | Value |
 |---|---|
-| **ID** | AJ |
-| **Epic** | EP-02 Swing Trading Product |
+| **ID** | AL *(was AK before the workspace took that letter — see §11 note)* |
+| **Epic** | EP-03 Daily Market Intelligence |
 | **Status** | **NOW** |
 | **Priority** | High |
-| **Estimated size** | 2–3 weeks *(source: reports/0005 Phase 4)* |
-| **Confidence** | Medium — the first surface built for a workflow rather than an instrument |
+| **Estimated size** | 4–6 weeks *(source: reports/0005 Phase 4)* |
+| **Confidence** | Medium — scheduling has no owner in any architecture layer yet |
 
-**Product value.** The first surface built for a **workflow** rather than for an instrument.
+**Product value.** **This is v1** — the first version genuinely useful daily without the TradingView
+prompt doing the analysis.
 
-**What the owner can do after this that was impossible before.** Work a swing candidate end to end in
-one place — structure, regime, levels, evidence — instead of assembling it from four CLI commands and
-a chart.
+**What the owner can do after this that was impossible before.** Open the system each morning and be
+told what changed and what deserves attention, before asking. Requires scanning over a watchlist, a
+generated brief, and scheduling.
 
-**Why now.** Its dependency is met: `reports/0006` §2 rejected building a workspace before regime
-existed, precisely because it would present facts that were incomplete and, on one timeframe,
-misleading. `AI` shipped that regime.
+**Why now.** Its dependency is met. `AK` delivered the per-instrument page; a daily workflow is that
+page run over a watchlist, diffed, and delivered — which is why the `Workspace` was built as a
+serializable object rather than as printed output.
 
-**Dependencies.** AI (done, `cd4bb57`).
-**Out of scope.** Sizing and portfolio context, which arrive with EP-04.
-**Related.** `reports/0004` §12 · `reports/0005` Phase 4 · `reports/0006` §2.
+**Dependencies.** AK (done, `8121050`).
+**Acceptance.** A scheduled run produces a brief without interaction · scanning ranks a watchlist on
+computed facts with stated reasons · every run is archived · failures are visible.
+**Out of scope.** A UI — text output is sufficient and much cheaper.
+**Related.** `reports/0004` §12 Level 3 · `reports/0005` Phase 4.
 
-> **Not started.** This item is sequenced, not in progress. No workspace code, design or ADR exists in
-> the repository.
+> **Not started.** This item is sequenced, not in progress. No scanning, brief or scheduling code
+> exists in the repository.
 
 ## 6. NEXT
 
 The forced sequence. Each item is blocked on the one above it.
 
-*AI shipped; AJ moved to NOW.*
+*AK shipped; the daily workflow moved to NOW.*
 
-### `AK` — Deterministic daily workflow v1
-
-| Field | Value |
-|---|---|
-| **Epic** | EP-03 Daily Market Intelligence · **Status** NEXT · **Priority** High |
-| **Product value** | **This is v1** — the first version genuinely useful daily without the TradingView prompt doing the analysis |
-
-**What the owner can do after this that was impossible before.** Open the system each morning and be
-told what changed and what deserves attention, before asking. Requires scanning over a watchlist, a
-generated brief, and scheduling — the last of which currently has **no owner in any architecture layer**.
-
-**Dependencies.** AJ. **Related.** `reports/0004` §12 Level 3 · `reports/0005` Phase 4.
-
-### `AL` — Memory / decision archive
+### `AM` — Memory / decision archive
 
 | Field | Value |
 |---|---|
@@ -171,7 +166,9 @@ generated brief, and scheduling — the last of which currently has **no owner i
 **What the owner can do after this that was impossible before.** Ask *"what did I think about this in
 October, and was I right?"* and get an answer. Until this exists, daily use accumulates nothing.
 
-**Dependencies.** AK, and **OPEN DECISION D-01 (persistence schema)** must be settled first.
+**Dependencies.** AL, and **OPEN DECISION D-01 (persistence schema)** must be settled first. `AK`
+made this materially easier: a `Workspace` is a complete, schema-versioned object, so what gets
+archived is already decided.
 **Related.** `PROJECT_SPECIFICATION_V1.md` §25 · `reports/0004` C-159 · `reports/0005` Phase 5.
 
 ---
@@ -217,6 +214,50 @@ Repository-verified only. Every SHA below was confirmed to exist with `git cat-f
 The **complete** 30-milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the three most recent product-relevant milestones.
+
+### `AK` — Swing Trading Workspace v1 · **DONE**
+
+| Field | Value |
+|---|---|
+| **Commit** | **`8121050b9d36a22f9a20995c98c5be1206911c33`** |
+| **ADR** | **none** — the implementation proved no new architectural decision |
+| **Design** | [SWING_WORKSPACE_V1.md](docs/design/SWING_WORKSPACE_V1.md) |
+| **Review** | [SWING_WORKSPACE_V1_REVIEW.md](docs/reviews/SWING_WORKSPACE_V1_REVIEW.md) — no P0, no P1, **5 P2 fixed**, 3 P3 |
+| **Tests** | 3,582 → **3,702** (+120). Mutation 49/49, zero survivors |
+
+**Product value delivered.** `fmits swing BTCUSDT` is the whole analysis in one command, replacing
+three commands and a chart. It also made the **third stranded island reachable**:
+`fmis.decision_support`, `fmis.evidence` and `fmis.trading_context` — 1,131 statements of accepted,
+tested, ADR-governed code — had zero production importers before this milestone.
+
+**What the owner can now do that was impossible before.** Read one page that states the facts, the
+environment, the evidence, **what disagrees**, and **what it cannot tell you** — with risk, portfolio,
+trade plan and AI interpretation rendered as explicitly unavailable rather than quietly absent.
+
+**How the page stays honest.** An unbuilt section names the milestone that owns it and the inference
+its absence forbids. Conflicts are reported and never resolved. Nothing on the page is a
+recommendation, and no direction is expressed or implied.
+
+**Limitations shipped with it.** `AK-1` evidence is price-derived only, and four of ten families
+carry no descriptor · `AK-2` conflicts are reported, never resolved · `AK-3` risk, portfolio, trade
+plan and interpretation are not computed · `AK-4` evidence and levels describe the primary timeframe.
+
+**Status note.** DONE on repository evidence, as §11 rule 3 requires: the commit above exists, the full
+suite is green under `-W error`, coverage is 100 % on every workspace module, mutation is clean, the
+independent review is complete and all four real-data surfaces work.
+
+### `AJ` — Swing Trading Workspace architecture · **DONE** *(design only)*
+
+| Field | Value |
+|---|---|
+| **Commit** | **none** — delivered as an architecture specification, not as repository code |
+| **Outcome** | The section-registry design `AK` implements. Its substance is recorded in [the AK design](docs/design/SWING_WORKSPACE_V1.md) |
+
+**Product value delivered.** None directly, and it says so: this was an architecture milestone whose
+output was a decision, not a capability. It answered three questions `AK` could not have started
+without — whether the workspace displays a directional conclusion (no; a future Strategy engine owns
+that vocabulary), whether `decision_support` is adopted or replaced (adopted as-is), and whether the
+work splits (it did not need to).
 
 ### `AI` — Market Regime Engine v1 · **DONE**
 
@@ -398,7 +439,7 @@ known before sequencing.
 
 ## 10. Open decisions
 
-Carried, not solved. None of these blocks AJ.
+Carried, not solved. None of these blocks AL.
 
 | ID | Decision | Blocks | Source |
 |---|---|---|---|
@@ -440,6 +481,16 @@ Carried, not solved. None of these blocks AJ.
 8. **Architecture work must name the product blocker it removes.** AH is the pattern: it named the
    milestone it unblocks (AI) before the work started, and the DONE row is written against that
    claim rather than around it.
+
+### Milestone letters: the workspace took `AK`
+
+The board previously read `AJ` = Swing Trading Workspace, `AK` = daily workflow, `AL` = memory. The
+owner named the workspace **implementation** `AK`, treating `AJ` as the architecture milestone that
+preceded it. Both are recorded that way in §8, and the two unshipped items below them shifted one
+letter: daily workflow `AK` → **`AL`**, memory `AL` → **`AM`**.
+
+Renumbering is safe here and only here: neither item had shipped, so no commit, ADR or design document
+cites the old letters. Nothing above `AJ` was touched.
 
 ### Known internal note
 

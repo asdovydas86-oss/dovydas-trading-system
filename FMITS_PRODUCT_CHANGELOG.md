@@ -7,8 +7,8 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `cd4bb574e3afbedeeb402fbaf2e254a5a9b5f8ca` (Milestone AI) |
-| **Verified on** | 2026-08-03 |
+| **Last verified against** | `8121050b9d36a22f9a20995c98c5be1206911c33` (Milestone AK) |
+| **Verified on** | 2026-08-04 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -67,18 +67,22 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `cd4bb57` — what the owner can do today.**
+**As of `8121050` — what the owner can do today.**
 
 ```
+fmits swing  BTCUSDT                            # the whole page, end to end
 fmits regime BTCUSDT --multi                    # the environment, per role, with evidence
-fmits regime BTCUSDT --interval 4h              # one timeframe, classified
 fmits mtf    BTCUSDT -n 260                     # 1W context · 1D setup · 4H execution
 fmits facts  BTCUSDT --interval 4h --limit 200  # one timeframe, exhaustively
-python -m fmis.pipeline regime BTCUSDT          # works without reinstalling
+python -m fmis.pipeline swing BTCUSDT           # works without reinstalling
 ```
 
 **Delivered:**
 
+- a **single-page swing workspace**: instrument and data quality, regime per role, structure per
+  role, levels, evidence by family and the **disagreements between them** — with risk, portfolio,
+  trade plan and AI interpretation shown as explicitly unavailable, each naming what its absence
+  forbids;
 - a **deterministic market-regime classification**: three environments — structure, volatility and
   participation — each with the evidence for it, the evidence against it, what was unavailable, and the
   exact policy that produced it. **Not a direction**, and no overall label or score;
@@ -120,6 +124,53 @@ makes no directional claim. Every rung of the automation ladder remains unstarte
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-04 · `AK` — Swing Trading Workspace v1
+
+**Status:** Released · **fourth user-visible product capability**
+**Commit:** `8121050b9d36a22f9a20995c98c5be1206911c33`
+Validated before versioning: 3,702 tests green including `-W error`, coverage 100 % on every workspace
+module, 49 mutation probes all detected with zero survivors, independent review complete, and all four
+real-data surfaces working.
+
+**Product capability added.** `fmits swing SYMBOL` — the whole analysis on one page: data quality,
+market regime per role, structure per role, levels, evidence grouped by family, and the conflicts
+between them.
+
+**What the owner can now do.** Read one page instead of running three commands and assembling the
+result against a chart — and, more importantly, see **what disagrees** and **what the system cannot
+tell them**, both as first-class sections rather than as omissions.
+
+**Why this matters more than convenience.** Four sections — risk, portfolio, trade plan and AI
+interpretation — are **rendered as unavailable**, each naming the milestone that owns it and the
+inference its absence forbids: *"No position size shown here would be legitimate. Do not infer one."*
+An omitted section is invisible, and an invisible gap reads as a gap that does not exist. This is the
+first surface in the system that shows the reader the shape of its own ignorance.
+
+It also made **1,131 statements of shipped code reachable**. `fmis.decision_support`,
+`fmis.evidence` and `fmis.trading_context` were accepted, ADR-governed and fully tested with **zero
+production importers**; the workspace is the surface all three were designed for.
+
+**Limitations.**
+
+- **Conflicts are reported, never resolved.** No rule outranks another and no timeframe is weighted
+  above another. Reconciling disagreement remains a later layer's decision.
+- **Evidence is price-derived only.** Four of the ten catalogued families carry no descriptor, and two
+  more have engines that are computed but not yet classified. The page says which, every run.
+- **Evidence and levels describe the primary timeframe** (1D by default). The other views contribute
+  regime and structure.
+- **No risk, no portfolio, no trade plan, no interpretation.** Those sections are empty by design.
+
+**Safety / risk notes.** No order placement, no credentials, no directional output, no recommendation,
+no position size. The page states this in three places and a test asserts each one.
+
+**Related.** Design: [SWING_WORKSPACE_V1](docs/design/SWING_WORKSPACE_V1.md) ·
+Review: [SWING_WORKSPACE_V1_REVIEW](docs/reviews/SWING_WORKSPACE_V1_REVIEW.md) — no P0, no P1, five P2
+found and fixed, three P3 · **No ADR**: the implementation proved no new architectural decision.
+
+**Breaking changes.** None. `fmits facts`, `fmits mtf` and `fmits regime` are unchanged.
 
 ---
 
@@ -393,17 +444,18 @@ fact that matters — the product began on 2026-08-02.
 
 > **Unreleased. Planned. Not available.** Nothing in this section exists in the repository.
 
-### `AJ` — Swing Trading Workspace — **UNRELEASED**
+### `AL` — Deterministic daily workflow v1 — **UNRELEASED**
 
 **Status:** NOW on the [product backlog](FMITS_PRODUCT_BACKLOG.md) · **not started** · no commit, no
 design and no ADR exists
 
-**Capability it will add.** A surface built for a **workflow** rather than for an instrument: working a
-swing candidate end to end in one place instead of assembling it from four commands and a chart.
+**Capability it will add.** A reason to open the system each morning: a watchlist scanned, a brief
+generated, and a scheduled run that happens without being asked.
 
 **What it will change for the owner.** Not yet decided in detail, and deliberately not described here
-as though it were. Its precondition is met: `reports/0006` §2 refused to build a workspace before a
-regime existed, because it would present facts that were incomplete and, on one timeframe, misleading.
+as though it were. Its precondition is met: `AK` delivered the per-instrument page, and a daily
+workflow is that page run over a watchlist, diffed and delivered — which is why the workspace was
+built as a serializable object rather than as printed output.
 
 No further capability is listed. The sequence after it is on the backlog — this changelog records what
 shipped, not what is planned.
@@ -456,4 +508,4 @@ and mark the entry Foundational.
 
 ---
 
-*Living document · last verified against `cd4bb57` on 2026-08-03*
+*Living document · last verified against `8121050` on 2026-08-04*

@@ -7,8 +7,8 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `e589411eb575f91ff017713ffc5ed35c094942bb` (Milestone AG) |
-| **Verified on** | 2026-08-02 |
+| **Last verified against** | `99483494ea44e00f2c3a8d3256d6288f6c7035c5` (Milestone AH) |
+| **Verified on** | 2026-08-03 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -67,7 +67,7 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `e589411` — what the owner can do today.**
+**As of `9948349` — what the owner can do today.**
 
 ```
 fmits mtf   BTCUSDT -n 260                     # 1W context · 1D setup · 4H execution
@@ -87,7 +87,8 @@ python -m fmis.pipeline mtf BTCUSDT            # works without reinstalling
   structural trend, price levels, level crossings, break of structure, change of character, nearest
   level above and below the last close;
 - **warm-up status** stated per feature, so "not computed yet" never looks like a value;
-- **inherited limitations printed on every sheet**, each citing the ADR that owns it.
+- **inherited limitations printed on every sheet**, each citing the ADR that owns it — now **six**,
+  since `ADR-0020 D1` was fixed and removed rather than left standing.
 
 **Explicitly not delivered:**
 
@@ -114,6 +115,59 @@ makes no directional claim. Every rung of the automation ladder remains unstarte
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-03 · `AH` — Confirmation-Delay Provenance v1
+
+**Status:** Released · **reliability, not a new capability**
+**Commit:** `99483494ea44e00f2c3a8d3256d6288f6c7035c5`
+Validated before versioning: 3,449 tests green including `-W error`, 42 mutation probes with 41
+detected and 1 proven equivalent, independent review complete, both real-data smoke tests valid.
+
+**Why this is recorded at all.** It adds **no user-visible capability**, and §1 permits it on two of
+the other three grounds: it **materially improves the reliability** of an existing capability, and it
+**removes a named blocker**.
+
+**What it changes for the owner.** Every break of structure and change of character on a fact sheet is
+now guaranteed to have been derived under the confirmation delay that detection actually used. Before
+this, `derive_structure_breaks` took that delay as an argument that lived on none of its inputs, so a
+value disagreeing with detection silently changed which level was the reference at every bar — and
+therefore which breaks and which changes of character existed. Measured across 300 seeded series
+against five wrong delays: **36.1 % produced materially different breaks, and none raised an error**.
+
+The delay is now stamped at detection onto every swing, copied onto every level's origin, and read
+from there. The argument is **removed** from every public entry point, so the mistake cannot be
+expressed rather than being warned about.
+
+**The one thing the owner will actually see.** Both sheets now print **six limitations instead of
+seven**. `ADR-0020 D1` — *"the confirmation delay is carried on no derived fact"* — is gone, because it
+stopped being true. A limitation kept past its fix teaches a reader to discount the list.
+
+**Blocker removed.** The Market Regime Engine (`AI`) is the second consumer of
+`derive_structure_breaks`. AF and AG contained the hazard by each using a single caller; containment
+does not survive a second one. That is now moot.
+
+**Limitations.**
+
+- One derivation cannot span two confirmation windows. A mixed set is **rejected loudly** rather than
+  guessed at; no producer in the repository can create one.
+- `left_bars` is not carried on a swing, because no consumer reads it. Adding it later is additive.
+- A break at bar 0 is no longer representable, since a level needs at least one confirming bar. No
+  real detection run could ever produce one.
+
+**Safety / risk notes.** No order placement, no credentials, no directional output. This milestone
+**reduces** correctness risk and adds none.
+
+**Related.** ADR: [ADR-0024](docs/adr/ADR-0024-confirmation-delay-provenance.md) ·
+Design: [CONFIRMATION_DELAY_PROVENANCE_V1](docs/design/CONFIRMATION_DELAY_PROVENANCE_V1.md) ·
+Review: [CONFIRMATION_DELAY_PROVENANCE_V1_REVIEW](docs/reviews/CONFIRMATION_DELAY_PROVENANCE_V1_REVIEW.md)
+— no P0, no P1, two P2 found and fixed, three P3 · Closes ADR-0020 D1.
+
+**Breaking changes.** Internal API only, and deliberate: `derive_structure_breaks` and
+`contextual_structure_breaks` no longer accept `confirmation_bars`; `SwingPoint` and `LevelOrigin`
+each require it; `StructureBreak.eligible_from` is now a projection. **No package's exported name list
+changed**, and no CLI behaviour changed beyond the removed limitation line.
 
 ---
 
@@ -284,17 +338,17 @@ fact that matters — the product began on 2026-08-02.
 
 > **Unreleased. Planned. Not available.** Nothing in this section exists in the repository.
 
-### `AH` — LevelOrigin confirmation-delay provenance — **UNRELEASED**
+### `AI` — Market Regime Engine — **UNRELEASED**
 
-**Status:** NOW on the [product backlog](FMITS_PRODUCT_BACKLOG.md) · no commit exists
+**Status:** NOW on the [product backlog](FMITS_PRODUCT_BACKLOG.md) · **not started** · no commit, no
+design and no ADR exists
 
-**Capability it will add.** **None user-visible.** It is a blocker-removal milestone, recorded here
-only because the next capability depends on it and because it reduces a correctness risk.
+**Capability it will add.** A regime classification that is reproducible, diffable and checkable
+against history, instead of one produced inside a TradingView prompt that cannot be versioned.
 
-**What it will change for the owner.** Nothing they can see. What it removes is a hazard: a mismatched
-confirmation delay currently produces materially different structure breaks in **36.1 %** of measured
-cases while raising no error. AF and AG contain it by using one caller; the Market Regime Engine is
-the second consumer and reopens it.
+**What it will change for the owner.** Not yet decided in detail, and deliberately not described here
+as though it were. What can be said is that its precondition is met: `AH` removed the hazard that made
+a second consumer of `derive_structure_breaks` unsafe, and regime is that second consumer.
 
 No further capability is listed. The sequence after it is on the backlog — this changelog records what
 shipped, not what is planned.
@@ -347,4 +401,4 @@ and mark the entry Foundational.
 
 ---
 
-*Living document · last verified against `e589411` on 2026-08-02*
+*Living document · last verified against `9948349` on 2026-08-03*

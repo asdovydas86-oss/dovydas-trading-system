@@ -11,8 +11,8 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `e589411eb575f91ff017713ffc5ed35c094942bb` (Milestone AG) |
-| **Verified on** | 2026-08-02 |
+| **Last verified against** | `99483494ea44e00f2c3a8d3256d6288f6c7035c5` (Milestone AH) |
+| **Verified on** | 2026-08-03 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -70,18 +70,18 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AG commit** | `e589411eb575f91ff017713ffc5ed35c094942bb` |
-| **HEAD** | this documentation commit, on top of `e589411` |
-| **`origin/main`** | synchronised with HEAD |
+| **Milestone AH commit** | `99483494ea44e00f2c3a8d3256d6288f6c7035c5` |
+| **HEAD** | this documentation commit, on top of `9948349` |
+| **`origin/main`** | `d0a88b5` — **behind local main by the two AH commits; not pushed** |
 | **Working tree** | clean |
-| **Test count** | **3,404 passing**, identically under `-W error` |
-| **Public exports / collisions** | 154 / 0 (145 before AG) |
+| **Test count** | **3,449 passing**, identically under `-W error` |
+| **Public exports / collisions** | 154 / 0 (unchanged by AH) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 |
-| **Latest completed milestone** | **AG — Multi-Timeframe Fact Sheet v1** (`e589411`) |
+| **Latest completed milestone** | **AH — Confirmation-Delay Provenance v1** (`9948349`) |
 | **Product Value Level** | **Level 1.5 — multi-timeframe deterministic analysis** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **AH — LevelOrigin confirmation-delay provenance (ADR-0020 D1)** |
+| **Immediate next milestone** | **AI — Market Regime Engine** (not started) |
 
 ### Current user-visible capability
 
@@ -107,63 +107,43 @@ close, and the inherited limitations — computed from live exchange data.
 
 Exactly one item.
 
-### `AH` — LevelOrigin / confirmation-delay provenance (ADR-0020 D1)
-
-| Field | Value |
-|---|---|
-| **ID** | AH |
-| **Epic** | EP-01 Technical Analysis & Market Structure |
-| **Status** | **NOW** |
-| **Priority** | **Critical** |
-| **Estimated size** | 1–2 weeks *(source: reports/0005 §3, reports/0006 §3.1)* |
-| **Confidence** | Medium — touches five shipped models across three packages |
-
-**Product value.** **Blocker removal**, and the blocker is named: the Market Regime Engine (`AI`) is
-the second consumer of `derive_structure_breaks` and cannot be built safely while a mismatched
-confirmation delay is undetectable.
-
-**What the owner can do after this that was impossible before.** Nothing directly. This is a
-blocker-removal milestone under the product-first rule.
-
-**Why now, and not before AG.** AF contained the hazard by single-sourcing the delay, and **AG reused
-AF's single caller rather than adding a second**, so containment held through AG. It does not
-generalise: the next consumer reopens it.
-
-**Measured severity.** 300 seeded series × 5 wrong delays: **36.1 % produced materially different
-breaks**, 155 of those also changed the change-of-character count, **zero raised an error**.
-
-**Dependencies.** AG (done). **Acceptance.** The delay is carried on a derived fact from detection
-through to `LevelOrigin`; a mismatch is impossible or loudly rejected; existing tests pass unchanged
-or with documented widening. **Out of scope.** Any new structural rule; any interpretation.
-**Known cost.** `SwingPoint` alone is constructed at 69 test sites.
-**Explicitly rejected approach.** A `right_bars` parameter on `structural_levels` — it relocates the
-hand-matching while making a wrong value look like recorded provenance.
-**Related.** ADR-0020 D1 · ADR-0022 · ADR-0023 · new ADR required · `reports/0006` §3.1.
-
-## 6. NEXT
-
-The forced sequence. Each item is blocked on the one above it.
-
-*AG shipped; AH moved to NOW.*
-
 ### `AI` — Market Regime Engine
 
 | Field | Value |
 |---|---|
-| **Epic** | EP-01 · **Status** NEXT · **Priority** **Critical** |
-| **Product value** | Moves the regime call out of the TradingView prompt into versioned, testable code |
+| **ID** | AI |
+| **Epic** | EP-01 Technical Analysis & Market Structure |
+| **Status** | **NOW** |
+| **Priority** | **Critical** |
+| **Estimated size** | 2–3 weeks *(source: reports/0005 Phase 3)* |
+| **Confidence** | Medium — the first interpretation layer in the repository |
+
+**Product value.** Moves the regime call out of the TradingView prompt into versioned, testable code.
 
 **What the owner can do after this that was impossible before.** See a regime classification that is
 reproducible, diffable and checkable against history — instead of one produced inside a prompt that
 cannot be versioned. This is the direct structural fix for the v2 LONG-bias failure recorded in
 `docs/analysis-notes.md`.
 
-**Dependencies.** AG (regime is per-timeframe by definition) **and** AH (regime is consumer #2).
+**Why now.** Both dependencies are met: AG made regime per-timeframe possible, and **AH removed the
+hazard that made a second consumer of `derive_structure_breaks` unsafe**. Regime is that second
+consumer, and the confirmation delay can no longer disagree with detection.
+
+**Dependencies.** AG (done) **and** AH (done, `9948349`).
 **Acceptance.** Regime output carries component evidence and uncertainty, never a bare label; no
 direction vocabulary at this layer; thresholds are versioned parameters, never literals.
 **Out of scope.** Trade selection, sizing, strategy conditioning.
 **Risks.** Being trusted before validation against history — mitigate by replaying over the archive.
 **Related.** `reports/0003` §L5 · `reports/0004` C-023 · `reports/0005` Phase 3.
+
+> **Not started.** This item is sequenced, not in progress. No Market Regime Engine code, design or
+> ADR exists in the repository.
+
+## 6. NEXT
+
+The forced sequence. Each item is blocked on the one above it.
+
+*AH shipped; AI moved to NOW.*
 
 ### `AJ` — Swing Trading Workspace
 
@@ -248,6 +228,49 @@ Repository-verified only. Every SHA below was confirmed to exist with `git cat-f
 The **complete** 30-milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the three most recent product-relevant milestones.
+
+### `AH` — Confirmation-Delay Provenance v1 · **DONE**
+
+| Field | Value |
+|---|---|
+| **Commit** | **`99483494ea44e00f2c3a8d3256d6288f6c7035c5`** |
+| **ADR** | [ADR-0024](docs/adr/ADR-0024-confirmation-delay-provenance.md) |
+| **Design** | [CONFIRMATION_DELAY_PROVENANCE_V1.md](docs/design/CONFIRMATION_DELAY_PROVENANCE_V1.md) |
+| **Review** | [CONFIRMATION_DELAY_PROVENANCE_V1_REVIEW.md](docs/reviews/CONFIRMATION_DELAY_PROVENANCE_V1_REVIEW.md) — no P0, no P1, **2 P2 fixed**, 3 P3 |
+| **Tests** | 3,404 → **3,449** (+45). Mutation 42 probes, 41 detected, 1 proven equivalent, 0 no-ops |
+
+**Product value delivered.** **Blocker removed**, as promised — and one reliability improvement the
+owner can see. Every break and change of character on a fact sheet is now guaranteed to have been
+derived under the confirmation delay detection actually used, because supplying a different one is no
+longer expressible. ADR-0020 D1 is closed and has left the printed limitations: both sheets now show
+six, not seven.
+
+**What the owner can now do that was impossible before.** Nothing new directly — this was a
+blocker-removal milestone under the product-first rule, and it says so. What changed is that a whole
+class of silently wrong output is gone: 36.1 % of 300 seeded series produced materially different
+breaks under a mismatched delay, and none of them raised an error.
+
+**How.** The delay is stamped where it is known and travels with the facts: `detect_swings` records
+`right_bars` on every `SwingPoint`, `structural_levels` copies it onto every `LevelOrigin`, and
+`derive_structure_breaks` reads `origin.knowable_from`. The argument is **removed** from every public
+entry point rather than validated, so the mismatch is unrepresentable.
+
+**Acceptance, against what was written before the work started.** The delay is carried on a derived
+fact from detection through to `LevelOrigin` ✓ · a mismatch is impossible rather than merely rejected
+✓ · existing tests pass with documented widening ✓ (80 construction sites migrated, two import guards
+made docstring-aware, bar-0 fixtures shifted) · the explicitly rejected `structural_levels` parameter
+was rejected again ✓.
+
+**Cost, against the estimate.** `SwingPoint` was constructed at 69 test sites as predicted, plus 11
+`LevelOrigin` sites; the migration was done by AST position rather than by hand.
+
+**Limitations shipped with it.** One derivation cannot span two confirmation windows — rejected
+loudly · `left_bars` is not carried, because no consumer reads it · a hand-built `PriceLevel` may
+still carry no origin and is rejected at the break layer rather than at construction.
+
+**Status note.** DONE on repository evidence, as §11 rule 3 requires: the commit above exists, the
+full suite is green under `-W error`, mutation is clean, the independent review is complete and both
+real-data smoke tests are valid.
 
 ### `AG` — Multi-Timeframe Fact Sheet v1 · **DONE**
 
@@ -355,7 +378,7 @@ known before sequencing.
 
 ## 10. Open decisions
 
-Carried, not solved. None of these blocks AH.
+Carried, not solved. None of these blocks AI.
 
 | ID | Decision | Blocks | Source |
 |---|---|---|---|
@@ -394,8 +417,9 @@ Carried, not solved. None of these blocks AH.
 7. **No milestone may bypass the automation ladder.** Research → rules → backtest → robustness →
    paper → shadow → controlled live → bounded autonomy. No rung is skipped for any reason, including
    income pressure.
-8. **Architecture work must name the product blocker it removes.** AH is the pattern: it delivers
-   nothing user-visible and says exactly which milestone it unblocks and why.
+8. **Architecture work must name the product blocker it removes.** AH is the pattern: it named the
+   milestone it unblocks (AI) before the work started, and the DONE row is written against that
+   claim rather than around it.
 
 ### Known internal note
 

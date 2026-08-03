@@ -1060,8 +1060,24 @@ def test_renderer_reaches_no_engine() -> None:
         if m.startswith("fmis.")
         and not m.startswith("fmis.pipeline")
         and m != "fmis.level_crossing"  # PriceLevel, for a type annotation only
+        # `fmis.market_regime` supplies type annotations and one vocabulary
+        # constant (`EvidenceStatus`, for the explicit display order). The
+        # renderer calls nothing from it, which the assertion below proves
+        # separately — this exemption is about *names*, not about behaviour.
+        and m != "fmis.market_regime"
     }
     assert engine_imports == set(), engine_imports
+
+    # The exemptions above are type-only, and that is asserted rather than
+    # trusted: the renderer must call no function from either package.
+    called = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "classify_regime" not in called
+    assert "derive_level_crossings" not in called
+    assert "structural_levels" not in called
 
 
 # ================================ CLI =======================================

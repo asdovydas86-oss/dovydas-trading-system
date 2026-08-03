@@ -4,14 +4,68 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AH — Confirmation-Delay Provenance v1 (2026-08-03).
-**Latest commit at time of writing:** `d0a88b5` — `docs(product): record Milestone AG release`
-(Milestones AF and AG are committed and pushed; the Milestone AH changes are uncommitted at time of
-writing).
+**Last updated for:** Milestone AI — Market Regime Engine v1 (2026-08-03).
+**Latest commit at time of writing:** `0775292` — `docs(product): record Milestone AH release`
+(Milestones AF, AG and AH are committed; AH is **not yet pushed**, and the Milestone AI changes are
+uncommitted at time of writing).
 
 ---
 
 ## Current milestone
+
+- **AI — Market Regime Engine v1**: the first **interpretation-adjacent** layer in the repository, and
+  `ARCH` §9's highest-leverage unbuilt module. Contracts in
+  [ADR-0025](../adr/ADR-0025-market-regime-engine-v1.md); design in
+  [the design document](../design/MARKET_REGIME_ENGINE_V1.md); independent review in
+  [the review record](../reviews/MARKET_REGIME_ENGINE_V1_REVIEW.md).
+
+  **The problem it solved.** The regime call lived in the v3 TradingView prompt's STEP 1 — not
+  versioned, not diffable, not testable. `docs/analysis-notes.md` records what that cost in v2: a trend
+  gate counted twice so a LONG began with two free confirmations, branches that looked symmetric while
+  one required a deep bear market, tools defined in one direction only, and no NO-TRADE outcome.
+
+  **What shipped:** `fmis.market_regime`, an engine package at L5, plus a fourth composition root
+  `fmis.pipeline.regime`, two renderers and the `fmits regime SYMBOL [--multi]` command.
+
+  **A regime is the environment, never a direction.** Three dimensions — **structure**
+  (trending/ranging/transitioning/indeterminate/insufficient), **volatility**
+  (expanding/contracting/steady/insufficient) and **participation**
+  (elevated/subdued/typical/insufficient) — each with its own evidence, never collapsed into one label
+  and never scored. This **diverges from the v3 prompt**, which classifies BULLISH/BEARISH/RANGE: a
+  directional regime is the object whose branches drifted apart in v2. Which way structure points is
+  already a fact on the fact sheet.
+
+  **The v2 failures are structurally unrepresentable.** The engine cannot tell `SUSTAINED_HIGHER` from
+  `SUSTAINED_LOWER` — asserted by comparing two whole regimes. Evidence votes by **family**, and the
+  four families partition across the three dimensions, so nothing corroborates itself. A threshold band
+  is **one** number whose edges are `1 + band` and `1 / (1 + band)`, so an asymmetric gate cannot be
+  written through the API or the CLI at all.
+
+  **Uncertainty is first-class.** `INSUFFICIENT` (evidence absent) and `INDETERMINATE` (evidence present
+  and disagreeing) are distinct states. Structure refuses to classify from one readable family, because
+  a single-family call is the free confirmation v2 gave away. `UNAVAILABLE` evidence is never counted as
+  conflicting, and a fourth status `CONTEXT` marks facts reported but counted neither way — following
+  `decision_support`'s `NOT_DIRECTIONAL` precedent.
+
+  **The boundary is a narrow model.** `fmis.market_regime` imports exactly **one** name from the
+  repository, `StructuralTrendType`, and cannot see `fmis.pipeline`, `fmis.features`, `fmis.data` or a
+  provider. The composition root adapts a `StructuralFactSheet` into `RegimeInput` and contains **no
+  arithmetic**, which is why the input carries indices rather than a distance.
+
+  **`facts` and `mtf` are untouched.** Their feature sets are byte-identical and their pages print no
+  regime vocabulary, both asserted. `regime_features()` adds a slow ATR baseline for the volatility
+  ratio, exactly as AG added EMA(200) — and `fmis.features.VolatilityRegime` was **not** reused, being
+  a *level* vocabulary (LOW/HIGH/EXTREME) for an unbuilt feature rather than a statement about change.
+
+  **Quality.** 3,449 → **3,582 tests** (+133), identically under `-W error`. Coverage **100 %** on every
+  module AI touched. **45 mutation probes, 45 detected, 0 survivors, 0 no-ops**, byte-identical
+  restoration. Exports 173 / 0 collisions. Classification costs 0.006 ms — 0.03 % of a 500-candle sheet.
+
+  **The review found four P2s, all fixed.** The evidence line printed `sustained_lower`, putting a
+  direction on a page whose own limitation denies restating one — found by reading live output, not by a
+  test. `MarketRegime.policy` was typed `Any` and never validated, so a result could cite a policy that
+  could not have produced it. Validation ran in the wrong order, raising `AttributeError` instead of a
+  named `TypeError`. And one assertion ended in `or True` and could never fail.
 
 - **AH — Confirmation-Delay Provenance v1**: the milestone that **closes ADR-0020 D1**, the largest
   remaining correctness hazard before the Market Regime Engine. Contracts in

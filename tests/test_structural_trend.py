@@ -1253,9 +1253,16 @@ def test_nothing_below_imports_this_package() -> None:
     The direction rule is unchanged. Every engine below remains unable to see
     this package, and each exemption is still named rather than pattern-matched,
     so a further consumer fails this test and must justify itself in an ADR.
+
+    Widened again for Milestone AI to add `fmis.market_regime`, an engine that
+    sits **above** this package at L5 and reads `StructuralTrendType` as one of
+    its two structure evidence families. The direction is unchanged — regime
+    consumes trend, trend does not consume regime — and `fmis.market_regime`
+    imports exactly this one name from the whole repository besides its own
+    modules, which a test in that package asserts.
     """
     root = Path(st.__file__).parent.parent
-    permitted = {root / "series_context", root / "pipeline"}
+    permitted = {root / "series_context", root / "pipeline", root / "market_regime"}
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue

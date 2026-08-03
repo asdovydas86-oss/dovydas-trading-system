@@ -23,6 +23,13 @@ import textwrap
 from datetime import datetime
 
 from fmis.level_crossing import PriceLevel
+from fmis.market_regime import (
+    EvidenceStatus,
+    MarketRegime,
+    RegimeDimension,
+    RegimePolicy,
+)
+from fmis.pipeline.regime import MultiTimeframeRegime
 from fmis.pipeline.multi_timeframe import MultiTimeframeFactSheet, TimeframeView
 from fmis.pipeline.structural_facts import StructuralFactSheet
 
@@ -30,6 +37,16 @@ __all__ = ["render_fact_sheet", "render_multi_timeframe_sheet"]
 
 _WIDTH = 66
 _ABSENT = "—"
+
+#: Evidence display order. An explicit tuple, never the enum's definition order,
+#: so renaming or reordering a member cannot silently reshuffle the page — the
+#: same rule `_SIDE_RANK` and `_ROLE_ORDER` follow elsewhere in the repository.
+_EVIDENCE_ORDER = (
+    EvidenceStatus.CONSISTENT,
+    EvidenceStatus.CONFLICTING,
+    EvidenceStatus.CONTEXT,
+    EvidenceStatus.UNAVAILABLE,
+)
 
 
 def _rule(title: str = "") -> str:
@@ -380,4 +397,145 @@ def render_multi_timeframe_sheet(
     )
     lines.append(" recommendation is expressed or implied.")
     lines.append(_rule())
+    return "\n".join(lines)
+
+
+def _evidence_lines(dimension: RegimeDimension) -> list[str]:
+    """One indented line per evidence item, grouped by status in a fixed order.
+
+    The order is consistent → conflicting → context → unavailable, from an
+    explicit tuple rather than the enum's definition order, so renaming or
+    reordering a member cannot silently reshuffle the page.
+
+    Every item is printed. A renderer that showed only the evidence agreeing with
+    the state would be the opposite of what `ARCH` §9 asked for, and would make a
+    classification look better supported than it is.
+    """
+    lines: list[str] = []
+    for status in _EVIDENCE_ORDER:
+        for item in dimension.evidence:
+            if item.status is not status:
+                continue
+            value = "" if item.value is None else _number(item.value)
+            lines.append(
+                _row(f"   {status.value}", item.observed, f"{item.source} {value}".strip())
+            )
+    return lines
+
+
+def _regime_block(regime: MarketRegime, heading: str) -> list[str]:
+    """One regime as a titled block: each dimension, its state, and its evidence."""
+    lines = [_rule(heading)]
+    lines.append(_row("As of", regime.as_of.isoformat(), "last closed candle"))
+    for dimension in regime.dimensions:
+        lines.append("")
+        lines.append(_row(dimension.name.value, dimension.state.value))
+        lines.extend(_evidence_lines(dimension))
+        if dimension.reason is not None:
+            lines.extend(
+                textwrap.wrap(
+                    dimension.reason,
+                    width=_WIDTH,
+                    initial_indent="   why: ",
+                    subsequent_indent="        ",
+                )
+            )
+    return lines
+
+
+def render_regime_sheet(
+    regime: MarketRegime, *, limitations: tuple[Limitation, ...] = ()
+) -> str:
+    """Render one timeframe's regime as a plain-text page.
+
+    Shows every dimension, every piece of evidence behind it including the
+    evidence that conflicts and the evidence that was unavailable, the reason a
+    dimension declined to classify, and the exact policy that produced the
+    result. A regime without its thresholds is not reproducible, which is the
+    objection `ARCH` §9 raises against a regime call buried in a prompt.
+
+    There is no overall line and no score, because there is no overall state and
+    no score to print.
+    """
+    lines: list[str] = []
+    lines.append(_rule())
+    lines.append(" FMITS MARKET REGIME — the environment, not a direction")
+    lines.append(_rule())
+    lines.append(_row("Asset", regime.symbol))
+    lines.append(_row("Timeframe", regime.timeframe))
+    lines.extend(_regime_block(regime, "REGIME BY DIMENSION"))
+    lines.append("")
+    lines.extend(_policy_lines(regime.policy))
+    if limitations:
+        lines.append("")
+        lines.extend(_limitation_lines(limitations))
+    lines.append("")
+    lines.extend(_regime_closing())
+    return "\n".join(lines)
+
+
+def _policy_lines(policy: RegimePolicy) -> list[str]:
+    """The exact parameters used, so the classification can be reproduced."""
+    lines = [_rule("POLICY THAT PRODUCED THIS")]
+    for name, value in policy.describe():
+        lines.append(_row(name, value))
+    return lines
+
+
+def _limitation_lines(limitations: tuple[Limitation, ...]) -> list[str]:
+    """The shared limitations block, wrapped exactly as the fact sheets wrap it."""
+    lines = [_rule("LIMITATIONS OF THIS CLASSIFICATION")]
+    for limitation in limitations:
+        head = f" [{limitation.code}] "
+        lines.extend(
+            textwrap.wrap(
+                limitation.text,
+                width=_WIDTH,
+                initial_indent=head,
+                subsequent_indent=" " * len(head),
+            )
+        )
+    return lines
+
+
+def _regime_closing() -> list[str]:
+    """The closing disclaimer, worded for a classification rather than a measurement."""
+    return [
+        _rule(),
+        " A regime describes the environment. It is not a direction, a ranking or",
+        " a recommendation, and none is expressed or implied.",
+        _rule(),
+    ]
+
+
+def render_multi_timeframe_regime(sheet: MultiTimeframeRegime) -> str:
+    """Render one regime per role, side by side, with nothing derived from the set."""
+    lines: list[str] = []
+    lines.append(_rule())
+    lines.append(" FMITS MULTI-TIMEFRAME REGIME — the environment, not a direction")
+    lines.append(_rule())
+    lines.append(_row("Asset", sheet.symbol))
+    lines.append(_row("Exchange / source", sheet.source))
+    lines.append(
+        _row("Newest data", sheet.newest_as_of.isoformat(), "not a shared instant")
+    )
+    for view in sheet.views:
+        lines.append("")
+        lines.extend(
+            _regime_block(
+                view.regime, f"{view.role.value.upper()} · {view.interval}"
+            )
+        )
+    lines.append("")
+    lines.append(_rule("REGIME BY ROLE"))
+    for view in sheet.views:
+        states = " · ".join(d.state.value for d in view.regime.dimensions)
+        lines.append(_row(f"{view.role.value} · {view.interval}", states))
+    lines.append(" Reported side by side. Nothing is derived from the combination.")
+    lines.append("")
+    lines.extend(_policy_lines(sheet.policy))
+    lines.append("")
+    lines.extend(_limitation_lines(sheet.limitations))
+    lines.append("")
+    lines.extend(_regime_closing())
     return "\n".join(lines)

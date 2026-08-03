@@ -41,12 +41,23 @@ from typing import Callable, Sequence
 
 from fmis.market_structure import DEFAULT_LEFT_BARS, DEFAULT_RIGHT_BARS
 from fmis.pipeline.market_analysis import PipelineError
+from fmis.market_regime import RegimePolicy
+from fmis.pipeline.regime import (
+    REGIME_LIMITATIONS,
+    multi_timeframe_regime_for_symbol,
+    regime_for_symbol,
+)
 from fmis.pipeline.multi_timeframe import (
     DEFAULT_TIMEFRAMES,
     TimeframeRole,
     multi_timeframe_facts_for_symbol,
 )
-from fmis.pipeline.render import render_fact_sheet, render_multi_timeframe_sheet
+from fmis.pipeline.render import (
+    render_fact_sheet,
+    render_multi_timeframe_regime,
+    render_multi_timeframe_sheet,
+    render_regime_sheet,
+)
 from fmis.pipeline.structural_facts import (
     DetectionSettings,
     structural_facts_for_symbol,
@@ -175,6 +186,123 @@ def _run_mtf(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _configure_regime(parser: argparse.ArgumentParser) -> None:
+    _add_common_arguments(parser)
+    parser.add_argument(
+        "-i",
+        "--interval",
+        default=_DEFAULT_INTERVAL,
+        help=f"candle interval (default: {_DEFAULT_INTERVAL})",
+    )
+    parser.add_argument(
+        "--multi",
+        action="store_true",
+        help=(
+            "classify each of the three roles instead of one interval. Each view "
+            "is classified alone; nothing is derived from their combination."
+        ),
+    )
+    for role in (TimeframeRole.CONTEXT, TimeframeRole.SETUP, TimeframeRole.EXECUTION):
+        default = DEFAULT_TIMEFRAMES[role]
+        parser.add_argument(
+            f"--{role.value}",
+            default=default,
+            metavar="INTERVAL",
+            help=(
+                f"interval playing the {role.value} role under --multi "
+                f"(default: {default})"
+            ),
+        )
+    parser.add_argument(
+        "--band",
+        type=float,
+        default=None,
+        metavar="FRACTION",
+        help=(
+            "policy band for volatility and participation (default: "
+            f"{RegimePolicy().volatility_band}). One number producing two "
+            "mirrored edges, so an asymmetric gate cannot be expressed."
+        ),
+    )
+    parser.add_argument(
+        "--transition-lookback",
+        type=int,
+        default=None,
+        metavar="BARS",
+        help=(
+            "how recent a change of character must be for structure to read as "
+            f"transitioning (default: {RegimePolicy().transition_lookback_bars})"
+        ),
+    )
+
+
+def _policy_from(args: argparse.Namespace) -> RegimePolicy:
+    """Build the policy from the flags, falling back to each stated default.
+
+    The band reaches both dimensions from **one** flag. Two flags would let a
+    caller skew volatility against participation, which is the shape of gate
+    `docs/analysis-notes.md` blames for the v2 bias, expressed at the CLI.
+    """
+    default = RegimePolicy()
+    custom = args.band is not None or args.transition_lookback is not None
+    return RegimePolicy(
+        policy_id=f"{default.policy_id}-custom" if custom else default.policy_id,
+        volatility_band=(
+            default.volatility_band if args.band is None else args.band
+        ),
+        participation_band=(
+            default.participation_band if args.band is None else args.band
+        ),
+        transition_lookback_bars=(
+            default.transition_lookback_bars
+            if args.transition_lookback is None
+            else args.transition_lookback
+        ),
+    )
+
+
+def _run_regime(args: argparse.Namespace) -> int:
+    policy = _policy_from(args)
+    if args.multi:
+        _, regimes = multi_timeframe_regime_for_symbol(
+            args.symbol,
+            timeframes={
+                TimeframeRole.CONTEXT: args.context,
+                TimeframeRole.SETUP: args.setup,
+                TimeframeRole.EXECUTION: args.execution,
+            },
+            limit=args.limit,
+            policy=policy,
+            detection=_detection_from(args),
+        )
+        print(render_multi_timeframe_regime(regimes))
+        return EXIT_OK
+    _, regime = regime_for_symbol(
+        args.symbol,
+        args.interval,
+        limit=args.limit,
+        policy=policy,
+        detection=_detection_from(args),
+    )
+    print(render_regime_sheet(regime, limitations=REGIME_LIMITATIONS))
+    return EXIT_OK
+
+
+REGIME_COMMAND = Command(
+    name="regime",
+    help="classify the market environment for one symbol",
+    description=(
+        "Fetch public candles for SYMBOL and classify three environments — "
+        "structure, volatility and participation — each with the evidence "
+        "behind it, the evidence against it, what was unavailable, and the exact "
+        "policy that produced the result. A regime is not a direction and not a "
+        "recommendation."
+    ),
+    configure=_configure_regime,
+    run=_run_regime,
+)
+
+
 FACTS_COMMAND = Command(
     name="facts",
     help="print the deterministic fact sheet for one symbol on one timeframe",
@@ -202,7 +330,7 @@ MTF_COMMAND = Command(
 
 #: The single registry. `build_parser` and `main` both read it, so a command
 #: cannot exist in the parser without a runner, or vice versa.
-COMMANDS: tuple[Command, ...] = (FACTS_COMMAND, MTF_COMMAND)
+COMMANDS: tuple[Command, ...] = (FACTS_COMMAND, MTF_COMMAND, REGIME_COMMAND)
 
 
 def build_parser() -> argparse.ArgumentParser:

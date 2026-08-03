@@ -188,8 +188,8 @@ changes the answer on more than a third of them — the defect and the proof tha
 nothing else, measured on one data set.
 
 **Live.** `fmits facts BTCUSDT --interval 4h --limit 200` and `fmits mtf BTCUSDT -n 260` both render
-correctly against real Binance data, now printing **six** limitations rather than seven, with
-`ADR-0020 D1` absent from both.
+correctly against real Binance data: `fmits facts` now prints **five** limitations rather than six and
+`fmits mtf` **eight** rather than nine, with `ADR-0020 D1` absent from both.
 
 ## 7. What it does not claim
 

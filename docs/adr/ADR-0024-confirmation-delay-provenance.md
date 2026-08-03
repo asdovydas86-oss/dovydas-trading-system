@@ -157,9 +157,10 @@ express the mistake.
 feeding two consumers is replaced by one asserting no `confirmation_bars=` argument exists anywhere in
 the module.
 
-**One limitation leaves the product.** `ADR-0020 D1` is removed from `LIMITATIONS`, so both the
-single-timeframe and multi-timeframe sheets print six limitations rather than seven. A limitation kept
-past its fix teaches a reader to discount the list.
+**One limitation leaves the product.** `ADR-0020 D1` is removed from `LIMITATIONS`, so the
+single-timeframe sheet prints **five** limitations rather than six, and the multi-timeframe sheet —
+which adds AG-1 to AG-3 — prints **eight** rather than nine. A limitation kept past its fix teaches a
+reader to discount the list.
 
 **Public API changes** — the migration is documented in the design record:
 

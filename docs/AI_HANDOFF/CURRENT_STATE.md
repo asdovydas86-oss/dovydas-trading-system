@@ -103,7 +103,8 @@ uncommitted at time of writing).
   **AF and AG both lose their duplicated delay configuration.** `structural_facts` reads `right_bars`
   once and hands it to `detect_swings` alone; the AF-era guard asserting one read feeding two
   consumers is replaced by one asserting no `confirmation_bars=` argument exists in the module.
-  **`ADR-0020 D1` is removed from `LIMITATIONS`**, so both sheets now print six limitations, not seven.
+  **`ADR-0020 D1` is removed from `LIMITATIONS`**, so `fmits facts` now prints five limitations rather
+  than six, and `fmits mtf` eight rather than nine.
 
   **Public API changes.** `SwingPoint` and `LevelOrigin` each gain a required `confirmation_bars` field
   and a `knowable_from` property; `SwingComparison` rejects a pair whose windows disagree;

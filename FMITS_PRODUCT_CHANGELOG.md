@@ -195,8 +195,8 @@ The delay is now stamped at detection onto every swing, copied onto every level'
 from there. The argument is **removed** from every public entry point, so the mistake cannot be
 expressed rather than being warned about.
 
-**The one thing the owner will actually see.** Both sheets now print **six limitations instead of
-seven**. `ADR-0020 D1` — *"the confirmation delay is carried on no derived fact"* — is gone, because it
+**The one thing the owner will actually see.** `fmits facts` now prints **five** limitations instead
+of six, and `fmits mtf` **eight** instead of nine. `ADR-0020 D1` — *"the confirmation delay is carried on no derived fact"* — is gone, because it
 stopped being true. A limitation kept past its fix teaches a reader to discount the list.
 
 **Blocker removed.** The Market Regime Engine (`AI`) is the second consumer of

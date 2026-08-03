@@ -262,8 +262,8 @@ independent review is complete and all three real-data surfaces work.
 **Product value delivered.** **Blocker removed**, as promised — and one reliability improvement the
 owner can see. Every break and change of character on a fact sheet is now guaranteed to have been
 derived under the confirmation delay detection actually used, because supplying a different one is no
-longer expressible. ADR-0020 D1 is closed and has left the printed limitations: both sheets now show
-six, not seven.
+longer expressible. ADR-0020 D1 is closed and has left the printed limitations: `fmits facts`
+now shows five rather than six, and `fmits mtf` eight rather than nine.
 
 **What the owner can now do that was impossible before.** Nothing new directly — this was a
 blocker-removal milestone under the product-first rule, and it says so. What changed is that a whole

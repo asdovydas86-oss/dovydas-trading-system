@@ -11,7 +11,7 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `99483494ea44e00f2c3a8d3256d6288f6c7035c5` (Milestone AH) |
+| **Last verified against** | `cd4bb574e3afbedeeb402fbaf2e254a5a9b5f8ca` (Milestone AI) |
 | **Verified on** | 2026-08-03 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -70,26 +70,33 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AH commit** | `99483494ea44e00f2c3a8d3256d6288f6c7035c5` |
-| **HEAD** | this documentation commit, on top of `9948349` |
-| **`origin/main`** | `d0a88b5` — **behind local main by the two AH commits; not pushed** |
+| **Milestone AI commit** | `cd4bb574e3afbedeeb402fbaf2e254a5a9b5f8ca` |
+| **HEAD** | this documentation commit, on top of `cd4bb57` |
+| **`origin/main`** | `d0a88b5` — **behind local main by four commits (AH and AI); not pushed** |
 | **Working tree** | clean |
-| **Test count** | **3,449 passing**, identically under `-W error` |
-| **Public exports / collisions** | 154 / 0 (unchanged by AH) |
+| **Test count** | **3,582 passing**, identically under `-W error` |
+| **Public exports / collisions** | 183 / 0 (154 before AI) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 |
-| **Latest completed milestone** | **AH — Confirmation-Delay Provenance v1** (`9948349`) |
-| **Product Value Level** | **Level 1.5 — multi-timeframe deterministic analysis** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
+| **Latest completed milestone** | **AI — Market Regime Engine v1** (`cd4bb57`) |
+| **Product Value Level** | **Level 2 — deterministic context: multi-timeframe facts plus a classified environment** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **AI — Market Regime Engine** (not started) |
+| **Immediate next milestone** | **AJ — Swing Trading Workspace** (not started) |
 
 ### Current user-visible capability
 
 ```
-fmits mtf   BTCUSDT -n 260                 # 1W context · 1D setup · 4H execution
-fmits facts BTCUSDT --interval 4h          # one timeframe, exhaustively
-python -m fmis.pipeline mtf BTCUSDT        # works without reinstalling
+fmits regime BTCUSDT --multi               # the environment, per role, with evidence
+fmits regime BTCUSDT --interval 4h         # one timeframe, classified
+fmits mtf    BTCUSDT -n 260                # 1W context · 1D setup · 4H execution
+fmits facts  BTCUSDT --interval 4h         # one timeframe, exhaustively
+python -m fmis.pipeline regime BTCUSDT     # works without reinstalling
 ```
+
+`regime` classifies three **environments** — structure, volatility and participation — each with the
+evidence behind it, the evidence against it, what was unavailable, and the exact policy that produced
+it. It is **not a direction**: `trending` does not mean rising. Under `--multi` each role is
+classified alone and nothing is derived from the combination.
 
 `mtf` returns three **role-labelled** views of one instrument, each with its own `as_of` and
 staleness, their structural trends side by side and nothing derived from the combination.
@@ -107,57 +114,39 @@ close, and the inherited limitations — computed from live exchange data.
 
 Exactly one item.
 
-### `AI` — Market Regime Engine
+### `AJ` — Swing Trading Workspace
 
 | Field | Value |
 |---|---|
-| **ID** | AI |
-| **Epic** | EP-01 Technical Analysis & Market Structure |
+| **ID** | AJ |
+| **Epic** | EP-02 Swing Trading Product |
 | **Status** | **NOW** |
-| **Priority** | **Critical** |
-| **Estimated size** | 2–3 weeks *(source: reports/0005 Phase 3)* |
-| **Confidence** | Medium — the first interpretation layer in the repository |
+| **Priority** | High |
+| **Estimated size** | 2–3 weeks *(source: reports/0005 Phase 4)* |
+| **Confidence** | Medium — the first surface built for a workflow rather than an instrument |
 
-**Product value.** Moves the regime call out of the TradingView prompt into versioned, testable code.
+**Product value.** The first surface built for a **workflow** rather than for an instrument.
 
-**What the owner can do after this that was impossible before.** See a regime classification that is
-reproducible, diffable and checkable against history — instead of one produced inside a prompt that
-cannot be versioned. This is the direct structural fix for the v2 LONG-bias failure recorded in
-`docs/analysis-notes.md`.
+**What the owner can do after this that was impossible before.** Work a swing candidate end to end in
+one place — structure, regime, levels, evidence — instead of assembling it from four CLI commands and
+a chart.
 
-**Why now.** Both dependencies are met: AG made regime per-timeframe possible, and **AH removed the
-hazard that made a second consumer of `derive_structure_breaks` unsafe**. Regime is that second
-consumer, and the confirmation delay can no longer disagree with detection.
+**Why now.** Its dependency is met: `reports/0006` §2 rejected building a workspace before regime
+existed, precisely because it would present facts that were incomplete and, on one timeframe,
+misleading. `AI` shipped that regime.
 
-**Dependencies.** AG (done) **and** AH (done, `9948349`).
-**Acceptance.** Regime output carries component evidence and uncertainty, never a bare label; no
-direction vocabulary at this layer; thresholds are versioned parameters, never literals.
-**Out of scope.** Trade selection, sizing, strategy conditioning.
-**Risks.** Being trusted before validation against history — mitigate by replaying over the archive.
-**Related.** `reports/0003` §L5 · `reports/0004` C-023 · `reports/0005` Phase 3.
+**Dependencies.** AI (done, `cd4bb57`).
+**Out of scope.** Sizing and portfolio context, which arrive with EP-04.
+**Related.** `reports/0004` §12 · `reports/0005` Phase 4 · `reports/0006` §2.
 
-> **Not started.** This item is sequenced, not in progress. No Market Regime Engine code, design or
-> ADR exists in the repository.
+> **Not started.** This item is sequenced, not in progress. No workspace code, design or ADR exists in
+> the repository.
 
 ## 6. NEXT
 
 The forced sequence. Each item is blocked on the one above it.
 
-*AH shipped; AI moved to NOW.*
-
-### `AJ` — Swing Trading Workspace
-
-| Field | Value |
-|---|---|
-| **Epic** | EP-02 Swing Trading Product · **Status** NEXT · **Priority** High |
-| **Product value** | The first surface built for a workflow rather than for an instrument |
-
-**What the owner can do after this that was impossible before.** Work a swing candidate end to end in
-one place — structure, regime, levels, evidence — instead of assembling it from CLI output and a chart.
-
-**Dependencies.** AI. Deliberately *after* regime: `reports/0006` §2 rejected building a workspace
-earlier precisely because it would present facts that were incomplete and, on one timeframe,
-misleading. **Out of scope.** Sizing and portfolio context, which arrive with EP-04.
+*AI shipped; AJ moved to NOW.*
 
 ### `AK` — Deterministic daily workflow v1
 
@@ -228,6 +217,37 @@ Repository-verified only. Every SHA below was confirmed to exist with `git cat-f
 The **complete** 30-milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the three most recent product-relevant milestones.
+
+### `AI` — Market Regime Engine v1 · **DONE**
+
+| Field | Value |
+|---|---|
+| **Commit** | **`cd4bb574e3afbedeeb402fbaf2e254a5a9b5f8ca`** |
+| **ADR** | [ADR-0025](docs/adr/ADR-0025-market-regime-engine-v1.md) |
+| **Design** | [MARKET_REGIME_ENGINE_V1.md](docs/design/MARKET_REGIME_ENGINE_V1.md) |
+| **Review** | [MARKET_REGIME_ENGINE_V1_REVIEW.md](docs/reviews/MARKET_REGIME_ENGINE_V1_REVIEW.md) — no P0, no P1, **4 P2 fixed**, 3 P3 |
+| **Tests** | 3,449 → **3,582** (+133). Mutation 45/45, zero survivors |
+
+**Product value delivered.** The regime call moves out of a prompt and into versioned, testable code.
+`fmits regime BTCUSDT` classifies three environments with the evidence behind each, the evidence
+against it, what was unavailable, and the exact thresholds used.
+
+**What the owner can now do that was impossible before.** Get a market-environment assessment that is
+reproducible, diffable and checkable against history — and see *why* it says what it says, including
+where it refuses to say anything. Previously this judgement existed only inside the v3 prompt's STEP 1.
+
+**How the v2 bias is prevented.** Not by review discipline but by construction: evidence votes by
+family so correlated indicators cannot corroborate themselves, a threshold band is one number whose
+edges are multiplicative mirrors so an asymmetric gate cannot be expressed, and the engine never
+learns which way a trend points.
+
+**Limitations shipped with it.** `AI-1` regime is not direction · `AI-2` volatility and participation
+each rest on a single evidence family, so neither can be corroborated within its dimension · `AI-3` the
+thresholds are stated policy, not measurements · `AI-4` each timeframe is classified alone.
+
+**Status note.** DONE on repository evidence, as §11 rule 3 requires: the commit above exists, the full
+suite is green under `-W error`, coverage is 100 % on every module touched, mutation is clean, the
+independent review is complete and all three real-data surfaces work.
 
 ### `AH` — Confirmation-Delay Provenance v1 · **DONE**
 
@@ -378,7 +398,7 @@ known before sequencing.
 
 ## 10. Open decisions
 
-Carried, not solved. None of these blocks AI.
+Carried, not solved. None of these blocks AJ.
 
 | ID | Decision | Blocks | Source |
 |---|---|---|---|

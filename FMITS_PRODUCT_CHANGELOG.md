@@ -7,7 +7,7 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `99483494ea44e00f2c3a8d3256d6288f6c7035c5` (Milestone AH) |
+| **Last verified against** | `cd4bb574e3afbedeeb402fbaf2e254a5a9b5f8ca` (Milestone AI) |
 | **Verified on** | 2026-08-03 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -67,16 +67,21 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `9948349` — what the owner can do today.**
+**As of `cd4bb57` — what the owner can do today.**
 
 ```
-fmits mtf   BTCUSDT -n 260                     # 1W context · 1D setup · 4H execution
-fmits facts BTCUSDT --interval 4h --limit 200  # one timeframe, exhaustively
-python -m fmis.pipeline mtf BTCUSDT            # works without reinstalling
+fmits regime BTCUSDT --multi                    # the environment, per role, with evidence
+fmits regime BTCUSDT --interval 4h              # one timeframe, classified
+fmits mtf    BTCUSDT -n 260                     # 1W context · 1D setup · 4H execution
+fmits facts  BTCUSDT --interval 4h --limit 200  # one timeframe, exhaustively
+python -m fmis.pipeline regime BTCUSDT          # works without reinstalling
 ```
 
 **Delivered:**
 
+- a **deterministic market-regime classification**: three environments — structure, volatility and
+  participation — each with the evidence for it, the evidence against it, what was unavailable, and the
+  exact policy that produced it. **Not a direction**, and no overall label or score;
 - a **multi-timeframe deterministic fact sheet**: three role-labelled views of one instrument, each
   with its own `as_of` and staleness, structural trends side by side, **nothing derived from their
   combination**;
@@ -97,7 +102,7 @@ python -m fmis.pipeline mtf BTCUSDT            # works without reinstalling
 | AI interpretation of any kind — the numbers are computed, not read | EP — after regime |
 | Trade signal, direction, ranking, score or recommendation | Strategy layer, `EP-13` |
 | Cross-timeframe **synthesis** — the views are reported, never reconciled | `AI` Market Regime Engine |
-| Market regime classification | `AI` |
+| ~~Market regime classification~~ | **Delivered by `AI`** — see below |
 | Support/resistance naming — levels are reported as *nearest above / below* | `EP-01` |
 | Portfolio or risk context, position sizing | `EP-04`, blocked on **D-02** |
 | Persistence — a sheet is printed, never stored | `AL`, blocked on **D-01** |
@@ -115,6 +120,56 @@ makes no directional claim. Every rung of the automation ladder remains unstarte
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-03 · `AI` — Market Regime Engine v1
+
+**Status:** Released · **third user-visible product capability**
+**Commit:** `cd4bb574e3afbedeeb402fbaf2e254a5a9b5f8ca`
+Validated before versioning: 3,582 tests green including `-W error`, coverage 100 % on every module
+touched, 45 mutation probes all detected with zero survivors, independent review complete, and all
+three real-data surfaces working.
+
+**Product capability added.** `fmits regime SYMBOL [--multi]` — a deterministic classification of the
+market **environment**: structure (trending / ranging / transitioning), volatility (expanding /
+contracting / steady) and participation (elevated / subdued / typical), each with the evidence behind
+it and the exact thresholds that produced it.
+
+**What the owner can now do.** Get a regime assessment that is reproducible, diffable and checkable
+against history, and see *why* it says what it says — including where it refuses to say anything.
+Until now that judgement existed only inside the v3 TradingView prompt's STEP 1, where it could not be
+versioned or tested.
+
+**Why this matters more than convenience.** `docs/analysis-notes.md` records what an unexamined regime
+call cost in v2: a trend gate counted twice so a LONG began with two free confirmations, and branches
+that looked symmetric while one required a deep bear market. Those failures are not prevented here by
+discipline but by construction — evidence votes by family, a threshold band is one number whose edges
+are multiplicative mirrors, and the engine never learns which way a trend points.
+
+**Limitations.**
+
+- **A regime is not a direction.** `trending` does not mean rising. Which way structure points is a
+  separate fact on the fact sheet, and this classification deliberately does not restate it. It also
+  diverges from the v3 prompt, which classifies BULLISH / BEARISH / RANGE.
+- **Volatility and participation each rest on a single evidence family**, so neither can be
+  corroborated or contradicted within its own dimension. Only structure requires two families to agree.
+- **The thresholds are stated policy, not measurements.** No backtest justifies them, because none
+  exists yet.
+- **Each timeframe is classified alone.** Under `--multi` the three regimes are reported side by side
+  and never reconciled.
+- There is **no overall regime label and no confidence score**, deliberately.
+
+**Safety / risk notes.** No order placement, no credentials, no directional output, no recommendation.
+The engine cannot express a trade idea.
+
+**Related.** ADR: [ADR-0025](docs/adr/ADR-0025-market-regime-engine-v1.md) ·
+Design: [MARKET_REGIME_ENGINE_V1](docs/design/MARKET_REGIME_ENGINE_V1.md) ·
+Review: [MARKET_REGIME_ENGINE_V1_REVIEW](docs/reviews/MARKET_REGIME_ENGINE_V1_REVIEW.md)
+— no P0, no P1, four P2 found and fixed, three P3 · Contract: `ARCH` §9.
+
+**Breaking changes.** None. `fmits facts` and `fmits mtf` compute and print exactly what they did:
+their feature sets are byte-identical and tests assert neither page shows regime vocabulary.
 
 ---
 
@@ -338,17 +393,17 @@ fact that matters — the product began on 2026-08-02.
 
 > **Unreleased. Planned. Not available.** Nothing in this section exists in the repository.
 
-### `AI` — Market Regime Engine — **UNRELEASED**
+### `AJ` — Swing Trading Workspace — **UNRELEASED**
 
 **Status:** NOW on the [product backlog](FMITS_PRODUCT_BACKLOG.md) · **not started** · no commit, no
 design and no ADR exists
 
-**Capability it will add.** A regime classification that is reproducible, diffable and checkable
-against history, instead of one produced inside a TradingView prompt that cannot be versioned.
+**Capability it will add.** A surface built for a **workflow** rather than for an instrument: working a
+swing candidate end to end in one place instead of assembling it from four commands and a chart.
 
 **What it will change for the owner.** Not yet decided in detail, and deliberately not described here
-as though it were. What can be said is that its precondition is met: `AH` removed the hazard that made
-a second consumer of `derive_structure_breaks` unsafe, and regime is that second consumer.
+as though it were. Its precondition is met: `reports/0006` §2 refused to build a workspace before a
+regime existed, because it would present facts that were incomplete and, on one timeframe, misleading.
 
 No further capability is listed. The sequence after it is on the backlog — this changelog records what
 shipped, not what is planned.
@@ -401,4 +456,4 @@ and mark the entry Foundational.
 
 ---
 
-*Living document · last verified against `9948349` on 2026-08-03*
+*Living document · last verified against `cd4bb57` on 2026-08-03*

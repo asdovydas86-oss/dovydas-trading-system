@@ -28,6 +28,11 @@ from fmis.market_structure import (
     required_candles,
 )
 
+#: The confirmation window every hand-built fixture point is confirmed under.
+#: Required since Milestone AH: a swing that does not state its window cannot
+#: say when it became knowable, and nothing downstream may assume one.
+CB = 2
+
 _BASE = datetime(2024, 1, 1, tzinfo=timezone.utc)
 PACKAGE_DIR = Path(ms.__file__).parent
 SRC = PACKAGE_DIR.parent  # src/fmis
@@ -98,12 +103,13 @@ def point(**overrides: object) -> SwingPoint:
         "type": SwingType.HIGH,
     }
     kwargs.update(overrides)
-    return SwingPoint(**kwargs)  # type: ignore[arg-type]
+    return SwingPoint(**kwargs, confirmation_bars=CB)  # type: ignore[arg-type]
 
 
-def test_swing_point_fields_are_exactly_four() -> None:
+def test_swing_point_fields_are_exactly_five() -> None:
+    """AH added `confirmation_bars`; the field order is part of the contract."""
     assert [f.name for f in fields(SwingPoint)] == [
-        "index", "timestamp", "price", "type",
+        "index", "timestamp", "price", "type", "confirmation_bars",
     ]
 
 
@@ -118,7 +124,9 @@ def test_swing_point_has_no_interpretation_fields() -> None:
 
 
 def test_swing_point_is_frozen_and_slotted() -> None:
-    assert SwingPoint.__slots__ == ("index", "timestamp", "price", "type")
+    assert SwingPoint.__slots__ == (
+        "index", "timestamp", "price", "type", "confirmation_bars",
+    )
     p = point()
     assert not hasattr(p, "__dict__")
     with pytest.raises(FrozenInstanceError):

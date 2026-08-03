@@ -64,7 +64,7 @@ right_bars`` closed candles yields an empty result, as does an empty series.
 from __future__ import annotations
 
 from fmis.data import CandleSeries
-from fmis.market_structure.models import SwingPoint, SwingType
+from fmis.market_structure.models import SwingPoint, SwingType, _require_bars
 
 __all__ = ["detect_swings", "required_candles", "DEFAULT_LEFT_BARS",
            "DEFAULT_RIGHT_BARS"]
@@ -85,15 +85,6 @@ def required_candles(left_bars: int, right_bars: int) -> int:
     return _require_bars(left_bars, "left_bars") + _require_bars(
         right_bars, "right_bars"
     ) + 1
-
-
-def _require_bars(value: object, field: str) -> int:
-    """A positive int. ``bool`` is rejected explicitly, being an int subclass."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(f"{field} must be an int, got {type(value).__name__}")
-    if value < 1:
-        raise ValueError(f"{field} must be at least 1, got {value}")
-    return value
 
 
 def _is_swing_high(highs: list[float], i: int, left: int, right: int) -> bool:
@@ -165,6 +156,7 @@ def detect_swings(
                     timestamp=candle.timestamp,
                     price=candle.high,
                     type=SwingType.HIGH,
+                    confirmation_bars=right,
                 )
             )
         if _is_swing_low(lows, index, left, right):
@@ -174,6 +166,7 @@ def detect_swings(
                     timestamp=candle.timestamp,
                     price=candle.low,
                     type=SwingType.LOW,
+                    confirmation_bars=right,
                 )
             )
 

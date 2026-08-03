@@ -29,13 +29,20 @@ every historical break non-reproducible without it.
 extreme. "Most extreme unbroken" is protected-level and liquidity logic, and is
 out of scope.
 
-**Eligibility begins at the level's confirmation bar**, ``origin.index +
-confirmation_bars`` — the earliest bar at which the level was knowable at all. A
-pivot at bar ``o`` is confirmed only once ``confirmation_bars`` further candles
-have closed, so treating it as the reference before then would let a prefix
-report a break the full run does not. That is measured, not theorised: 30
-violating prefixes across 40 seeded fixtures under pivot-bar eligibility, and 0
-under this rule. See ADR-0020 §2.4.
+**Eligibility begins at the level's confirmation bar**, ``origin.knowable_from``
+— the earliest bar at which the level was knowable at all. A pivot at bar ``o``
+is confirmed only once its confirmation window of further candles has closed, so
+treating it as the reference before then would let a prefix report a break the
+full run does not. That is measured, not theorised: 30 violating prefixes across
+40 seeded fixtures under pivot-bar eligibility, and 0 under this rule. See
+ADR-0020 §2.4.
+
+**The delay is read off the level, never supplied** (ADR-0024). Each origin
+records the window its pivot was confirmed under, so this module cannot be given
+a delay that disagrees with detection — the ADR-0020 D1 hazard is not warned
+about here, it is unrepresentable. One level set must agree on that window;
+mixing two is rejected, because "the most recent eligible level" would stop being
+well defined.
 
 **Structure breaks once.** At most one break per level, ever — the earliest
 qualifying crossing. A second close beyond an already-broken level is not a
@@ -81,53 +88,44 @@ _SIDE_RANK: Mapping[LevelSide, int] = MappingProxyType(
 )
 
 
-def _require_confirmation_bars(value: object) -> int:
-    """A non-negative int. ``bool`` is rejected explicitly, being an int subclass.
-
-    Zero is permitted and means "a level is eligible at its own pivot bar". That
-    is only correct for levels whose provenance did not come from a confirmation
-    window, so it is allowed rather than blessed — and the module docstring says
-    what it costs.
-
-    There is deliberately **no default**. The caller already chose ``right_bars``
-    when detecting swings, and a default would silently bind this layer to
-    `DEFAULT_RIGHT_BARS` and be wrong for anyone who chose otherwise — the exact
-    failure a default is supposed to prevent. Making it required makes the
-    coupling visible at every call site.
-    """
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(
-            f"confirmation_bars must be an int, got {type(value).__name__}"
-        )
-    if value < 0:
-        raise ValueError(f"confirmation_bars cannot be negative, got {value}")
-    return value
-
-
 def _levels_by_side(
-    levels: Sequence[PriceLevel], confirmation_bars: int
+    levels: Sequence[PriceLevel],
 ) -> dict[LevelSide, list[tuple[int, PriceLevel]]]:
     """Levels grouped by side and ordered by the bar each became eligible.
 
     Returns ``{side: [(eligible_from, level), …]}`` sorted ascending, which is what
     makes reference lookup a scan rather than a search over the whole set.
 
-    **This is the one place the eligibility arithmetic lives.**
-    ``eligible_from = origin.index + confirmation_bars`` is computed here and
-    nowhere else, so `derive_structure_breaks` never restates it: the reference
-    test already implies it (see there). Because two levels on one side may not
-    share an origin index, eligibility values are **strictly increasing** within a
-    side, which is what makes that implication exact.
+    **This is the one place the eligibility rule lives.** Eligibility begins at
+    the level's own ``origin.knowable_from`` — the bar at which the pivot became
+    knowable — and that value is read from the level, never supplied. The
+    arithmetic behind it belongs to `LevelOrigin.knowable_from` and is not
+    restated here, so this module holds the *decision* that eligibility starts
+    there while `fmis.level_crossing` holds the number.
 
     Validates, never repairs:
 
       * a level without provenance cannot be placed in time — rejected;
       * two levels on one side sharing an origin index make "the most recent
-        level" ambiguous — rejected.
+        level" ambiguous — rejected;
+      * levels whose origins disagree about the confirmation window did not come
+        from one detection run — rejected.
 
-    `structural_levels` can produce neither: it always attaches an origin, and
-    `fmis.market_structure`'s ordering rule already forces per-type strictly
-    increasing indices. Both failures therefore mean a hand-built set, where
+    **Why one window is required across the set.** ``eligible_from`` must be
+    *strictly increasing* within a side for `_reference`'s binary search to find
+    what a linear scan would, and for the reference test to imply eligibility
+    without restating it. With one shared window that follows from strictly
+    increasing origin indices, which the duplicate check above already forces.
+    With mixed windows it does not: a later pivot detected under a shorter window
+    can become knowable *before* an earlier one, and "the most recent eligible
+    level" stops being well defined. Mixing windows also means mixing detection
+    runs over one index space, which no producer in this repository can do.
+    Rejecting it keeps a proven property proven instead of silently weakening it.
+
+    `structural_levels` can produce none of the three: it always attaches an
+    origin, `fmis.market_structure`'s ordering rule already forces per-type
+    strictly increasing indices, and every origin in one run copies the same
+    ``right_bars``. All three failures therefore mean a hand-built set, where
     guessing would be inventing behaviour.
 
     Deliberately **private**: it is the reference-ranking rule, and a public
@@ -138,6 +136,8 @@ def _levels_by_side(
         LevelSide.LOWER: [],
     }
     seen: dict[tuple[LevelSide, int], PriceLevel] = {}
+    window: int | None = None
+    window_position = 0
 
     for position, level in enumerate(levels):
         if not isinstance(level, PriceLevel):
@@ -152,6 +152,16 @@ def _levels_by_side(
                 f"{level.price}); a break needs provenance to place the level "
                 "in time"
             )
+        if window is None:
+            window = origin.confirmation_bars
+            window_position = position
+        elif origin.confirmation_bars != window:
+            raise StructureBreakInputError(
+                f"levels[{position}] was confirmed under "
+                f"{origin.confirmation_bars} bars but levels[{window_position}] "
+                f"under {window}; one level set cannot mix confirmation windows, "
+                "because the most recent eligible level would be ambiguous"
+            )
         key = (level.side, origin.index)
         if key in seen:
             raise StructureBreakInputError(
@@ -160,7 +170,7 @@ def _levels_by_side(
                 "point would be ambiguous"
             )
         seen[key] = level
-        grouped[level.side].append((origin.index + confirmation_bars, level))
+        grouped[level.side].append((origin.knowable_from, level))
 
     for side in grouped:
         grouped[side].sort(key=lambda pair: pair[0])
@@ -201,23 +211,28 @@ def _reference(
 def derive_structure_breaks(
     levels: Sequence[PriceLevel],
     crossings: Sequence[LevelCrossingEvent],
-    *,
-    confirmation_bars: int,
 ) -> tuple[StructureBreak, ...]:
     """Every break of structure implied by ``levels`` and ``crossings``.
 
     Args:
         levels: the structural level set, as `structural_levels` returns. Order is
-            **not** part of the contract. Every level must carry provenance, and
-            no two levels on one side may share an origin index.
+            **not** part of the contract. Every level must carry provenance, no
+            two levels on one side may share an origin index, and every origin
+            must record the **same** confirmation window.
         crossings: the crossing history, as `derive_level_crossings` returns.
             Order is **not** part of the contract, and duplicated events collapse.
             Every crossing's level must be present in ``levels``.
-        confirmation_bars: the confirmation delay used when the underlying swings
-            were detected — the same ``right_bars`` passed to `detect_swings`.
-            **Required, with no default**, because it lives on none of the inputs
-            (ADR-0020 deferred question D1) and a default would silently be wrong
-            for any caller who chose a different lookback.
+
+    **There is no ``confirmation_bars`` argument, and its absence is the point**
+    (ADR-0024). Each level states the window it was confirmed under, on
+    ``origin.confirmation_bars``, so this function reads the delay off the data
+    that earned it. Until Milestone AH the delay was a required keyword argument
+    that lived on none of the inputs (ADR-0020 D1): supplying one that disagreed
+    with the ``right_bars`` used for detection silently changed which level was
+    the reference at every bar, and so which breaks and which changes of
+    character existed, **while raising no error** — 36.1 % of 300 seeded series
+    produced materially different breaks under a wrong value, none detected. A
+    caller can no longer express that mistake.
 
     Returns:
         An immutable tuple of `StructureBreak`, ordered by
@@ -229,17 +244,16 @@ def derive_structure_breaks(
         is at most one break per (bar, side). Empty when nothing broke.
 
     Raises:
-        TypeError: an argument is not a non-string sequence, an element has the
-            wrong type, or ``confirmation_bars`` is not an ``int``.
-        ValueError: ``confirmation_bars`` is negative.
+        TypeError: an argument is not a non-string sequence, or an element has
+            the wrong type.
         StructureBreakInputError: a level carries no provenance, two levels on one
-            side share an origin index, or a crossing references a level absent
-            from ``levels``.
+            side share an origin index, two levels disagree about the confirmation
+            window, or a crossing references a level absent from ``levels``.
 
-    The result is a pure function of the two inputs and the confirmation delay:
-    the same inputs always give the same output, permuting either input changes
-    nothing, duplicated crossings change nothing, and extending the underlying
-    series never alters a break already returned.
+    The result is a pure function of the two inputs: the same inputs always give
+    the same output, permuting either input changes nothing, duplicated crossings
+    change nothing, and extending the underlying series never alters a break
+    already returned.
 
     A single bar may produce **two** breaks — one upper, one lower. They share an
     index and a timestamp, and **their order is the level ordering, not a claim
@@ -258,11 +272,9 @@ def derive_structure_breaks(
             "crossings must be a sequence of LevelCrossingEvent, got "
             f"{type(crossings).__name__}"
         )
-    bars = _require_confirmation_bars(confirmation_bars)
-
     # Validate and rank before deriving, so a failure is deterministic and no
     # partial result is ever built.
-    ranked = _levels_by_side(levels, bars)
+    ranked = _levels_by_side(levels)
     known = {id(level) for level in levels}
 
     # The earliest qualifying crossing per level. Keyed by object identity rather
@@ -294,11 +306,11 @@ def derive_structure_breaks(
         # Eligibility and recency are **one** test, not two. `_reference`
         # returns the last level whose `eligible_from <= index`, and eligibility
         # values are strictly increasing within a side (two levels sharing an
-        # origin index are rejected above), so `_reference(...) is level` already
-        # implies `level.origin.index + bars <= crossing.index`. A separate
-        # eligibility check would be unreachable code that no test could
-        # distinguish — an equivalent mutant by construction. The arithmetic it
-        # would restate lives once, in `_levels_by_side`.
+        # origin index are rejected above, and a mixed confirmation window is
+        # rejected with them), so `_reference(...) is level` already implies
+        # `level.origin.knowable_from <= crossing.index`. A separate eligibility
+        # check would be unreachable code that no test could distinguish — an
+        # equivalent mutant by construction.
         if _reference(ranked[level.side], crossing.index) is not level:
             continue
         key = id(level)
@@ -306,13 +318,7 @@ def derive_structure_breaks(
         if previous is None or crossing.index < previous.index:
             earliest[key] = crossing
 
-    found = [
-        StructureBreak(
-            crossing=crossing,
-            eligible_from=crossing.level.origin.index + bars,
-        )
-        for crossing in earliest.values()
-    ]
+    found = [StructureBreak(crossing=crossing) for crossing in earliest.values()]
     found.sort(key=_break_key)
     return tuple(found)
 

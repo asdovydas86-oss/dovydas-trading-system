@@ -656,7 +656,9 @@ def test_limitations_are_inherited_plus_three() -> None:
 def test_the_three_new_limitation_codes_are_present() -> None:
     codes = {l.code for l in sheet().limitations}
     assert {"AG-1", "AG-2", "AG-3"} <= codes
-    assert {"ADR-0020 D1", "ADR-0019 D2"} <= codes
+    assert "ADR-0019 D2" in codes
+    # Inherited from AF, which dropped ADR-0020 D1 in Milestone AH.
+    assert "ADR-0020 D1" not in codes
 
 
 def test_ag2_states_no_synthesis_is_performed() -> None:
@@ -796,8 +798,9 @@ def test_render_shows_absent_structure_on_a_flat_view() -> None:
 
 def test_render_includes_all_limitations() -> None:
     text = render_module.render_multi_timeframe_sheet(sheet())
-    for code in ("ADR-0019 D2", "ADR-0020 D1", "AG-1", "AG-2", "AG-3"):
+    for code in ("ADR-0019 D2", "AG-1", "AG-2", "AG-3"):
         assert f"[{code}]" in text
+    assert "[ADR-0020 D1]" not in text
 
 
 def test_render_carries_the_disclaimer() -> None:

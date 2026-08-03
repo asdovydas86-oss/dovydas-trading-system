@@ -4,13 +4,74 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AG — Multi-Timeframe Fact Sheet v1 (2026-08-02).
-**Latest commit at time of writing:** `20b7331` — `docs(product): add product backlog and changelog`
-(Milestone AF is committed and pushed; the Milestone AG changes are uncommitted at time of writing).
+**Last updated for:** Milestone AH — Confirmation-Delay Provenance v1 (2026-08-03).
+**Latest commit at time of writing:** `d0a88b5` — `docs(product): record Milestone AG release`
+(Milestones AF and AG are committed and pushed; the Milestone AH changes are uncommitted at time of
+writing).
 
 ---
 
 ## Current milestone
+
+- **AH — Confirmation-Delay Provenance v1**: the milestone that **closes ADR-0020 D1**, the largest
+  remaining correctness hazard before the Market Regime Engine. Contracts in
+  [ADR-0024](../adr/ADR-0024-confirmation-delay-provenance.md); design in
+  [the design document](../design/CONFIRMATION_DELAY_PROVENANCE_V1.md); independent review in
+  [the review record](../reviews/CONFIRMATION_DELAY_PROVENANCE_V1_REVIEW.md).
+
+  **The problem it solved, measured.** `derive_structure_breaks` required a `confirmation_bars`
+  argument that had to equal the `right_bars` used for detection, and the number lived on none of the
+  inputs, so nothing could check it. A wrong value did not raise: it silently changed which level was
+  the reference at every bar, and therefore which breaks and which changes of character existed.
+  Across 300 seeded series against five wrong delays, **36.1 % produced materially different breaks
+  and zero raised an error**.
+
+  **What shipped:** the delay is stamped where it is known and travels with the facts derived from it.
+  `detect_swings` records `right_bars` on every `SwingPoint`; `structural_levels` copies it onto every
+  `LevelOrigin`; `derive_structure_breaks` reads `origin.knowable_from` and **no longer takes the
+  argument at all**. Neither does `contextual_structure_breaks`, and `structural_levels` never did.
+
+  **The mismatch is unrepresentable, not guarded.** The brief forbade a runtime warning over two
+  independent sources of truth, and no compatibility path was kept: an optional override would have
+  preserved the hazard exactly. `StructureBreak.eligible_from` became a **projection** of
+  `crossing.level.origin.knowable_from`, so a break can no longer disagree with its own level.
+
+  **`knowable_from`, not `eligible_from`.** *Knowable* is a fact about detection; *eligible* is a
+  break-of-structure decision that stays in `fmis.structure_break`. A first attempt named it
+  `confirmed_at` and `fmis.market_structure`'s vocabulary guard rejected it — `confirmed` is on the
+  banned interpretation list. The guard was right; the name changed and the guard was not weakened.
+
+  **One level set must agree on one window.** A mixed set is rejected as `StructureBreakInputError`,
+  because `eligible_from` must be strictly increasing within a side for `_reference`'s binary search
+  and for the single-test eligibility rule to hold. A window of at least 1 is required on both models,
+  which also makes a break at bar 0 unrepresentable — reachable before only from a hand-built fixture.
+
+  **AF and AG both lose their duplicated delay configuration.** `structural_facts` reads `right_bars`
+  once and hands it to `detect_swings` alone; the AF-era guard asserting one read feeding two
+  consumers is replaced by one asserting no `confirmation_bars=` argument exists in the module.
+  **`ADR-0020 D1` is removed from `LIMITATIONS`**, so both sheets now print six limitations, not seven.
+
+  **Public API changes.** `SwingPoint` and `LevelOrigin` each gain a required `confirmation_bars` field
+  and a `knowable_from` property; `SwingComparison` rejects a pair whose windows disagree;
+  `StructureBreak` keeps one field and projects `eligible_from`. **No package's `__all__` changed** —
+  13 / 19 / 5 as before. 80 test construction sites were migrated by AST position, with no default
+  added, so every site states the window it means.
+
+  **Quality.** 3,404 → **3,449 tests** (+45), identically under `-W error`. Coverage 100 % on every
+  module AH touched, except two at 99 % whose uncovered lines predate this milestone. **42 mutation
+  probes, 41 detected, 1 proven-equivalent survivor, 0 no-ops**, byte-identical restoration verified.
+  Public exports 154 / 0 collisions, import cycles 0, runtime dependencies 0.
+
+  **Behaviour is otherwise unchanged, and that is proved.** A reimplementation of the pre-AH algorithm
+  agrees with the new derivation on every break across 40 seeded series at four detection windows. On
+  the same fixtures a wrong delay changes the answer on more than a third — the defect and the proof
+  that removing it broke nothing, measured on one data set.
+
+  **The review found two P2s, both fixed.** The rendered detection row could not distinguish
+  `left_bars` from `right_bars` because every fixture used `L2 R2`; and the cross-window rejection
+  message was asserted only by substring, so a probe swapping the two reported windows survived. It
+  also recorded the one surviving probe as a **proven equivalent mutant** rather than rounding it to
+  zero.
 
 - **AG — Multi-Timeframe Fact Sheet v1**: the second milestone that adds **no engine**. Contracts in
   [ADR-0023](../adr/ADR-0023-multi-timeframe-composition.md); design in
@@ -37,9 +98,9 @@ update this file.
   it reading as a shared instant. `fmis.alignment` is deliberately unused: it serves arithmetic, and
   nothing here computes across timeframes.
 
-  **ADR-0020 D1 stays contained.** One `DetectionSettings` reaches every view — asserted by AST *and*
-  by object identity across all three calls. AG adds no second caller of `derive_structure_breaks`, so
-  the containment holds; the fix is still owed to its own milestone.
+  **ADR-0020 D1 stayed contained** — one `DetectionSettings` reaching every view, asserted by AST
+  *and* by object identity across all three calls. **Superseded by Milestone AH**, which removed the
+  argument entirely; the containment described here is history, not current behaviour.
 
   **`default_features()` unchanged.** `swing_features()` adds EMA(200) — the swing workflow's headline
   trend reference — without breaking `test_pipeline_market_analysis.py:128`, whose 60-candle fixture

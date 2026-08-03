@@ -54,6 +54,11 @@ from fmis.structural_trend import (
     derive_structural_trend_history,
 )
 
+#: The confirmation window every hand-built fixture point is confirmed under.
+#: Required since Milestone AH: a swing that does not state its window cannot
+#: say when it became knowable, and nothing downstream may assume one.
+CB = 2
+
 _BASE = datetime(2024, 1, 1, tzinfo=timezone.utc)
 PACKAGE_DIR = Path(st.__file__).parent
 
@@ -106,12 +111,12 @@ def swing(label: StructuralSwingLabel, index: int) -> StructuralSwing:
     # endswith, not "in": "higher_low" contains "high" but is a LOW-side label.
     kind = SwingType.HIGH if label.value.endswith("high") else SwingType.LOW
     earlier, later = _PRICES[label]
-    previous = SwingPoint(index=0, timestamp=_BASE, price=earlier, type=kind)
+    previous = SwingPoint(index=0, timestamp=_BASE, price=earlier, type=kind, confirmation_bars=CB)
     current = SwingPoint(
         index=index,
         timestamp=_BASE + timedelta(hours=4 * index),
         price=later,
-        type=kind,
+        type=kind, confirmation_bars=CB,
     )
     return label_swing(compare_swings(previous, current))
 
@@ -672,11 +677,11 @@ def test_a_decreasing_timestamp_is_rejected(fn) -> None:
     earlier = swing(StructuralSwingLabel.HIGHER_HIGH, 3)
     ahead = SwingPoint(
         index=3, timestamp=_BASE + timedelta(hours=4 * 40), price=110.0,
-        type=SwingType.HIGH,
+        type=SwingType.HIGH, confirmation_bars=CB,
     )
     moved = label_swing(
         compare_swings(
-            SwingPoint(index=0, timestamp=_BASE, price=100.0, type=SwingType.HIGH),
+            SwingPoint(index=0, timestamp=_BASE, price=100.0, type=SwingType.HIGH, confirmation_bars=CB),
             ahead,
         )
     )

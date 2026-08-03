@@ -26,19 +26,19 @@ for `market_analysis`, applied unchanged. A test asserts this module contains
 single bookkeeping subtraction lives in `_window_of`, which is reused rather than
 restated.
 
-**The confirmation delay has exactly one source (ADR-0020 D1 containment).**
-`derive_structure_breaks` requires a ``confirmation_bars`` that must equal the
-``right_bars`` used for detection, and ADR-0020 records that a mismatch is
-*undetectable*: it silently changes which level is the reference at every bar,
-and so which breaks and which changes of character exist. Carrying the delay on
-`LevelOrigin` is a separate milestone because it changes a shipped model.
+**The confirmation delay is no longer this module's problem (ADR-0024).**
+`DetectionSettings.right_bars` reaches `detect_swings` and stops there. Detection
+stamps the window onto every `SwingPoint`, `structural_levels` copies it onto
+every `LevelOrigin`, and `derive_structure_breaks` reads it off the levels — so
+this root passes the delay to exactly **one** callee and has no second call site
+to keep synchronised.
 
-Until then, this module closes the hazard **for itself, structurally**:
-`DetectionSettings.right_bars` is read once and passed to both consumers, so the
-two cannot be given different values through this root. A test asserts the module
-contains exactly one ``right_bars`` read site feeding both calls. That is
-containment, not a fix — every *other* caller of `derive_structure_breaks` remains
-exposed, and this module is deliberately not that fix.
+Milestone AF contained the ADR-0020 D1 hazard here by reading ``right_bars`` once
+and handing the same value to two consumers. That containment was real but local:
+every *other* caller of `derive_structure_breaks` stayed exposed. Milestone AH
+removed the argument entirely, so the mismatch is now unrepresentable everywhere
+rather than avoided in this file. The duplicated delay configuration this module
+used to carry is gone, and with it the test that policed it.
 
 Data policy, inherited unchanged from ADR-0007:
   * **Closed candles only, always.** The forming candle is excluded before any
@@ -126,14 +126,14 @@ class DetectionSettings:
     ``left_bars`` and ``right_bars`` are the neighbours `detect_swings` requires on
     each side of a pivot. ``right_bars`` additionally *is* the confirmation delay:
     a pivot at bar ``o`` is knowable only once ``right_bars`` further candles have
-    closed, which is exactly what `derive_structure_breaks` needs as
-    ``confirmation_bars``.
+    closed.
 
-    Holding both in one frozen object is the ADR-0020 D1 containment described in
-    the module docstring: `build_structural_facts` reads ``right_bars`` from here
-    and hands the *same* value to both consumers, so they cannot disagree.
-    Passing two separate integers would have reproduced the exact hazard this
-    exists to close.
+    Since ADR-0024 this object is the input to **detection only**. The delay it
+    names is stamped onto every `SwingPoint` detection produces and travels from
+    there to the levels and to break derivation, so nothing downstream reads
+    ``right_bars`` from here a second time. Under ADR-0020 D1 containment it was
+    read twice from this one field precisely so the two reads could not disagree;
+    that arrangement is no longer needed, because there is no second read.
 
     Validation is delegated, not restated: `required_candles` already rejects a
     non-int or negative bar count, and calling it in `__post_init__` means this
@@ -169,18 +169,19 @@ class Limitation:
 #: Limitations every sheet inherits from the layers it composes. Stated on the
 #: sheet rather than left in the ADRs, because a fact sheet that omits what it
 #: cannot see reads as more complete than it is.
+#: Every limitation the sheet inherits, each citing the ADR that owns it.
+#:
+#: **ADR-0020 D1 was removed in Milestone AH**, because it stopped being true.
+#: It read: *"The confirmation delay is carried on no derived fact … a level
+#: object read outside this sheet does not know the delay it was confirmed
+#: under."* Every `LevelOrigin` now records that delay (ADR-0024), so the sentence
+#: would be false on every run. A limitation kept past its fix teaches a reader to
+#: discount the list, which is worse than a shorter list.
 LIMITATIONS: tuple[Limitation, ...] = (
     Limitation(
         "ADR-0019 D2",
         "The first swing high and first swing low have no label and therefore no "
         "price level; the earliest reference on each side is missing.",
-    ),
-    Limitation(
-        "ADR-0020 D1",
-        "The confirmation delay is carried on no derived fact. This sheet passes "
-        "one value to both detection and break derivation, so they cannot "
-        "disagree here, but a level object read outside this sheet does not know "
-        "the delay it was confirmed under.",
     ),
     Limitation(
         "ADR-0020 D3",
@@ -331,15 +332,13 @@ def _structure_of(
 ) -> StructureFacts:
     """Run the complete structural chain over one closed series.
 
-    Every stage delegates in full. The only decision made here is that
-    ``detection.right_bars`` is read **once** and reaches both `detect_swings` and
-    `derive_structure_breaks`, so the ADR-0020 D1 mismatch is unrepresentable
-    through this root.
+    Every stage delegates in full, and since ADR-0024 there is no delay to
+    synchronise: ``detection.right_bars`` reaches `detect_swings` alone, and the
+    confirmation window travels to `derive_structure_breaks` on the levels
+    themselves.
     """
-    confirmation_bars = detection.right_bars
-
     swings = detect_swings(
-        series, left_bars=detection.left_bars, right_bars=confirmation_bars
+        series, left_bars=detection.left_bars, right_bars=detection.right_bars
     )
     labelled = label_swing_sequence(compare_swing_sequence(swings))
     state_history = derive_structural_sequence_state_history(labelled)
@@ -347,9 +346,7 @@ def _structure_of(
 
     levels = structural_levels(labelled)
     crossings = derive_level_crossings(series, levels)
-    breaks = derive_structure_breaks(
-        levels, crossings, confirmation_bars=confirmation_bars
-    )
+    breaks = derive_structure_breaks(levels, crossings)
     changes = derive_changes_of_character(breaks)
 
     return StructureFacts(

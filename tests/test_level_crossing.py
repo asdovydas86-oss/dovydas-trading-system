@@ -62,6 +62,11 @@ from fmis.series_context import (
     contextual_structural_trend_history,
 )
 
+#: The confirmation window every hand-built fixture point is confirmed under.
+#: Required since Milestone AH: a swing that does not state its window cannot
+#: say when it became knowable, and nothing downstream may assume one.
+CB = 2
+
 PACKAGE_DIR = Path(lc.__file__).parent
 _BASE = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
@@ -114,7 +119,7 @@ LOWER_100 = PriceLevel(100.0, LevelSide.LOWER)
 
 def origin(index: int, label: StructuralSwingLabel) -> LevelOrigin:
     return LevelOrigin(
-        index=index, timestamp=_BASE + timedelta(hours=4 * index), label=label
+        index=index, timestamp=_BASE + timedelta(hours=4 * index), label=label, confirmation_bars=CB
     )
 
 
@@ -123,7 +128,7 @@ def swing_point(index: int, price: float, type_: SwingType) -> SwingPoint:
         index=index,
         timestamp=_BASE + timedelta(hours=4 * index),
         price=price,
-        type=type_,
+        type=type_, confirmation_bars=CB,
     )
 
 
@@ -1202,7 +1207,7 @@ def test_every_label_has_exactly_one_permitted_side(label: StructuralSwingLabel)
 def test_level_origin_type_validation(kwargs: dict, message: str) -> None:
     base = dict(index=1, timestamp=_BASE, label=StructuralSwingLabel.HIGHER_HIGH)
     with pytest.raises(TypeError) as excinfo:
-        LevelOrigin(**{**base, **kwargs})
+        LevelOrigin(**{**base, **kwargs}, confirmation_bars=CB)
     assert str(excinfo.value) == message
 
 
@@ -1212,7 +1217,7 @@ def test_a_naive_origin_timestamp_is_rejected() -> None:
         LevelOrigin(
             index=1,
             timestamp=datetime(2024, 1, 1, 12, 0, 0),
-            label=StructuralSwingLabel.HIGHER_HIGH,
+            label=StructuralSwingLabel.HIGHER_HIGH, confirmation_bars=CB,
         )
     assert str(excinfo.value) == (
         "timestamp must be timezone-aware; a naive origin timestamp has no "
@@ -1226,7 +1231,7 @@ def test_a_non_utc_aware_origin_timestamp_is_accepted() -> None:
     got = LevelOrigin(
         index=1,
         timestamp=datetime(2024, 1, 1, 17, 0, tzinfo=offset),
-        label=StructuralSwingLabel.HIGHER_HIGH,
+        label=StructuralSwingLabel.HIGHER_HIGH, confirmation_bars=CB,
     )
     assert got.timestamp.utcoffset() == timedelta(hours=5)
 
@@ -1270,13 +1275,13 @@ def test_the_ordering_key_is_total_for_far_future_timestamps() -> None:
     a = PriceLevel(
         100.0,
         LevelSide.UPPER,
-        LevelOrigin(3, far, StructuralSwingLabel.HIGHER_HIGH),
+        LevelOrigin(3, far, StructuralSwingLabel.HIGHER_HIGH, confirmation_bars=CB),
     )
     b = PriceLevel(
         100.0,
         LevelSide.UPPER,
         LevelOrigin(
-            3, far + timedelta(microseconds=1), StructuralSwingLabel.HIGHER_HIGH
+            3, far + timedelta(microseconds=1), StructuralSwingLabel.HIGHER_HIGH, confirmation_bars=CB
         ),
     )
     assert a != b
@@ -1293,7 +1298,7 @@ def test_the_no_origin_sentinel_cannot_collide_with_a_real_timestamp() -> None:
         100.0,
         LevelSide.UPPER,
         LevelOrigin(
-            0, datetime.min.replace(tzinfo=timezone.utc), StructuralSwingLabel.HIGHER_HIGH
+            0, datetime.min.replace(tzinfo=timezone.utc), StructuralSwingLabel.HIGHER_HIGH, confirmation_bars=CB
         ),
     )
     bare = PriceLevel(100.0, LevelSide.UPPER)
@@ -1316,7 +1321,7 @@ def test_the_internal_order_guard_actually_fires() -> None:
 
 def test_a_negative_origin_index_is_rejected() -> None:
     with pytest.raises(ValueError) as excinfo:
-        LevelOrigin(index=-1, timestamp=_BASE, label=StructuralSwingLabel.HIGHER_HIGH)
+        LevelOrigin(index=-1, timestamp=_BASE, label=StructuralSwingLabel.HIGHER_HIGH, confirmation_bars=CB)
     assert str(excinfo.value) == "index cannot be negative, got -1"
 
 

@@ -52,6 +52,11 @@ from fmis.pipeline.structural_facts import (
 )
 from fmis.providers.binance import HttpResponse
 
+#: The confirmation window every hand-built fixture point is confirmed under.
+#: Required since Milestone AH: a swing that does not state its window cannot
+#: say when it became knowable, and nothing downstream may assume one.
+CB = 2
+
 _BASE = datetime(2024, 1, 1, tzinfo=timezone.utc)
 _OPEN_MS = 1_704_067_200_000
 _FOUR_HOURS_MS = 4 * 60 * 60 * 1000
@@ -216,7 +221,7 @@ def level(price: float, side: LevelSide, index: int, label: StructuralSwingLabel
         price=price,
         side=side,
         origin=LevelOrigin(
-            index=index, timestamp=_BASE + timedelta(hours=4 * index), label=label
+            index=index, timestamp=_BASE + timedelta(hours=4 * index), label=label, confirmation_bars=CB
         ),
     )
 
@@ -360,12 +365,19 @@ def test_module_imports_no_maths_library() -> None:
 # =================== ADR-0020 D1 containment (the key test) =================
 
 
-def test_detection_settings_is_the_only_confirmation_source() -> None:
-    """`right_bars` must reach both consumers from one read, or D1 reopens.
+def test_this_root_no_longer_carries_a_duplicated_delay(
+) -> None:
+    """AH: the delay reaches exactly one callee, so there is nothing to keep in step.
 
-    Parsed rather than asserted behaviourally, because the hazard is precisely
-    that a mismatch produces *plausible* output: only the call sites can show
-    that two different values are unrepresentable through this root.
+    This replaces the AF-era containment guard, which asserted that
+    ``detection.right_bars`` was read **once** and handed to **two** consumers.
+    That guard was correct while `derive_structure_breaks` demanded the number as
+    an argument; it is meaningless now that the argument is gone, and keeping it
+    would pin a workaround in place after its cause was removed.
+
+    What is asserted instead is stronger: this root reads ``right_bars`` once, it
+    reaches `detect_swings` only, and no ``confirmation_bars`` argument is passed
+    anywhere in the module.
     """
     tree = ast.parse(Path(sf_module.__file__).read_text())
     fn = next(
@@ -383,12 +395,17 @@ def test_detection_settings_is_the_only_confirmation_source() -> None:
         )
     ]
     body = "\n".join(ast.unparse(node) for node in statements)
-    # Exactly one read of detection.right_bars, bound to one local name.
     assert body.count("detection.right_bars") == 1, body
-    assert "confirmation_bars = detection.right_bars" in body
-    # Both consumers receive that same local name.
-    assert "right_bars=confirmation_bars" in body
-    assert "confirmation_bars=confirmation_bars" in body
+    assert "right_bars=detection.right_bars" in body
+    assert "derive_structure_breaks(levels, crossings)" in body
+
+    # And nowhere in the whole module does a confirmation delay get passed.
+    module_body = "\n".join(
+        ast.unparse(node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+    )
+    assert "confirmation_bars=" not in module_body
 
 
 def test_changing_right_bars_changes_both_detection_and_breaks() -> None:
@@ -417,8 +434,7 @@ def test_breaks_agree_with_a_hand_matched_direct_call() -> None:
     swings = detect_swings(series.closed(), left_bars=3, right_bars=right)
     levels = structural_levels(label_swing_sequence(compare_swing_sequence(swings)))
     expected = derive_structure_breaks(
-        levels, derive_level_crossings(series.closed(), levels),
-        confirmation_bars=right,
+        levels, derive_level_crossings(series.closed(), levels)
     )
     assert sheet.structure.breaks == expected
 
@@ -604,17 +620,28 @@ def test_limitations_are_present_and_sourced() -> None:
     sheet = build_structural_facts(fixture_series())
     assert sheet.limitations == LIMITATIONS
     codes = {limitation.code for limitation in sheet.limitations}
-    assert "ADR-0020 D1" in codes
     assert "ADR-0019 D2" in codes
+    # ADR-0020 D1 was removed in Milestone AH: the delay is now carried on every
+    # LevelOrigin, so the limitation it described is no longer true.
+    assert "ADR-0020 D1" not in codes
     for limitation in sheet.limitations:
         assert isinstance(limitation, Limitation)
         assert limitation.code.startswith("ADR-")
         assert limitation.text.endswith(".")
 
 
-def test_d1_limitation_states_containment_not_a_fix() -> None:
-    text = next(x.text for x in LIMITATIONS if x.code == "ADR-0020 D1")
-    assert "cannot disagree here" in text
+def test_the_d1_limitation_is_gone_because_it_was_fixed() -> None:
+    """AH: a limitation kept past its fix teaches a reader to discount the list."""
+    assert all(x.code != "ADR-0020 D1" for x in LIMITATIONS)
+    assert not any("confirmation delay is carried on no derived fact" in x.text
+                   for x in LIMITATIONS)
+
+    # The fact it used to disclaim now holds on every level the sheet reports.
+    sheet = build_structural_facts(fixture_series())
+    assert sheet.structure.levels
+    for level in sheet.structure.levels:
+        assert level.origin is not None
+        assert level.origin.confirmation_bars == sheet.detection.right_bars
 
 
 # ====================== latest projections ==================================
@@ -812,7 +839,7 @@ def test_render_includes_the_headline_facts() -> None:
         "fixture",
         "4h",
         sheet.as_of.isoformat(),
-        "confirmation_bars=2 (single source)",
+        "confirmation_bars=2 (carried on each level)",
         "Structural trend",
         "Break of structure",
         "Change of character",
@@ -821,6 +848,24 @@ def test_render_includes_the_headline_facts() -> None:
         "LIMITATIONS",
     ):
         assert expected in text, expected
+
+
+def test_render_reports_the_right_bars_window_not_the_left_one() -> None:
+    """The detection row names the **confirmation** window, which is `right_bars`.
+
+    Asserted with asymmetric settings on purpose: the default is L2 R2, so a
+    renderer that printed `left_bars` would be indistinguishable from a correct
+    one on every symmetric fixture. A mutation doing exactly that survived the
+    suite until this test existed.
+    """
+    sheet = build_structural_facts(
+        fixture_series(), detection=DetectionSettings(3, 5), source="fixture"
+    )
+    text = render_module.render_fact_sheet(sheet)
+    line = next(ln for ln in text.splitlines() if "Detection" in ln)
+    assert "L3 R5" in line
+    assert "confirmation_bars=5 (carried on each level)" in line
+    assert "confirmation_bars=3" not in line
 
 
 def test_render_marks_warming_up_features_with_a_dash_not_a_zero() -> None:

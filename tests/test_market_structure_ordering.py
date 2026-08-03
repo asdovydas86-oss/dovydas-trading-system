@@ -37,6 +37,11 @@ from fmis.market_structure import (
 )
 from fmis.market_structure import models
 
+#: The confirmation window every hand-built fixture point is confirmed under.
+#: Required since Milestone AH: a swing that does not state its window cannot
+#: say when it became knowable, and nothing downstream may assume one.
+CB = 2
+
 _BASE = datetime(2024, 1, 1, tzinfo=timezone.utc)
 PACKAGE_DIR = Path(ms.__file__).parent
 
@@ -55,7 +60,7 @@ COMPARISON_NOUNS = dict(
 
 
 def sp(index: int, price: float, type: SwingType = SwingType.HIGH, offset: int = 0) -> SwingPoint:
-    return SwingPoint(index, _BASE + timedelta(hours=4 * index + offset), price, type)
+    return SwingPoint(index, _BASE + timedelta(hours=4 * index + offset), price, type, confirmation_bars=CB)
 
 
 def key(point: SwingPoint) -> tuple[int, datetime, SwingType]:
@@ -122,8 +127,8 @@ _TS_B = _BASE
         ),
         (
             [
-                SwingPoint(0, _TS_A, 1.0, SwingType.HIGH),
-                SwingPoint(1, _TS_B, 1.0, SwingType.LOW),
+                SwingPoint(0, _TS_A, 1.0, SwingType.HIGH, confirmation_bars=CB),
+                SwingPoint(1, _TS_B, 1.0, SwingType.LOW, confirmation_bars=CB),
             ],
             "points must be ordered by timestamp; points[1] has "
             "2024-01-01T00:00:00+00:00 after 2024-01-05T03:00:00+00:00",
@@ -131,7 +136,7 @@ _TS_B = _BASE
         (
             [
                 sp(0, 1.0, SwingType.HIGH),
-                SwingPoint(0, _BASE + timedelta(hours=9), 1.0, SwingType.LOW),
+                SwingPoint(0, _BASE + timedelta(hours=9), 1.0, SwingType.LOW, confirmation_bars=CB),
             ],
             "points[1] shares index 0 with the previous point but carries "
             "a different timestamp",
@@ -143,7 +148,7 @@ _TS_B = _BASE
         (
             [
                 sp(0, 1.0, SwingType.HIGH),
-                SwingPoint(1, _BASE, 2.0, SwingType.HIGH),
+                SwingPoint(1, _BASE, 2.0, SwingType.HIGH, confirmation_bars=CB),
             ],
             "points[1] repeats or precedes timestamp 2024-01-01T00:00:00+00:00 "
             "for swing type 'high'",
@@ -166,8 +171,8 @@ def test_point_adapter_messages_are_exact(run: list[SwingPoint], expected: str) 
         ),
         (
             [
-                SwingPoint(0, _TS_A, 1.0, SwingType.HIGH),
-                SwingPoint(1, _TS_B, 1.0, SwingType.LOW),
+                SwingPoint(0, _TS_A, 1.0, SwingType.HIGH, confirmation_bars=CB),
+                SwingPoint(1, _TS_B, 1.0, SwingType.LOW, confirmation_bars=CB),
             ],
             "comparisons must be ordered by current timestamp; comparisons[1] "
             "has 2024-01-01T00:00:00+00:00 after 2024-01-05T03:00:00+00:00",
@@ -175,7 +180,7 @@ def test_point_adapter_messages_are_exact(run: list[SwingPoint], expected: str) 
         (
             [
                 sp(0, 1.0, SwingType.HIGH),
-                SwingPoint(0, _BASE + timedelta(hours=9), 1.0, SwingType.LOW),
+                SwingPoint(0, _BASE + timedelta(hours=9), 1.0, SwingType.LOW, confirmation_bars=CB),
             ],
             "comparisons[1] shares current index 0 with the previous comparison "
             "but carries a different timestamp",
@@ -188,7 +193,7 @@ def test_point_adapter_messages_are_exact(run: list[SwingPoint], expected: str) 
         (
             [
                 sp(0, 1.0, SwingType.HIGH),
-                SwingPoint(1, _BASE, 2.0, SwingType.HIGH),
+                SwingPoint(1, _BASE, 2.0, SwingType.HIGH, confirmation_bars=CB),
             ],
             "comparisons[1] repeats or precedes current timestamp "
             "2024-01-01T00:00:00+00:00 for swing type 'high'",
@@ -262,20 +267,20 @@ def _adversarial_runs() -> list[list[SwingPoint]]:
         # index rises per type, timestamp does not — an intervening LOW keeps the
         # global timestamp check from firing first.
         [
-            SwingPoint(0, flat, 5.0, SwingType.HIGH),
-            SwingPoint(1, flat, 1.0, SwingType.LOW),
-            SwingPoint(2, flat, 6.0, SwingType.HIGH),
+            SwingPoint(0, flat, 5.0, SwingType.HIGH, confirmation_bars=CB),
+            SwingPoint(1, flat, 1.0, SwingType.LOW, confirmation_bars=CB),
+            SwingPoint(2, flat, 6.0, SwingType.HIGH, confirmation_bars=CB),
         ],
         [
-            SwingPoint(0, flat, 1.0, SwingType.LOW),
-            SwingPoint(1, flat, 5.0, SwingType.HIGH),
-            SwingPoint(2, flat, 0.5, SwingType.LOW),
+            SwingPoint(0, flat, 1.0, SwingType.LOW, confirmation_bars=CB),
+            SwingPoint(1, flat, 5.0, SwingType.HIGH, confirmation_bars=CB),
+            SwingPoint(2, flat, 0.5, SwingType.LOW, confirmation_bars=CB),
         ],
         # same shape, timestamps rising globally but repeating within the type
         [
-            SwingPoint(0, flat, 5.0, SwingType.HIGH),
-            SwingPoint(1, later, 1.0, SwingType.LOW),
-            SwingPoint(2, flat, 6.0, SwingType.HIGH),
+            SwingPoint(0, flat, 5.0, SwingType.HIGH, confirmation_bars=CB),
+            SwingPoint(1, later, 1.0, SwingType.LOW, confirmation_bars=CB),
+            SwingPoint(2, flat, 6.0, SwingType.HIGH, confirmation_bars=CB),
         ],
     ]
 

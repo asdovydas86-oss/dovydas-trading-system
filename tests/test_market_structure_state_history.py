@@ -42,6 +42,11 @@ from fmis.market_structure import (
     label_swing_sequence,
 )
 
+#: The confirmation window every hand-built fixture point is confirmed under.
+#: Required since Milestone AH: a swing that does not state its window cannot
+#: say when it became knowable, and nothing downstream may assume one.
+CB = 2
+
 _BASE = datetime(2024, 1, 1, tzinfo=timezone.utc)
 PACKAGE_DIR = Path(ms.__file__).parent
 
@@ -66,7 +71,7 @@ _PRICES: dict[StructuralSwingLabel, tuple[float, float]] = {
 
 
 def sp(index: int, price: float, type: SwingType = SwingType.HIGH) -> SwingPoint:
-    return SwingPoint(index, _BASE + timedelta(hours=4 * index), price, type)
+    return SwingPoint(index, _BASE + timedelta(hours=4 * index), price, type, confirmation_bars=CB)
 
 
 def swing(
@@ -420,8 +425,8 @@ def test_a_mismatched_timestamp_at_an_equal_index_is_rejected() -> None:
     )
     low = label_swing(
         compare_swings(
-            SwingPoint(0, _BASE, 20.0, SwingType.LOW),
-            SwingPoint(6, _BASE + timedelta(hours=999), 10.0, SwingType.LOW),
+            SwingPoint(0, _BASE, 20.0, SwingType.LOW, confirmation_bars=CB),
+            SwingPoint(6, _BASE + timedelta(hours=999), 10.0, SwingType.LOW, confirmation_bars=CB),
         )
     )
     with pytest.raises(ValueError) as caught:

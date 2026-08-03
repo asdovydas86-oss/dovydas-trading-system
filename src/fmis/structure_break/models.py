@@ -87,21 +87,25 @@ class StructureBreak:
         provenance and label, the bar index, the timestamp, the kind and the
         mechanism — so nothing about the break needs restating here.
 
-    ``eligible_from``
-        The candle index from which this level could first break structure:
-        ``level.origin.index + confirmation_bars``. Stored rather than projected
-        because ``confirmation_bars`` is a **caller-supplied** number that lives
-        nowhere on the inputs (ADR-0020 §2.4, deferred question D1), so a
-        consumer holding only this object could not otherwise recover it — and
-        recovering it is what makes the break auditable.
+    ``eligible_from`` is a **property, not a field** — see below.
 
     **The break validates itself against its own crossing.** ``kind`` must be
     `CrossingKind.CLOSE_BREACH`, ``mechanism`` must not be
     `CrossingMechanism.ALREADY_BEYOND`, the level must carry provenance, and the
-    crossing bar must be at or after ``eligible_from``, which must in turn be at
-    or after the level's origin. A `StructureBreak` claiming a touch, a wick, or a
-    break of a level that was not yet knowable **cannot be constructed**. That is
-    `SwingComparison`'s rule, applied here.
+    crossing bar must be at or after ``eligible_from``. A `StructureBreak`
+    claiming a touch, a wick, or a break of a level that was not yet knowable
+    **cannot be constructed**. That is `SwingComparison`'s rule, applied here.
+
+    **``eligible_from`` stopped being a stored field in Milestone AH** (ADR-0024).
+    It was stored because ``confirmation_bars`` was a caller-supplied number that
+    lived nowhere on the inputs (ADR-0020 D1), so a consumer holding only this
+    object could not otherwise recover it. It now lives on
+    ``crossing.level.origin``, which makes the stored copy exactly what ADR-0016
+    §4 forbids: a duplicate of a value one attribute away, with somewhere to
+    drift. Worse, while it was a constructor argument it was a **second source of
+    truth** — a break could be built claiming an eligibility its own level
+    contradicted. Removing the argument removes that possibility rather than
+    validating against it.
 
     **What it does not claim.** Not that the break will hold. Not that a trend
     exists. Not that anything should be traded. And for two breaks sharing a bar —
@@ -114,25 +118,12 @@ class StructureBreak:
     """
 
     crossing: LevelCrossingEvent
-    eligible_from: int
 
     def __post_init__(self) -> None:
         if not isinstance(self.crossing, LevelCrossingEvent):
             raise TypeError(
                 "crossing must be a LevelCrossingEvent, got "
                 f"{type(self.crossing).__name__}"
-            )
-        # bool is an int subclass; an index of True is a programming error.
-        if isinstance(self.eligible_from, bool) or not isinstance(
-            self.eligible_from, int
-        ):
-            raise TypeError(
-                "eligible_from must be an int, got "
-                f"{type(self.eligible_from).__name__}"
-            )
-        if self.eligible_from < 0:
-            raise ValueError(
-                f"eligible_from cannot be negative, got {self.eligible_from}"
             )
         if self.crossing.kind is not CrossingKind.CLOSE_BREACH:
             raise ValueError(
@@ -149,16 +140,30 @@ class StructureBreak:
                 "crossing level carries no origin; a break needs provenance to "
                 "place the level in time"
             )
-        if self.eligible_from < self.crossing.level.origin.index:
-            raise ValueError(
-                f"eligible_from ({self.eligible_from}) cannot precede the level "
-                f"origin index ({self.crossing.level.origin.index})"
-            )
         if self.crossing.index < self.eligible_from:
             raise ValueError(
                 f"crossing index ({self.crossing.index}) precedes eligible_from "
                 f"({self.eligible_from}); the level was not yet knowable"
             )
+
+    @property
+    def eligible_from(self) -> int:
+        """The candle index from which this level could first break structure.
+
+        A **projection** of ``crossing.level.origin.knowable_from``, not a stored
+        field, following ADR-0016 §4. The break and the level it broke can no
+        longer disagree about when that level became knowable, because there is
+        only one place the number exists.
+
+        The check that ``eligible_from`` cannot precede the level's origin index
+        is gone with the field: ``knowable_from`` is ``index + confirmation_bars``
+        with a window of at least 1, so it is *always* after the origin. What was
+        a validated invariant is now an arithmetic one.
+
+        Reads through the `origin` property rather than the raw attribute, so the
+        "never ``None``" argument lives in exactly one place.
+        """
+        return self.origin.knowable_from
 
     @property
     def index(self) -> int:

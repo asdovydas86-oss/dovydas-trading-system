@@ -56,7 +56,14 @@ def structural_levels(
         An immutable tuple with one `PriceLevel` per swing, **in the input's
         order**, each at that swing's ``comparison.current.price``, on the side
         its label implies, with a `LevelOrigin` carrying the pivot's index,
-        the pivot's timestamp and the swing's own label.
+        the pivot's timestamp, the swing's own label and the confirmation window
+        the pivot was detected under.
+
+        The confirmation window is **copied off the swing**, never taken as an
+        argument. A ``confirmation_bars`` parameter here would let a caller record
+        a window the swings were not detected under, which is the ADR-0020 D1
+        hazard relocated one layer up and dressed as provenance — the approach
+        ADR-0024 records as explicitly rejected.
 
         Input order is preserved rather than canonicalised because this function
         is a projection, not a derivation: reordering here would silently
@@ -102,6 +109,7 @@ def structural_levels(
                 index=swing.comparison.current.index,
                 timestamp=swing.comparison.current.timestamp,
                 label=swing.label,
+                confirmation_bars=swing.comparison.current.confirmation_bars,
             ),
         )
         for swing in swings

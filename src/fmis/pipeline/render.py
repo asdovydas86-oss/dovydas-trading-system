@@ -176,7 +176,7 @@ def render_fact_sheet(
         _row(
             "Detection",
             f"L{sheet.detection.left_bars} R{sheet.detection.right_bars}",
-            f"confirmation_bars={sheet.detection.right_bars} (single source)",
+            f"confirmation_bars={sheet.detection.right_bars} (carried on each level)",
         )
     )
     lines.append(_row("Last close", _number(window.last_close)))

@@ -63,6 +63,23 @@ class SwingType(str, Enum):
     LOW = "low"
 
 
+def _require_bars(value: object, field: str) -> int:
+    """A positive int. ``bool`` is rejected explicitly, being an int subclass.
+
+    **The one bar-count rule in this package.** It lives here rather than in
+    `swings`, where it began, because `SwingPoint.confirmation_bars` must apply
+    exactly the same rule and `swings` imports *this* module — importing back the
+    other way would close an import cycle. `required_candles` and `detect_swings`
+    read it from here, so a window this validator rejects cannot be used for
+    detection *or* recorded on a point, in one wording rather than two.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{field} must be an int, got {type(value).__name__}")
+    if value < 1:
+        raise ValueError(f"{field} must be at least 1, got {value}")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class SwingPoint:
     """One confirmed local extreme: where it is, when, at what price, which kind.
@@ -78,6 +95,32 @@ class SwingPoint:
       * ``price`` — the candle's ``high`` for a `SwingType.HIGH`, its ``low``
         for a `SwingType.LOW`. The extreme itself, never a midpoint or average.
       * ``type`` — `SwingType.HIGH` or `SwingType.LOW`.
+      * ``confirmation_bars`` — the ``right_bars`` this point was **confirmed
+        under**. See below; it is the reason ADR-0020 D1 is closed.
+
+    **Why the confirmation window is carried (ADR-0024).** A pivot at bar ``o``
+    is not knowable at bar ``o``: it becomes knowable only once
+    ``confirmation_bars`` further candles have closed and none of them exceeded
+    it. Every consumer that places a swing *in time* needs that number, and until
+    this field existed the number travelled **beside** the data as a hand-passed
+    argument — `derive_structure_breaks(..., confirmation_bars=R)`. A caller who
+    passed a different ``R`` than the one used for detection silently changed
+    which level was the reference at every bar, and therefore which breaks and
+    which changes of character existed, **while raising no error**: measured at
+    36.1 % of 300 seeded series producing materially different breaks, zero of
+    them detected. Carrying the number on the point that earned it makes that
+    mismatch unrepresentable rather than merely discouraged.
+
+    ``left_bars`` is deliberately **not** carried. It decides *whether* a pivot
+    is a pivot, which is already settled by the time this object exists; only
+    ``right_bars`` decides *when the pivot became knowable*, and that is the one
+    question a later layer asks. Carrying a field no consumer reads would be
+    provenance theatre. Adding it later is purely additive if a consumer appears.
+
+    ``confirmation_bars`` is **required and has no default.** A default would
+    silently bind every hand-built point to `DEFAULT_RIGHT_BARS` and be wrong for
+    anyone who detected with another window — the exact failure this field exists
+    to prevent, reintroduced at the constructor.
 
     Deliberately absent: direction, trend, strength, confidence, rank, and any
     reference to a neighbouring swing. Each of those is an interpretation, and
@@ -88,6 +131,7 @@ class SwingPoint:
     timestamp: datetime
     price: float
     type: SwingType
+    confirmation_bars: int
 
     def __post_init__(self) -> None:
         # bool is an int subclass; an index of True is a programming error.
@@ -105,6 +149,26 @@ class SwingPoint:
             raise ValueError("price must be a finite number")
         if not isinstance(self.type, SwingType):
             raise TypeError(f"type must be a SwingType, got {type(self.type).__name__}")
+        # Validated with `_require_bars`' own rule rather than a second wording:
+        # at least 1, because `detect_swings` — the only producer — rejects a
+        # smaller window outright. A point claiming to have been confirmed under
+        # zero bars would claim a confirmation that never happened.
+        _require_bars(self.confirmation_bars, "confirmation_bars")
+
+    @property
+    def knowable_from(self) -> int:
+        """The earliest closed-candle index at which this pivot was knowable.
+
+        ``index + confirmation_bars`` — a **projection, not a stored field**,
+        following ADR-0016 §4: a stored copy of a value one attribute away is
+        somewhere for it to drift.
+
+        This is a fact about **detection**, not a policy about what may be done
+        at that bar. `fmis.structure_break` decides that a level becomes eligible
+        to break structure here; that decision stays in that layer, and this
+        property states only when the point became knowable at all.
+        """
+        return self.index + self.confirmation_bars
 
 
 class SwingRelation(str, Enum):
@@ -219,6 +283,13 @@ class SwingComparison:
             raise ValueError(
                 f"current.timestamp ({self.current.timestamp.isoformat()}) must be "
                 f"later than previous.timestamp ({self.previous.timestamp.isoformat()})"
+            )
+        if self.previous.confirmation_bars != self.current.confirmation_bars:
+            raise ValueError(
+                "previous and current must share a confirmation window, got "
+                f"{self.previous.confirmation_bars} and "
+                f"{self.current.confirmation_bars}; two points detected under "
+                "different windows are not a comparable pair"
             )
         expected = _relation_for(self.previous, self.current)
         if self.relation is not expected:

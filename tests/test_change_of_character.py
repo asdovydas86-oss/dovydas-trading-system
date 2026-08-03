@@ -72,6 +72,7 @@ from fmis.structure_break import (
 PACKAGE_DIR = Path(coc.__file__).parent
 _BASE = datetime(2024, 1, 1, tzinfo=timezone.utc)
 RB = 2  # confirmation bars used throughout, matching DEFAULT_RIGHT_BARS
+CB = RB  # the same window, recorded on every hand-built origin (AH)
 
 
 # =========================== helpers ========================================
@@ -121,6 +122,7 @@ def level(
     side: LevelSide,
     origin_index: int,
     label: StructuralSwingLabel | None = None,
+    confirmation_bars: int = CB,
 ) -> PriceLevel:
     if label is None:
         label = (
@@ -135,6 +137,7 @@ def level(
             index=origin_index,
             timestamp=_BASE + timedelta(hours=4 * origin_index),
             label=label,
+            confirmation_bars=confirmation_bars,
         ),
     )
 
@@ -155,14 +158,24 @@ def break_at(
     crossing is still real and both objects still self-validate.
 
     ``bars`` defaults to ``min(RB, index)`` so that a break at an early bar is
-    representable at all: `StructureBreak` requires ``origin.index + bars <=
-    index``, which `RB` alone cannot satisfy for ``index < RB``.
+    representable at all: a break requires ``origin.confirmed_at <= index``,
+    which `RB` alone cannot satisfy for ``index < RB``.
+
+    Since Milestone AH the window is carried on the level's own origin and must
+    be **at least 1**, so ``index`` must be at least 1 too: a level cannot have
+    become knowable at bar 0. `test_a_break_at_bar_zero_is_unrepresentable`
+    pins that.
     """
     if bars is None:
         bars = min(RB, index)
+    if bars < 1:
+        raise ValueError(
+            f"a break at bar {index} needs a confirmation window of at least 1, "
+            "which no level at or before that bar can have"
+        )
     if origin_index is None:
         origin_index = index - bars
-    lvl = level(price, side, origin_index, label)
+    lvl = level(price, side, origin_index, label, confirmation_bars=bars)
     if side is LevelSide.UPPER:
         bar = candle(index, price - 1, price + 3, price - 2, price + 2)
     else:
@@ -174,7 +187,7 @@ def break_at(
         kind=CrossingKind.CLOSE_BREACH,
         mechanism=CrossingMechanism.WITHIN_RANGE,
     )
-    return StructureBreak(crossing=crossing, eligible_from=origin_index + bars)
+    return StructureBreak(crossing=crossing)
 
 
 def run(*spec: tuple[int, LevelSide]) -> tuple[StructureBreak, ...]:
@@ -205,7 +218,7 @@ def chain(
     swings = contextual_structural_swings(candles, right_bars=right_bars)
     levels = structural_levels(swings.values)
     crossings = derive_level_crossings(candles, list(levels))
-    return derive_structure_breaks(levels, crossings, confirmation_bars=right_bars)
+    return derive_structure_breaks(levels, crossings)
 
 
 def real_series() -> CandleSeries:
@@ -287,7 +300,7 @@ def outside_bar_breaks() -> tuple[StructureBreak, ...]:
         ),
     ]
     return derive_structure_breaks(
-        [early_up, up, low], events, confirmation_bars=RB
+        [early_up, up, low], events
     )
 
 
@@ -710,7 +723,7 @@ def test_a_gapped_break_changes_character_like_any_other() -> None:
         kind=CrossingKind.CLOSE_BREACH,
         mechanism=CrossingMechanism.GAPPED_BEYOND,
     )
-    subject = StructureBreak(crossing=gapped, eligible_from=7)
+    subject = StructureBreak(crossing=gapped)
     got = derive_changes_of_character([break_at(4, L, price=95.0), subject])
     assert len(got) == 1
     assert got[0].subject.crossing.mechanism is CrossingMechanism.GAPPED_BEYOND
@@ -998,7 +1011,7 @@ def _contextual_breaks(candles: CandleSeries) -> ContextualSeries[StructureBreak
     swings = contextual_structural_swings(candles, right_bars=RB)
     levels = contextual_structural_levels(swings)
     crossings = contextual_level_crossings(candles, levels)
-    return contextual_structure_breaks(levels, crossings, confirmation_bars=RB)
+    return contextual_structure_breaks(levels, crossings)
 
 
 def test_the_safe_pipeline_end_to_end() -> None:
@@ -1087,7 +1100,7 @@ def test_an_identity_mismatch_upstream_is_still_rejected_upstream() -> None:
         contextual_structural_swings(eth, right_bars=RB)
     ))
     with pytest.raises(SeriesIdentityMismatchError):
-        contextual_structure_breaks(levels, crossings, confirmation_bars=RB)
+        contextual_structure_breaks(levels, crossings)
 
 
 @pytest.mark.parametrize(
@@ -1211,9 +1224,9 @@ def test_adversarial_alternating_two_sided_and_single_sided_bars() -> None:
 
 
 def test_adversarial_far_apart_bars() -> None:
-    breaks = run((0, U), (1_000_000, L))
+    breaks = run((1, U), (1_000_000, L))
     got = derive_changes_of_character(breaks)
-    assert [(c.previous.index, c.index) for c in got] == [(0, 1_000_000)]
+    assert [(c.previous.index, c.index) for c in got] == [(1, 1_000_000)]
 
 
 def test_adversarial_adjacent_bars() -> None:
@@ -1222,14 +1235,16 @@ def test_adversarial_adjacent_bars() -> None:
 
 
 def test_adversarial_a_long_alternating_run() -> None:
-    spec = [(i * 2, U if i % 2 == 0 else L) for i in range(200)]
+    # Bars start at 2, not 0: since AH no level is knowable before bar 1, so a
+    # run of breaks cannot begin at the origin of the series.
+    spec = [(i * 2, U if i % 2 == 0 else L) for i in range(1, 201)]
     got = derive_changes_of_character(run(*spec))
     assert len(got) == 199
-    assert [c.index for c in got] == [i * 2 for i in range(1, 200)]
+    assert [c.index for c in got] == [i * 2 for i in range(2, 201)]
 
 
 def test_adversarial_a_long_single_sided_run() -> None:
-    spec = [(i * 2, U) for i in range(200)]
+    spec = [(i * 2, U) for i in range(1, 201)]
     assert derive_changes_of_character(run(*spec)) == ()
 
 
@@ -1247,11 +1262,34 @@ def test_adversarial_invalid_ordering_is_not_an_error() -> None:
     )
 
 
-def test_adversarial_a_break_at_bar_zero() -> None:
-    zero = break_at(0, U, origin_index=0, bars=0)
-    assert zero.index == 0
-    got = derive_changes_of_character([zero, break_at(5, L)])
-    assert [(c.previous.index, c.index) for c in got] == [(0, 5)]
+def test_a_break_at_bar_zero_is_unrepresentable() -> None:
+    """Since AH, no level can be knowable at bar 0, so nothing can break there.
+
+    A level becomes knowable at ``origin.index + confirmation_bars`` with a
+    window of at least 1 and a non-negative origin, so the earliest breakable bar
+    is 1. Before AH the window could be supplied as 0 and a bar-0 break was
+    constructible — a fact no detection run could ever produce.
+    """
+    with pytest.raises(ValueError) as excinfo:
+        break_at(0, U, origin_index=0, bars=0)
+    assert "at least 1" in str(excinfo.value)
+
+    # And not merely blocked by the helper: the model itself refuses.
+    lvl = level(100.0, U, 0)
+    bar = candle(0, 99.0, 103.0, 98.0, 102.0)
+    crossing = LevelCrossingEvent(
+        level=lvl,
+        candle=bar,
+        index=0,
+        kind=CrossingKind.CLOSE_BREACH,
+        mechanism=CrossingMechanism.WITHIN_RANGE,
+    )
+    with pytest.raises(ValueError) as excinfo:
+        StructureBreak(crossing=crossing)
+    assert str(excinfo.value) == (
+        "crossing index (0) precedes eligible_from (2); the level was not yet "
+        "knowable"
+    )
 
 
 def test_adversarial_invalid_provenance_cannot_reach_this_layer() -> None:
@@ -1265,7 +1303,7 @@ def test_adversarial_invalid_provenance_cannot_reach_this_layer() -> None:
         mechanism=CrossingMechanism.WITHIN_RANGE,
     )
     with pytest.raises(ValueError):
-        StructureBreak(crossing=crossing, eligible_from=3)
+        StructureBreak(crossing=crossing)
 
 
 def test_adversarial_a_non_close_break_cannot_reach_this_layer() -> None:
@@ -1278,7 +1316,7 @@ def test_adversarial_a_non_close_break_cannot_reach_this_layer() -> None:
         mechanism=CrossingMechanism.WITHIN_RANGE,
     )
     with pytest.raises(ValueError):
-        StructureBreak(crossing=touch, eligible_from=5)
+        StructureBreak(crossing=touch)
 
 
 def test_adversarial_mixed_identity_breaks_are_this_layer_s_indifference() -> None:
@@ -1293,8 +1331,7 @@ def test_adversarial_mixed_identity_breaks_are_this_layer_s_indifference() -> No
             index=11,
             kind=CrossingKind.CLOSE_BREACH,
             mechanism=CrossingMechanism.WITHIN_RANGE,
-        ),
-        eligible_from=11,
+        )
     )
     got = derive_changes_of_character([btc, eth])
     assert len(got) == 1  # the payload is analysed; identity is the envelope's job
@@ -1314,7 +1351,7 @@ def test_the_derivation_is_subquadratic_in_the_break_count() -> None:
     import time
 
     def elapsed(count: int) -> float:
-        breaks = run(*[(i * 2, U if i % 2 == 0 else L) for i in range(count)])
+        breaks = run(*[(i * 2, U if i % 2 == 0 else L) for i in range(1, count + 1)])
         best = float("inf")
         for _ in range(3):
             start = time.perf_counter()
@@ -1332,7 +1369,7 @@ def test_the_derivation_is_subquadratic_in_the_break_count() -> None:
 def test_a_large_run_derives_quickly() -> None:
     import time
 
-    breaks = run(*[(i * 2, U if i % 2 == 0 else L) for i in range(20_000)])
+    breaks = run(*[(i * 2, U if i % 2 == 0 else L) for i in range(1, 20_001)])
     start = time.perf_counter()
     got = derive_changes_of_character(breaks)
     duration = time.perf_counter() - start
@@ -1832,7 +1869,7 @@ def test_existing_level_crossing_and_break_behaviour_is_unchanged() -> None:
     crossings = derive_level_crossings(real, list(levels))
     assert len(levels) == 3
     assert len(crossings) == 15
-    assert len(derive_structure_breaks(levels, crossings, confirmation_bars=RB)) == 1
+    assert len(derive_structure_breaks(levels, crossings)) == 1
 
 
 def test_existing_structural_state_and_trend_behaviour_is_unchanged() -> None:
@@ -1862,10 +1899,11 @@ def test_the_break_model_still_exposes_exactly_what_this_layer_reads() -> None:
     """The audit conclusion, pinned: no primitive was added or needed."""
     import dataclasses
 
-    assert {f.name for f in dataclasses.fields(StructureBreak)} == {
-        "crossing",
-        "eligible_from",
-    }
+    assert {f.name for f in dataclasses.fields(StructureBreak)} == {"crossing"}
+    # `eligible_from` remains readable — it became a projection of the level's
+    # own provenance in Milestone AH rather than a stored field, which is why it
+    # is no longer a dataclass field but is still what this layer can read.
+    assert isinstance(getattr(StructureBreak, "eligible_from"), property)
     for needed in ("index", "side"):
         assert isinstance(getattr(StructureBreak, needed), property), needed
 
@@ -1897,7 +1935,7 @@ def test_the_full_chain_composes_end_to_end() -> None:
     swings = contextual_structural_swings(candles, right_bars=RB)
     levels = contextual_structural_levels(swings)
     crossings = contextual_level_crossings(candles, levels)
-    breaks = contextual_structure_breaks(levels, crossings, confirmation_bars=RB)
+    breaks = contextual_structure_breaks(levels, crossings)
     changes = contextual_changes_of_character(breaks)
     assert changes.identity is swings.identity is breaks.identity
     assert isinstance(changes.values, tuple)

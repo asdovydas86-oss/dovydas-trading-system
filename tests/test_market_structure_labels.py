@@ -33,13 +33,18 @@ from fmis.market_structure import (
     label_swing_sequence,
 )
 
+#: The confirmation window every hand-built fixture point is confirmed under.
+#: Required since Milestone AH: a swing that does not state its window cannot
+#: say when it became knowable, and nothing downstream may assume one.
+CB = 2
+
 _BASE = datetime(2024, 1, 1, tzinfo=timezone.utc)
 PACKAGE_DIR = Path(ms.__file__).parent
 SRC = PACKAGE_DIR.parent
 
 
 def sp(index: int, price: float, type: SwingType = SwingType.HIGH) -> SwingPoint:
-    return SwingPoint(index, _BASE + timedelta(hours=4 * index), price, type)
+    return SwingPoint(index, _BASE + timedelta(hours=4 * index), price, type, confirmation_bars=CB)
 
 
 def pair(
@@ -350,8 +355,8 @@ def test_duplicate_same_type_current_point_rejected() -> None:
 def test_shared_current_index_with_different_timestamp_rejected() -> None:
     high = compare_swings(sp(0, 1.0, SwingType.HIGH), sp(3, 2.0, SwingType.HIGH))
     odd_low = compare_swings(
-        SwingPoint(0, _BASE, 9.0, SwingType.LOW),
-        SwingPoint(3, _BASE + timedelta(hours=99), 8.0, SwingType.LOW),
+        SwingPoint(0, _BASE, 9.0, SwingType.LOW, confirmation_bars=CB),
+        SwingPoint(3, _BASE + timedelta(hours=99), 8.0, SwingType.LOW, confirmation_bars=CB),
     )
     with pytest.raises(ValueError, match="different timestamp"):
         label_swing_sequence([high, odd_low])
@@ -359,12 +364,12 @@ def test_shared_current_index_with_different_timestamp_rejected() -> None:
 
 def test_decreasing_current_timestamp_rejected() -> None:
     first = compare_swings(
-        SwingPoint(0, _BASE, 1.0, SwingType.HIGH),
-        SwingPoint(1, _BASE + timedelta(hours=80), 2.0, SwingType.HIGH),
+        SwingPoint(0, _BASE, 1.0, SwingType.HIGH, confirmation_bars=CB),
+        SwingPoint(1, _BASE + timedelta(hours=80), 2.0, SwingType.HIGH, confirmation_bars=CB),
     )
     second = compare_swings(
-        SwingPoint(0, _BASE, 5.0, SwingType.LOW),
-        SwingPoint(2, _BASE + timedelta(hours=8), 4.0, SwingType.LOW),
+        SwingPoint(0, _BASE, 5.0, SwingType.LOW, confirmation_bars=CB),
+        SwingPoint(2, _BASE + timedelta(hours=8), 4.0, SwingType.LOW, confirmation_bars=CB),
     )
     with pytest.raises(ValueError, match="ordered by current timestamp"):
         label_swing_sequence([first, second])
@@ -419,7 +424,7 @@ def test_equal_index_order_is_inherited_from_input_not_imposed() -> None:
             stamp = _BASE + timedelta(hours=4 * index)
             for kind in (first, second):
                 points.append(
-                    SwingPoint(index, stamp, price[kind][0 if index == 10 else 1], kind)
+                    SwingPoint(index, stamp, price[kind][0 if index == 10 else 1], kind, confirmation_bars=CB)
                 )
         comparisons = compare_swing_sequence(points)
         result = label_swing_sequence(comparisons)
@@ -434,10 +439,10 @@ def test_low_before_high_at_an_equal_index_is_valid_upstream() -> None:
     """The reversed tie order is legitimate input, not something to reject."""
     stamp = _BASE + timedelta(hours=40)
     points = [
-        SwingPoint(0, _BASE, 10.0, SwingType.LOW),
-        SwingPoint(0, _BASE, 50.0, SwingType.HIGH),
-        SwingPoint(10, stamp, 20.0, SwingType.LOW),
-        SwingPoint(10, stamp, 60.0, SwingType.HIGH),
+        SwingPoint(0, _BASE, 10.0, SwingType.LOW, confirmation_bars=CB),
+        SwingPoint(0, _BASE, 50.0, SwingType.HIGH, confirmation_bars=CB),
+        SwingPoint(10, stamp, 20.0, SwingType.LOW, confirmation_bars=CB),
+        SwingPoint(10, stamp, 60.0, SwingType.HIGH, confirmation_bars=CB),
     ]
     comparisons = compare_swing_sequence(points)          # accepted upstream
     result = label_swing_sequence(comparisons)            # accepted here
@@ -521,14 +526,14 @@ def random_points(rng: random.Random, count: int) -> list[SwingPoint]:
         stamp = _BASE + timedelta(hours=4 * index)
         if rng.random() < 0.15:  # outside bar
             points.append(SwingPoint(index, stamp, float(rng.randint(50, 55)),
-                                     SwingType.HIGH))
+                                     SwingType.HIGH, confirmation_bars=CB))
             points.append(SwingPoint(index, stamp, float(rng.randint(10, 15)),
-                                     SwingType.LOW))
+                                     SwingType.LOW, confirmation_bars=CB))
         else:
             kind = rng.choice([SwingType.HIGH, SwingType.LOW])
             price = float(rng.randint(50, 55) if kind is SwingType.HIGH
                           else rng.randint(10, 15))
-            points.append(SwingPoint(index, stamp, price, kind))
+            points.append(SwingPoint(index, stamp, price, kind, confirmation_bars=CB))
     return points
 
 
@@ -737,8 +742,8 @@ def test_ordering_error_messages_are_exact(run_kind: str, expected: str) -> None
         run = [
             compare_swings(sp(0, 1.0), sp(6, 2.0)),
             compare_swings(
-                SwingPoint(0, _BASE, 9.0, SwingType.LOW),
-                SwingPoint(6, _BASE + timedelta(hours=999), 8.0, SwingType.LOW),
+                SwingPoint(0, _BASE, 9.0, SwingType.LOW, confirmation_bars=CB),
+                SwingPoint(6, _BASE + timedelta(hours=999), 8.0, SwingType.LOW, confirmation_bars=CB),
             ),
         ]
     else:

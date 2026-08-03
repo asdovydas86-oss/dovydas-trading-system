@@ -45,8 +45,6 @@ __all__ = ["contextual_structure_breaks"]
 def contextual_structure_breaks(
     levels: ContextualSeries[PriceLevel],
     crossings: ContextualSeries[LevelCrossingEvent],
-    *,
-    confirmation_bars: int,
 ) -> ContextualSeries[StructureBreak]:
     """Breaks of structure from contextual levels and crossings, in context.
 
@@ -56,24 +54,22 @@ def contextual_structure_breaks(
         crossings: a `ContextualSeries` of `LevelCrossingEvent`, as
             `fmis.level_crossing.contextual_level_crossings` returns. Its identity
             must match ``levels``'.
-        confirmation_bars: forwarded verbatim to `derive_structure_breaks` — the
-            same ``right_bars`` used to detect the underlying swings. Required,
-            with no default; see that function for why.
+    There is **no ``confirmation_bars`` argument**: since Milestone AH the delay
+    travels on each level's own origin, so this wrapper has nothing to forward and
+    no way to introduce a mismatch the delegate would not see. See ADR-0024.
 
     Returns:
         A `ContextualSeries` under the identity both inputs share, whose payload is
-        exactly ``derive_structure_breaks(levels.values, crossings.values,
-        confirmation_bars=confirmation_bars)``.
+        exactly ``derive_structure_breaks(levels.values, crossings.values)``.
 
     Raises:
         TypeError: an argument is not a `ContextualSeries`, or the delegate rejects
-            a payload element or ``confirmation_bars``.
+            a payload element.
         SeriesIdentityMismatchError: the levels and the crossings describe
             different analytical series — a different instrument or a different
             timeframe. Raised, never repaired and never resolved by picking a side.
         StructureBreakInputError: raised by the delegate, with its message
             unchanged.
-        ValueError: ``confirmation_bars`` is negative — from the delegate.
 
     Comparing BTCUSDT levels against ETHUSDT crossings, or 4h levels against 1h
     crossings, is the silent mixing ADR-0018 exists to prevent, and it is refused
@@ -91,9 +87,7 @@ def contextual_structure_breaks(
     identity = require_same_identity(levels, crossings)
     return ContextualSeries(
         identity=identity,
-        values=derive_structure_breaks(
-            levels.values, crossings.values, confirmation_bars=confirmation_bars
-        ),
+        values=derive_structure_breaks(levels.values, crossings.values),
     )
 
 

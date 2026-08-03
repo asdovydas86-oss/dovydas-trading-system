@@ -210,13 +210,31 @@ _LABEL_RANK: Mapping[StructuralSwingLabel, int] = MappingProxyType(
 class LevelOrigin:
     """Where a level came from. Provenance, never policy.
 
-    Exactly three fields, all copied from the swing unchanged:
+    Exactly four fields, all copied from the swing unchanged:
 
       * ``index`` — the pivot's position in the closed-candle sequence.
       * ``timestamp`` — the **pivot candle's** timestamp, matching
         `SwingPoint.timestamp`. Not a confirmation time, not an emission time.
         Must be **timezone-aware**; see below.
       * ``label`` — the swing's own `StructuralSwingLabel`, carried verbatim.
+      * ``confirmation_bars`` — the window the pivot was confirmed under,
+        copied from `SwingPoint.confirmation_bars`. See below.
+
+    **The confirmation window is provenance, and it closes ADR-0020 D1.** A level
+    derived from a pivot at bar ``o`` was not knowable at bar ``o``: it became
+    knowable at ``o + confirmation_bars``. Before this field existed,
+    `derive_structure_breaks` took that number as a hand-passed argument, and a
+    caller who passed one that disagreed with the ``right_bars`` used for
+    detection silently changed which level was the reference at every bar — and
+    so which breaks and which changes of character existed — **while raising no
+    error**. The number now travels with the origin that earned it, which makes
+    the mismatch unrepresentable rather than discouraged, and it is why
+    `derive_structure_breaks` no longer takes the argument at all.
+
+    It is **copied, never chosen**: `structural_levels` reads it off the swing.
+    There is deliberately no way to construct a level whose recorded window
+    differs from its swing's, because this package never builds an origin from
+    anything but a swing.
 
     Nothing here marks the level protected, active, spent, or BOS-relevant, and
     nothing in this package reads an origin except the ordering key. An
@@ -244,12 +262,16 @@ class LevelOrigin:
     `fmis.data`'s contract in a second place.
 
     Frozen, slotted and hashable, so provenance cannot drift and a level stays
-    usable as a dict key.
+    usable as a dict key. **Equality and hashing include the window**: two origins
+    identical but for ``confirmation_bars`` are two different provenances, because
+    they became knowable at two different bars. Collapsing them would be the
+    original hazard re-expressed as an equality rule.
     """
 
     index: int
     timestamp: datetime
     label: StructuralSwingLabel
+    confirmation_bars: int
 
     def __post_init__(self) -> None:
         # bool is an int subclass; an index of True is a programming error.
@@ -271,6 +293,37 @@ class LevelOrigin:
                 "label must be a StructuralSwingLabel, got "
                 f"{type(self.label).__name__}"
             )
+        # bool is an int subclass here too. At least 1, matching
+        # `fmis.market_structure`'s bar-count rule: the only producer of an
+        # origin is a detected swing, and detection rejects a smaller window.
+        if isinstance(self.confirmation_bars, bool) or not isinstance(
+            self.confirmation_bars, int
+        ):
+            raise TypeError(
+                "confirmation_bars must be an int, got "
+                f"{type(self.confirmation_bars).__name__}"
+            )
+        if self.confirmation_bars < 1:
+            raise ValueError(
+                "confirmation_bars must be at least 1, got "
+                f"{self.confirmation_bars}"
+            )
+
+    @property
+    def knowable_from(self) -> int:
+        """The earliest closed-candle index at which this level was knowable.
+
+        ``index + confirmation_bars`` — a **projection, not a stored field**,
+        following ADR-0016 §4, so the two numbers cannot disagree.
+
+        This states **when the level became knowable**, which is a fact about the
+        detection that produced it. It does **not** state what may be done at that
+        bar: `fmis.structure_break` decides that eligibility to break structure
+        begins here, and that decision stays in that package. Naming this field
+        ``eligible_from`` would have moved a break-of-structure semantic into the
+        level layer, which does not own it.
+        """
+        return self.index + self.confirmation_bars
 
 
 @dataclass(frozen=True, slots=True)

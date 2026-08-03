@@ -616,7 +616,7 @@ def test_the_engine_reads_no_clock_and_no_network() -> None:
 
 def test_no_engine_below_imports_this_package() -> None:
     root = PACKAGE_DIR.parent
-    permitted = {root / "pipeline", PACKAGE_DIR}
+    permitted = {root / "pipeline", root / "workspace", PACKAGE_DIR}
     for py in root.rglob("*.py"):
         if py.parent in permitted:
             continue

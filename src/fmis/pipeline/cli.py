@@ -42,6 +42,7 @@ from typing import Callable, Sequence
 from fmis.market_structure import DEFAULT_LEFT_BARS, DEFAULT_RIGHT_BARS
 from fmis.pipeline.market_analysis import PipelineError
 from fmis.market_regime import RegimePolicy
+from fmis.workspace import render_workspace, workspace_for_symbol
 from fmis.pipeline.regime import (
     REGIME_LIMITATIONS,
     multi_timeframe_regime_for_symbol,
@@ -303,6 +304,69 @@ REGIME_COMMAND = Command(
 )
 
 
+def _configure_swing(parser: argparse.ArgumentParser) -> None:
+    _add_common_arguments(parser)
+    for role in (TimeframeRole.CONTEXT, TimeframeRole.SETUP, TimeframeRole.EXECUTION):
+        default = DEFAULT_TIMEFRAMES[role]
+        parser.add_argument(
+            f"--{role.value}",
+            default=default,
+            metavar="INTERVAL",
+            help=f"interval playing the {role.value} role (default: {default})",
+        )
+    parser.add_argument(
+        "--band",
+        type=float,
+        default=None,
+        metavar="FRACTION",
+        help=(
+            "regime policy band for volatility and participation (default: "
+            f"{RegimePolicy().volatility_band})"
+        ),
+    )
+    parser.add_argument(
+        "--transition-lookback",
+        type=int,
+        default=None,
+        metavar="BARS",
+        help=(
+            "how recent a change of character must be for structure to read as "
+            f"transitioning (default: {RegimePolicy().transition_lookback_bars})"
+        ),
+    )
+
+
+def _run_swing(args: argparse.Namespace) -> int:
+    _, workspace = workspace_for_symbol(
+        args.symbol,
+        timeframes={
+            TimeframeRole.CONTEXT: args.context,
+            TimeframeRole.SETUP: args.setup,
+            TimeframeRole.EXECUTION: args.execution,
+        },
+        limit=args.limit,
+        policy=_policy_from(args),
+        detection=_detection_from(args),
+    )
+    print(render_workspace(workspace))
+    return EXIT_OK
+
+
+SWING_COMMAND = Command(
+    name="swing",
+    help="the complete swing workspace for one symbol",
+    description=(
+        "Fetch every timeframe once and compose the full swing workspace: data "
+        "quality, market regime, structure by role, levels, evidence by family, "
+        "conflicts and limitations. Risk, portfolio, trade plan and AI "
+        "interpretation render as explicitly unavailable. Nothing here is a "
+        "trade recommendation and no direction is expressed or implied."
+    ),
+    configure=_configure_swing,
+    run=_run_swing,
+)
+
+
 FACTS_COMMAND = Command(
     name="facts",
     help="print the deterministic fact sheet for one symbol on one timeframe",
@@ -330,7 +394,12 @@ MTF_COMMAND = Command(
 
 #: The single registry. `build_parser` and `main` both read it, so a command
 #: cannot exist in the parser without a runner, or vice versa.
-COMMANDS: tuple[Command, ...] = (FACTS_COMMAND, MTF_COMMAND, REGIME_COMMAND)
+COMMANDS: tuple[Command, ...] = (
+    FACTS_COMMAND,
+    MTF_COMMAND,
+    REGIME_COMMAND,
+    SWING_COMMAND,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:

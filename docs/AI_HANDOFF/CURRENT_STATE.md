@@ -4,14 +4,63 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AI — Market Regime Engine v1 (2026-08-03).
-**Latest commit at time of writing:** `0775292` — `docs(product): record Milestone AH release`
-(Milestones AF, AG and AH are committed; AH is **not yet pushed**, and the Milestone AI changes are
-uncommitted at time of writing).
+**Last updated for:** Milestone AK — Swing Trading Workspace v1 (2026-08-04).
+**Latest commit at time of writing:** `44685de` — `docs: correct the limitation counts AH changed`
+(Milestones AF through AI are committed and pushed; the Milestone AK changes are uncommitted at time
+of writing).
 
 ---
 
 ## Current milestone
+
+- **AK — Swing Trading Workspace v1**: the milestone that makes the **third island reachable**.
+  Design in [the design document](../design/SWING_WORKSPACE_V1.md); independent review in
+  [the review record](../reviews/SWING_WORKSPACE_V1_REVIEW.md). It follows the Milestone AJ
+  architecture without redesign, and proved no new architectural decision, so **no ADR was written**.
+
+  **The problem it solved.** Report 0003 found two dependency islands and AF–AI joined them. A third
+  was still stranded: `fmis.decision_support` (674 statements), `fmis.evidence` (291) and
+  `fmis.trading_context` (166) were accepted, ADR-governed and fully tested with **zero production
+  importers**. The workspace is the surface all three were designed for, and all three now have one.
+
+  **What shipped:** `fmis.workspace` — a new top layer above `fmis.pipeline` and
+  `fmis.decision_support` — with a frozen `Workspace` model, a section registry, deterministic
+  conflict detection, a terminal renderer and the `fmits swing SYMBOL` command.
+
+  **The workspace is an object, not a command.** `Workspace` is frozen, complete, schema-versioned
+  and rendered by consumers that do not re-derive anything. The renderer imports only the model and
+  calls no builder and no engine — both asserted.
+
+  **Eleven sections, and the empty ones are rendered.** Instrument · regime · structure · levels ·
+  evidence · conflicts · **risk** · **portfolio** · **trade plan** · **AI interpretation** ·
+  limitations. The four unbuilt sections use an `Unavailable` model carrying the milestone that owns
+  them and the inference their absence forbids — *"No position size shown here would be legitimate.
+  Do not infer one."* An omitted section is invisible, and an invisible gap reads as a gap that does
+  not exist.
+
+  **Conflicts are reported and never resolved.** Five kinds across timeframes, regimes and evidence.
+  The exclusions matter as much as the inclusions: `NEUTRAL` and `INDETERMINATE` never conflict with
+  a trend, `INSUFFICIENT` is missing evidence rather than an opposite, and a tie stays a tie
+  (ADR-0008 §5). A vocabulary scan asserts the module contains no verb of resolution.
+
+  **The evidence join was free.** `Observation.key` is already the `EvidenceDescriptor` name, so
+  placing an observation in its family is `find(key)` — a lookup, not a heuristic. And
+  `snapshot_from_sheet` adapts a `StructuralFactSheet` into the `AnalysisSnapshot` the evidence layer
+  reads, sharing the same `window` and `features` objects, so the page costs **no second fetch**.
+
+  **Quality.** 3,582 → **3,702 tests** (+120), identically under `-W error`. Coverage **100 %** on all
+  six workspace modules and on `pipeline/cli.py`. **49 mutation probes, 49 detected, 0 survivors, 0
+  no-ops**, byte-identical restoration. Exports 212 / 0 collisions, cycles 0, runtime dependencies 0.
+
+  **The review found five P2s, all fixed** — and the mutation gate is the reason. **Twelve probes
+  survived their first run against a suite that already had 100 % line coverage**, which is the
+  clearest demonstration this repository has produced that coverage and mutation measure different
+  things. Two of the twelve would have shipped a page that was confidently wrong: conflict output
+  depended on the order its inputs arrived in, and the levels section could print an **execution**
+  heading over **context** numbers. The others: the page overran its 78-column contract in four
+  places, the evidence table said "no engine" where the truth was "no descriptor", and the CLI
+  imported `fmis.trading_context` in violation of ADR-0009 — fixed by removing the import rather than
+  widening the guard.
 
 - **AI — Market Regime Engine v1**: the first **interpretation-adjacent** layer in the repository, and
   `ARCH` §9's highest-leverage unbuilt module. Contracts in

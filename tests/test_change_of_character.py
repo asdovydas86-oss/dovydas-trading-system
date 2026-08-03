@@ -1600,9 +1600,16 @@ def test_nothing_imports_change_of_character() -> None:
     The direction rule is unchanged. Every engine below remains unable to see
     this package, and each exemption is still named rather than pattern-matched,
     so a further consumer fails this test and must justify itself in an ADR.
+
+    Widened for Milestone AK to admit `fmis.workspace`, the Swing Trading
+    Workspace: it sits at the **top** of the graph, above `fmis.pipeline`, and
+    composes what this package produces while naming it in provenance. The
+    direction rule is unchanged — the workspace consumes this package and this
+    package cannot see the workspace — and the exemption is named rather than
+    pattern-matched, so a further consumer still fails this test.
     """
     root = PACKAGE_DIR.parent
-    permitted = {root / "pipeline"}
+    permitted = {root / "pipeline", root / "workspace"}
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue

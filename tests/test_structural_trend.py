@@ -1260,9 +1260,21 @@ def test_nothing_below_imports_this_package() -> None:
     consumes trend, trend does not consume regime — and `fmis.market_regime`
     imports exactly this one name from the whole repository besides its own
     modules, which a test in that package asserts.
+
+    Widened for Milestone AK to admit `fmis.workspace`, the Swing Trading
+    Workspace: it sits at the **top** of the graph, above `fmis.pipeline`, and
+    composes what this package produces while naming it in provenance. The
+    direction rule is unchanged — the workspace consumes this package and this
+    package cannot see the workspace — and the exemption is named rather than
+    pattern-matched, so a further consumer still fails this test.
     """
     root = Path(st.__file__).parent.parent
-    permitted = {root / "series_context", root / "pipeline", root / "market_regime"}
+    permitted = {
+        root / "series_context",
+        root / "pipeline",
+        root / "market_regime",
+        root / "workspace",
+    }
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:
             continue

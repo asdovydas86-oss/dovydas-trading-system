@@ -709,10 +709,17 @@ def test_provider_shortfall_raises_insufficient_data() -> None:
 
 
 def test_no_engine_imports_the_fact_sheet_root() -> None:
-    """The application layer stays the top of the graph."""
+    """No **engine** imports the application layer. The workspace is not one.
+
+    Widened for Milestone AK: `fmis.workspace` sits *above* `fmis.pipeline` and
+    consumes this root, which is the direction ADR-0007 permits. What the guard
+    still forbids is an engine — anything below the application layer — reaching
+    upward, and every such package remains covered.
+    """
     root = Path(sf_module.__file__).parent.parent
+    above = {"pipeline", "workspace"}
     for path in root.rglob("*.py"):
-        if "pipeline" in path.parts or "__pycache__" in path.parts:
+        if above & set(path.parts) or "__pycache__" in path.parts:
             continue
         assert "structural_facts" not in path.read_text(), path
 

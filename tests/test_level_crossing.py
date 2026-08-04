@@ -1865,6 +1865,11 @@ def test_nothing_below_imports_level_crossing() -> None:
     direction rule is unchanged — the workspace consumes this package and this
     package cannot see the workspace — and the exemption is named rather than
     pattern-matched, so a further consumer still fails this test.
+
+    Widened for Milestone AL to admit `fmis.decision_context`. That package
+    imports **nothing** from `fmis` — it names this package only in the
+    provenance string it renders beside each check, so a reader can see which
+    layer owns the rule. The direction rule is untouched.
     """
     root = PACKAGE_DIR.parent
     permitted = {
@@ -1872,6 +1877,7 @@ def test_nothing_below_imports_level_crossing() -> None:
         root / "change_of_character",
         root / "pipeline",
         root / "workspace",
+        root / "decision_context",
     }
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:

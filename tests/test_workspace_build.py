@@ -334,7 +334,7 @@ def test_only_two_families_are_catalogued_today() -> None:
 def test_the_builder_produces_a_complete_page() -> None:
     workspace = build_workspace(multi())
     assert isinstance(workspace, Workspace)
-    assert len(workspace.sections) == 11
+    assert len(workspace.sections) == 12
     assert {s.id for s in workspace.sections} == set(SectionId)
 
 
@@ -583,6 +583,7 @@ def test_an_uncatalogued_observation_is_counted_in_no_family() -> None:
             primary_role=TimeframeRole.SETUP,
             conflicts=(),
             evidence=patched,
+            context=None,
             limitations=(),
         )
     )
@@ -762,7 +763,7 @@ def test_a_dimension_reason_reaches_the_page_when_one_exists() -> None:
             symbol="BTCUSDT", objective="swing_trade", source="fixture", sheet=sheet,
             regimes={view.role: indeterminate for view in sheet.views},
             primary_role=TimeframeRole.SETUP, conflicts=(), evidence=None,
-            limitations=(),
+            context=None, limitations=(),
         )
     )
     rows = [row for block in section.body for row in getattr(block, "rows", ())]
@@ -840,7 +841,8 @@ def test_the_conflicts_section_lists_statements_when_conflicts_exist() -> None:
     base = dict(
         symbol="BTCUSDT", objective="swing_trade", source="fixture", sheet=sheet,
         regimes={v.role: regime_for_sheet(v.sheet) for v in sheet.views},
-        primary_role=TimeframeRole.SETUP, evidence=None, limitations=(),
+        primary_role=TimeframeRole.SETUP, evidence=None, context=None,
+        limitations=(),
     )
     with_conflict = conflicts_section(WorkspaceInputs(conflicts=(conflict,), **base))
     without = conflicts_section(WorkspaceInputs(conflicts=(), **base))
@@ -853,3 +855,162 @@ def test_the_conflicts_section_lists_statements_when_conflicts_exist() -> None:
         getattr(b, "rows", ()) for b in without.body
     )
     assert "No disagreement observed" in without.summary[0]
+
+
+# ============ 7. the decision context section (Milestone AL) =================
+
+
+def test_the_page_gained_a_gate_between_conflicts_and_the_planning_sections() -> None:
+    """A gate belongs after everything it judges and before everything it guards."""
+    from fmis.workspace.models import SECTION_ORDER
+
+    order = list(SECTION_ORDER)
+    assert order.index(SectionId.CONFLICTS) < order.index(SectionId.CONTEXT)
+    assert order.index(SectionId.CONTEXT) < order.index(SectionId.RISK)
+    assert len(order) == 12
+
+
+def test_the_context_section_discriminates_thin_data_from_full_data() -> None:
+    """The measured gap: before AL these three pages looked alike."""
+    from fmis.decision_context import ContextState
+
+    seen = {}
+    for count in (12, 40, 260):
+        sheet = build_multi_timeframe_facts(
+            {TimeframeRole.SETUP: facts(seed=5, count=count)},
+            intervals={TimeframeRole.SETUP: "1d"}, source="fixture")
+        section = build_workspace(sheet).by_id[SectionId.CONTEXT]
+        seen[count] = section.summary[0]
+    assert seen[12] == ContextState.INSUFFICIENT.value
+    assert seen[40] == ContextState.LIMITED.value
+    assert seen[260] == ContextState.SUFFICIENT.value
+
+
+def test_the_context_section_lists_every_requirement_and_its_owner() -> None:
+    from fmis.decision_context import Requirement, SOURCES
+
+    section = build_workspace(multi()).by_id[SectionId.CONTEXT]
+    rows = [r for block in section.body for r in getattr(block, "rows", ())]
+    assert {r.label for r in rows} == {r.value for r in Requirement}
+    notes = [n for block in section.body for n in getattr(block, "notes", ())]
+    for requirement, source in SOURCES.items():
+        assert any(requirement.value in n and source in n for n in notes)
+
+
+def test_the_adapter_reads_each_view_s_own_detection_requirement() -> None:
+    """Depth is judged against what that analysis needed, not against a literal."""
+    from fmis.market_structure import required_candles
+    from fmis.workspace.builder import context_input_from_facts
+
+    sheet = build_multi_timeframe_facts(
+        {TimeframeRole.SETUP: facts(seed=5, count=260,
+                                    detection=DetectionSettings(4, 6))},
+        intervals={TimeframeRole.SETUP: "1d"}, source="fixture")
+    regimes = {v.role: regime_for_sheet(v.sheet) for v in sheet.views}
+    subject = context_input_from_facts(
+        sheet, regimes, None, primary_role=TimeframeRole.SETUP, conflict_count=0)
+    assert subject.primary.required_candles == required_candles(4, 6)
+    assert subject.primary.closed_candles == sheet.views[0].sheet.window.closed_count
+
+
+def test_a_missing_evidence_report_is_itself_insufficiency() -> None:
+    from fmis.workspace.builder import context_input_from_facts
+
+    sheet = multi()
+    regimes = {v.role: regime_for_sheet(v.sheet) for v in sheet.views}
+    subject = context_input_from_facts(
+        sheet, regimes, None, primary_role=TimeframeRole.SETUP, conflict_count=0)
+    assert subject.evidence_is_insufficient is True
+
+
+def test_the_context_section_never_states_a_direction() -> None:
+    import re
+
+    banned = {"long", "short", "buy", "sell", "bullish", "bearish", "entry",
+              "target", "stop", "recommend", "score"}
+    section = build_workspace(multi()).by_id[SectionId.CONTEXT]
+    text = " ".join(
+        list(section.summary)
+        + [f"{r.label} {r.value} {r.note}" for b in section.body for r in getattr(b, "rows", ())]
+        + [n for b in section.body for n in getattr(b, "notes", ())]
+        + list(section.caveats)
+    )
+    assert not (set(re.findall(r"[a-z]+", text.lower())) & banned)
+
+
+def test_the_strict_policy_reaches_the_page() -> None:
+    from fmis.decision_context import ContextPolicy, ContextState
+
+    sheet = build_multi_timeframe_facts(
+        {TimeframeRole.SETUP: facts(seed=5, count=40)},
+        intervals={TimeframeRole.SETUP: "1d"}, source="fixture")
+    lenient = build_workspace(sheet).by_id[SectionId.CONTEXT]
+    strict = build_workspace(
+        sheet, context_policy=ContextPolicy(strict=True)
+    ).by_id[SectionId.CONTEXT]
+    assert lenient.summary[0] == ContextState.LIMITED.value
+    assert strict.summary[0] == ContextState.INSUFFICIENT.value
+
+
+def test_an_unevaluated_context_reports_failed_with_a_reason() -> None:
+    from fmis.workspace.sections import WorkspaceInputs, context_section
+
+    sheet = multi()
+    section = context_section(
+        WorkspaceInputs(
+            symbol="BTCUSDT", objective="swing_trade", source="fixture", sheet=sheet,
+            regimes={v.role: regime_for_sheet(v.sheet) for v in sheet.views},
+            primary_role=TimeframeRole.SETUP, conflicts=(), evidence=None,
+            context=None, limitations=(),
+        )
+    )
+    assert section.status is SectionStatus.FAILED
+    assert section.reason
+
+
+def test_the_adapter_copies_every_view_count_from_the_sheet() -> None:
+    """Survivors 37–39, 41: the adapter's fields were never checked one by one."""
+    from fmis.workspace.builder import context_input_from_facts
+
+    sheet = build_multi_timeframe_facts(
+        {TimeframeRole.CONTEXT: facts(seed=1, count=40),
+         TimeframeRole.SETUP: facts(seed=5, count=260),
+         TimeframeRole.EXECUTION: facts(seed=9, count=260)},
+        intervals={TimeframeRole.CONTEXT: "1w", TimeframeRole.SETUP: "1d",
+                   TimeframeRole.EXECUTION: "4h"}, source="fixture")
+    regimes = {v.role: regime_for_sheet(v.sheet) for v in sheet.views}
+    subject = context_input_from_facts(
+        sheet, regimes, None, primary_role=TimeframeRole.EXECUTION, conflict_count=0)
+
+    assert subject.primary_role == "execution"
+    assert subject.primary.role == "execution"
+    by_role = {v.role: v for v in subject.views}
+    for view in sheet.views:
+        adequacy = by_role[view.role.value]
+        assert adequacy.warming_up == len(view.sheet.warming_up)
+        assert adequacy.level_count == len(view.sheet.structure.levels)
+        insufficient = sum(
+            1 for d in regimes[view.role].dimensions
+            if d.state.value == "insufficient"
+        )
+        assert adequacy.dimensions_insufficient == insufficient
+    # The thin 1w view must actually carry non-trivial counts, or the assertions
+    # above would hold on a fixture where every value happened to be zero.
+    assert by_role["context"].warming_up > 0
+    assert by_role["context"].dimensions_insufficient > 0
+
+
+def test_the_context_section_status_follows_the_state() -> None:
+    """Survivor 42: available only when sufficient, partial otherwise."""
+    from fmis.decision_context import ContextState
+
+    for count, expected in ((260, SectionStatus.AVAILABLE), (40, SectionStatus.PARTIAL),
+                            (12, SectionStatus.PARTIAL)):
+        sheet = build_multi_timeframe_facts(
+            {TimeframeRole.SETUP: facts(seed=5, count=count)},
+            intervals={TimeframeRole.SETUP: "1d"}, source="fixture")
+        section = build_workspace(sheet).by_id[SectionId.CONTEXT]
+        assert section.status is expected, (count, section.summary[0])
+        assert (section.summary[0] == ContextState.SUFFICIENT.value) is (
+            expected is SectionStatus.AVAILABLE
+        )

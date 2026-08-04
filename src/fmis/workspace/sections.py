@@ -15,6 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Callable
 
+from fmis.decision_context import ContextState, DecisionContext, Severity
 from fmis.decision_support import Alignment, EvidenceReport, Observation
 from fmis.evidence import EvidenceFamily, descriptors_for, find
 from fmis.market_regime import (
@@ -80,6 +81,7 @@ class WorkspaceInputs:
     primary_role: TimeframeRole
     conflicts: tuple[Conflict, ...]
     evidence: EvidenceReport | None
+    context: DecisionContext | None
     limitations: tuple[Limitation, ...]
 
     @property
@@ -614,7 +616,97 @@ def conflicts_section(inputs: WorkspaceInputs) -> WorkspaceSection:
     )
 
 
-# ─────────────────────── §7–§10 the unbuilt sections ──────────────────────
+# ───────────────────────────── §7 decision context ────────────────────────
+
+#: How each state reads on the page. An explicit mapping, never the enum's
+#: definition order or a formatted enum value, so renaming a member fails here
+#: rather than silently changing what the reader is told.
+_CONTEXT_SUMMARY: Mapping[ContextState, str] = {
+    ContextState.SUFFICIENT: (
+        "Every requirement is met. This analysis rests on the data each layer "
+        "said it needed."
+    ),
+    ContextState.LIMITED: (
+        "Nothing blocking is missing, but the analysis is degraded in the ways "
+        "named below."
+    ),
+    ContextState.INSUFFICIENT: (
+        "A blocking requirement is unmet. Continuing toward a setup from here "
+        "would be reasoning from data the system knows is not there."
+    ),
+}
+
+
+def context_section(inputs: WorkspaceInputs) -> WorkspaceSection:
+    """Whether the page above contains enough to continue — the gate, not a verdict.
+
+    Placed immediately after conflicts because it judges everything above it, and
+    immediately before the planning sections because it guards them. It is a
+    statement about *information*, never about the market: `SUFFICIENT` says the
+    data each layer asked for is present, and says nothing whatever about price.
+    """
+    context = inputs.context
+    if context is None:
+        return Section(
+            id=SectionId.CONTEXT,
+            title="DECISION CONTEXT",
+            status=SectionStatus.FAILED,
+            summary=("The decision context could not be evaluated.",),
+            reason="the workspace produced no evaluable context input",
+            caveats=("An unevaluated context is not a met one.",),
+            provenance=Provenance(engine="fmis.decision_context"),
+        )
+
+    rows = [
+        Row(check.requirement.value, "met" if check.met else "not met",
+            check.statement, tier=Tier.DERIVED)
+        for check in context.checks
+    ]
+    sources = NoteBlock(
+        tuple(
+            f"{check.requirement.value} — rule owned by {check.source}"
+            for check in context.checks
+        )
+    )
+    notes = [
+        f"{len(context.blocking)} blocking · {len(context.limiting)} limiting "
+        f"gap(s). Every requirement checked is listed, met ones included.",
+        "Conflicts do not affect this judgement. Sufficiency is about what is "
+        "available, not about whether it agrees.",
+    ]
+
+    return Section(
+        id=SectionId.CONTEXT,
+        title="DECISION CONTEXT",
+        status=(
+            SectionStatus.AVAILABLE
+            if context.state is ContextState.SUFFICIENT
+            else SectionStatus.PARTIAL
+        ),
+        summary=(
+            f"{context.state.value}",
+            _CONTEXT_SUMMARY[context.state],
+        ),
+        body=(
+            RowBlock(tuple(rows), heading="REQUIREMENTS"),
+            sources,
+            NoteBlock(tuple(notes)),
+        ),
+        caveats=(
+            "This judges the information, not the market. It is not a direction "
+            "and not a recommendation.",
+            "A met requirement means the data each layer asked for is present, "
+            "not that the analysis is correct.",
+        ),
+        provenance=Provenance(
+            engine="fmis.decision_context",
+            policy_id=context.policy.policy_id,
+            as_of=context.as_of,
+        ),
+    )
+
+
+# ─────────────────────── §8–§11 the unbuilt sections ──────────────────────
 
 
 def risk_section(inputs: WorkspaceInputs) -> WorkspaceSection:
@@ -709,6 +801,7 @@ SECTION_PROVIDERS: tuple[tuple[SectionId, SectionProvider], ...] = (
     (SectionId.LEVELS, levels_section),
     (SectionId.EVIDENCE, evidence_section),
     (SectionId.CONFLICTS, conflicts_section),
+    (SectionId.CONTEXT, context_section),
     (SectionId.RISK, risk_section),
     (SectionId.PORTFOLIO, portfolio_section),
     (SectionId.TRADE_PLAN, trade_plan_section),

@@ -78,6 +78,7 @@ class SectionId(str, Enum):
     LEVELS = "levels"
     EVIDENCE = "evidence"
     CONFLICTS = "conflicts"
+    CONTEXT = "context"
     RISK = "risk"
     PORTFOLIO = "portfolio"
     TRADE_PLAN = "trade_plan"
@@ -94,7 +95,9 @@ class SectionId(str, Enum):
 #: higher timeframe's environment before the setup and because the v3 prompt's
 #: own first correction was "regime classification first". Structure third, so a
 #: reader learns the environment before forming a directional impression of it.
-#: Conflicts before risk, so nothing is planned around evidence that disagrees.
+#: Conflicts before risk, so nothing is planned around evidence that disagrees,
+#: and the decision context immediately after them — it is the page's gate, and
+#: a gate belongs after everything it judges and before everything it guards.
 #: Interpretation last, so a model's narrative cannot anchor the facts above it.
 SECTION_ORDER: tuple[SectionId, ...] = (
     SectionId.INSTRUMENT,
@@ -103,6 +106,7 @@ SECTION_ORDER: tuple[SectionId, ...] = (
     SectionId.LEVELS,
     SectionId.EVIDENCE,
     SectionId.CONFLICTS,
+    SectionId.CONTEXT,
     SectionId.RISK,
     SectionId.PORTFOLIO,
     SectionId.TRADE_PLAN,

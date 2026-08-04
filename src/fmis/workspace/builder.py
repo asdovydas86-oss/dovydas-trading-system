@@ -26,8 +26,22 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from fmis.decision_support import EvidenceReport, build_evidence_report
-from fmis.market_regime import MarketRegime, RegimePolicy
+from fmis.decision_context import (
+    ContextInput,
+    ContextPolicy,
+    DecisionContext,
+    ViewAdequacy,
+    evaluate_context,
+)
+from fmis.decision_support import EvidenceReport, OverallState, build_evidence_report
+from fmis.market_regime import (
+    MarketRegime,
+    RegimeDimensionName,
+    RegimePolicy,
+    StructureState,
+    VolatilityState,
+    ParticipationState,
+)
 from fmis.pipeline.market_analysis import AnalysisSnapshot
 from fmis.pipeline.multi_timeframe import (
     DEFAULT_TIMEFRAMES,
@@ -36,6 +50,7 @@ from fmis.pipeline.multi_timeframe import (
     multi_timeframe_facts_for_symbol,
 )
 from fmis.pipeline.regime import REGIME_LIMITATIONS, regime_features, regime_for_sheet
+from fmis.market_structure import required_candles
 from fmis.pipeline.structural_facts import (
     LIMITATIONS,
     DetectionSettings,
@@ -52,6 +67,7 @@ __all__ = [
     "WORKSPACE_LIMITATIONS",
     "PRIMARY_ROLE",
     "snapshot_from_sheet",
+    "context_input_from_facts",
     "build_workspace",
     "workspace_for_symbol",
 ]
@@ -129,11 +145,72 @@ def _evidence_for(sheet: StructuralFactSheet) -> EvidenceReport | None:
     return build_evidence_report(snapshot_from_sheet(sheet))
 
 
+#: The states that mean a regime dimension had nothing to read. Listed once, so
+#: "insufficient" is recognised the same way for every dimension and a renamed
+#: member fails here rather than silently counting as classified.
+_INSUFFICIENT_STATES = (
+    StructureState.INSUFFICIENT,
+    VolatilityState.INSUFFICIENT,
+    ParticipationState.INSUFFICIENT,
+)
+
+
+def context_input_from_facts(
+    sheet: MultiTimeframeFactSheet,
+    regimes: Mapping[TimeframeRole, MarketRegime],
+    evidence: EvidenceReport | None,
+    *,
+    primary_role: TimeframeRole,
+    conflict_count: int,
+) -> ContextInput:
+    """Adapt what the engines produced into the decision engine's narrow input.
+
+    Counts only — no sheet, no report, no rendered page crosses this boundary.
+    `required_candles` comes from each view's **own** detection settings, so the
+    depth requirement is compared against what that analysis actually needed
+    rather than against a number invented here.
+
+    ``evidence_is_insufficient`` is the verdict ADR-0008 §7 already reached, read
+    rather than recomputed. When no evidence report could be built at all, that
+    is itself insufficiency and is reported as such.
+    """
+    views = tuple(
+        ViewAdequacy(
+            role=view.role.value,
+            interval=view.interval,
+            closed_candles=view.sheet.window.closed_count,
+            required_candles=required_candles(
+                view.sheet.detection.left_bars, view.sheet.detection.right_bars
+            ),
+            warming_up=len(view.sheet.warming_up),
+            level_count=len(view.sheet.structure.levels),
+            dimensions_insufficient=sum(
+                1
+                for dimension in regimes[view.role].dimensions
+                if dimension.state in _INSUFFICIENT_STATES
+            ),
+        )
+        for view in sheet.views
+    )
+    return ContextInput(
+        symbol=sheet.symbol,
+        as_of=sheet.newest_as_of,
+        views=views,
+        primary_role=primary_role.value,
+        evidence_is_insufficient=(
+            evidence is None or evidence.state is OverallState.INSUFFICIENT_DATA
+        ),
+        conflict_count=conflict_count,
+        metadata={"source": sheet.source},
+    )
+
+
 def build_workspace(
     sheet: MultiTimeframeFactSheet,
     *,
     objective: TradingObjective = TradingObjective.SWING_TRADE,
     policy: RegimePolicy | None = None,
+    context_policy: ContextPolicy | None = None,
     primary_role: TimeframeRole = PRIMARY_ROLE,
     metadata: Mapping[str, Any] | None = None,
 ) -> Workspace:
@@ -197,6 +274,14 @@ def build_workspace(
         evidence=None if evidence is None else (primary_label, evidence),
     )
 
+    context = evaluate_context(
+        context_input_from_facts(
+            sheet, regimes, evidence,
+            primary_role=primary_role, conflict_count=len(conflicts),
+        ),
+        context_policy,
+    )
+
     inputs = WorkspaceInputs(
         symbol=sheet.symbol,
         objective=objective.value,
@@ -206,6 +291,7 @@ def build_workspace(
         primary_role=primary_role,
         conflicts=conflicts,
         evidence=evidence,
+        context=context,
         limitations=(*sheet.limitations, *REGIME_LIMITATIONS, *WORKSPACE_LIMITATIONS),
     )
 
@@ -219,6 +305,7 @@ def build_workspace(
             "primary_role": primary_role.value,
             "intervals": sheet.intervals,
             "conflict_count": len(conflicts),
+            "context_state": context.state.value,
             **dict(metadata or {}),
         },
     )
@@ -231,6 +318,7 @@ def workspace_for_symbol(
     limit: int | None = None,
     objective: TradingObjective = TradingObjective.SWING_TRADE,
     policy: RegimePolicy | None = None,
+    context_policy: ContextPolicy | None = None,
     primary_role: TimeframeRole = PRIMARY_ROLE,
     detection: DetectionSettings | None = None,
     transport: Transport | None = None,
@@ -257,7 +345,11 @@ def workspace_for_symbol(
         base_url=base_url,
     )
     return sheet, build_workspace(
-        sheet, objective=objective, policy=policy, primary_role=primary_role
+        sheet,
+        objective=objective,
+        policy=policy,
+        context_policy=context_policy,
+        primary_role=primary_role,
     )
 
 

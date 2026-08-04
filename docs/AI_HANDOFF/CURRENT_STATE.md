@@ -4,14 +4,63 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AK — Swing Trading Workspace v1 (2026-08-04).
-**Latest commit at time of writing:** `44685de` — `docs: correct the limitation counts AH changed`
-(Milestones AF through AI are committed and pushed; the Milestone AK changes are uncommitted at time
-of writing).
+**Last updated for:** Milestone AL — Decision Context Engine v1 (2026-08-04).
+**Latest commit at time of writing:** `6ebf1e0` — `docs(product): record Milestone AK release`
+(Milestones AF through AI are pushed; AK is committed and unpushed; the Milestone AL changes are
+uncommitted at time of writing).
 
 ---
 
 ## Current milestone
+
+- **AL — Decision Context Engine v1**: an **architecture-first** milestone. The board's NOW item was
+  the daily workflow; the first work was proving which milestone was correct. Contracts in
+  [ADR-0026](../adr/ADR-0026-decision-context-boundary.md); design in
+  [the design document](../design/DECISION_CONTEXT_V1.md); independent review in
+  [the review record](../reviews/DECISION_CONTEXT_V1_REVIEW.md).
+
+  **The gap it closed, measured before starting.** At `6ebf1e0` a 12-candle page and a 260-candle page
+  produced nearly the same section-status profile. A section's status says whether it *produced
+  output*, not whether the output can be *trusted*. `required_candles` existed per indicator and
+  `InsufficientDataError` fired only at zero closed candles — **nothing judged whether an analysis as a
+  whole rested on enough data**, which is the bias `SPEC` §7 names, live in the product.
+
+  **Why it preceded the daily workflow.** `reports/0005` Phase 4 names *"alert fatigue from an
+  unfiltered brief"* as that milestone's principal risk. The filter is a sufficiency judgement, so
+  building the workflow first would have meant building it inside and extracting it later.
+
+  **What shipped:** `fmis.decision_context`, an engine answering exactly one question — *does this
+  analysis contain enough trustworthy information to continue toward a trading setup?* — plus a twelfth
+  workspace section placed between conflicts and risk, because a gate belongs after everything it
+  judges and before everything it guards.
+
+  **It invents no threshold.** Five requirements, each delegating its rule to the layer that already
+  declared it: `required_candles` for depth, the feature engine for warm-up, `fmis.market_regime` for
+  determinacy, `fmis.level_crossing` for structure, ADR-0008 §7 for evidence. `ContextPolicy` is the
+  only policy object in the repository carrying **no numbers**, and a test asserts no numeric literal
+  beyond 0 and 1 exists in the evaluator.
+
+  **Conflicts never move the verdict.** Sufficiency is about what is available, not whether it agrees;
+  penalising disagreement would reward pages that look tidy by being one-sided.
+
+  **No score, three states.** `SUFFICIENT` / `LIMITED` / `INSUFFICIENT`. The middle is the honest one.
+  12 candles → insufficient, 40 → limited, 260 → sufficient, where all three previously rendered as an
+  available page.
+
+  **The engine imports nothing from `fmis`.** Its input is seven integers, two strings, a flag and a
+  timestamp — which matters because the `Workspace` model is *presentation-shaped*, and an engine
+  consuming it would parse formatted strings back into data.
+
+  **Quality.** 3,702 → **3,766 tests** (+64), identically under `-W error`. Coverage **100 %** on all
+  four new modules. **43 mutation probes, 43 detected, 0 survivors, 0 no-ops.** Exports 228 / 0
+  collisions, cycles 0, runtime dependencies 0.
+
+  **The review found two P2s, both fixed.** `may_continue` was re-derived from the checks and therefore
+  contradicted its own state under a strict policy — reporting `INSUFFICIENT` and "may continue"
+  simultaneously. And `DEFAULT_POLICY` collided with `fmis.market_regime`; the repository's existing
+  collision guard caught it. **Eleven mutation probes survived their first run** against 100 % line
+  coverage, four of them a single cluster where the adapter copied four fields and nothing asserted any
+  of them, because every test looked at the verdict rather than its inputs.
 
 - **AK — Swing Trading Workspace v1**: the milestone that makes the **third island reachable**.
   Design in [the design document](../design/SWING_WORKSPACE_V1.md); independent review in

@@ -127,50 +127,21 @@ The cycle, observable across every shipped milestone in [`docs/README.md`](../RE
 
 ---
 
-## 7. Model selection policy
+## 7. Model selection and session-cost policy
 
-No formal cost-tracking policy exists for this repository yet. The guidance below is a recommendation
-derived from how work has actually been scoped across past milestones — apply judgement, and prefer
-asking the owner over guessing on a genuinely ambiguous case.
+The full policy — Sonnet as the default model, the four specific cases that justify Opus, the
+required per-task model declaration, session-boundary rules for `/clear` and `/compact`, and why
+"Opus is safer" is not sufficient justification on its own — is
+[`docs/development/AI_ENGINEERING_WORKFLOW_AND_COST_POLICY.md`](../development/AI_ENGINEERING_WORKFLOW_AND_COST_POLICY.md).
+Read it before choosing a model or a session boundary; it is not restated here.
 
-**Favor Opus when:**
-- the task is *architecture-first* — the scope itself is in question and must be resolved by reasoning
-  before any code is written (e.g. "determine whether X is even the correct next milestone");
-- the task is an *independent review* — adversarially re-deriving another session's claims, finding
-  what its own tests didn't catch;
-- the design has several defensible directions and the choice has long-lived consequences (a new
-  package boundary, a new ADR, a schema).
-
-**Favor Sonnet when:**
-- an architecture or design document is already **accepted**, and the task is to implement it without
-  redesigning it (explicitly the common case — most `IMPLEMENTATION ONLY` milestones);
-- the task is mechanical: a new indicator following an existing sibling's shape, a test suite for an
-  already-designed module, a documentation sync after a milestone lands;
-- the task is bounded and reversible, and a wrong first attempt costs little to correct.
-
-When a task starts ambiguous and narrows (e.g. a design phase followed by an implementation phase),
-it is reasonable to switch models at that boundary rather than run the whole task on one tier.
+In one line: **Sonnet by default, large and autonomous; Opus only for concrete architecture,
+systemic reasoning, unknown-root-cause debugging or critical independent review, kept narrow;
+`/clear` at milestone or unrelated-task boundaries, `/compact` only within one continuing task.**
 
 ---
 
-## 8. Session policy
-
-- **New session per milestone.** A milestone is already the repository's unit of work — see §6 — so
-  it is also the natural session boundary. Starting a new milestone in a fresh session means this
-  document, `CURRENT_STATE.md` and the backlog are read once, cleanly, rather than accumulated on top
-  of an unrelated prior task's context.
-- **`/clear`** between unrelated tasks in the same terminal session — before switching from one
-  milestone or investigation to a genuinely unrelated one. Do not carry a prior milestone's working
-  context into a new one; re-read §5 fresh instead.
-- **`/compact`** when a single milestone's session has grown long (a long design discussion, a long
-  review) but you are continuing the *same* task — compaction preserves the thread; `/clear` does not.
-- Prefer ending a session at a milestone boundary (after commit, before the next design phase) over
-  mid-implementation — resuming mid-implementation from a compacted or fresh context risks losing a
-  constraint that was only stated once, earlier in the conversation.
-
----
-
-## 9. Reading policy
+## 8. Reading policy
 
 Read the **minimum** authoritative documentation for the task, not everything linked from here.
 
@@ -187,7 +158,7 @@ fix the document, per §6's review-first workflow, rather than trusting the stal
 
 ---
 
-## 10. Project principles
+## 9. Project principles
 
 The non-negotiable rules live in [`CLAUDE.md`](../../CLAUDE.md) — read it in full; it is short.
 In one line each, so you know what to expect before you open it: **product first, not documentation** ·

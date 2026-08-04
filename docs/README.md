@@ -64,6 +64,7 @@ README summarizes and points, it does not restate them.
 | [reviews/MARKET_STRUCTURE_ARCHITECTURE_REVIEW_V1.md](reviews/MARKET_STRUCTURE_ARCHITECTURE_REVIEW_V1.md) | Audit of the complete deterministic market-structure foundation (ADR-0012…0015) at commit `1154622`: contract-ownership map, stability semantics, P0–P4 findings, recommended next milestone | **Authoritative — market-structure readiness** |
 | [RVE_DESIGN_V1.md](RVE_DESIGN_V1.md) | Relative Value Engine technical design (Milestones J/K/L): contracts, public API, interactions, decisions RV-1…RV-11 | Design proposal — not authorization to implement |
 | [REPOSITORY_MAP.md](REPOSITORY_MAP.md) | What each directory is for, and its allowed/forbidden dependencies | Reference — current repo |
+| [development/AI_ENGINEERING_WORKFLOW_AND_COST_POLICY.md](development/AI_ENGINEERING_WORKFLOW_AND_COST_POLICY.md) | AI model-selection and session-cost policy: Sonnet as default, the four cases that justify Opus, per-task model declaration, `/clear` vs `/compact` boundaries | **Authoritative — AI workflow and cost** |
 | [AI_HANDOFF/START_HERE_FOR_AI.md](AI_HANDOFF/START_HERE_FOR_AI.md) | Onboarding + non-negotiable rules for AI agents | Reference — workflow |
 | [AI_HANDOFF/CURRENT_STATE.md](AI_HANDOFF/CURRENT_STATE.md) | Snapshot of the repository today (updated every milestone) | **Reference — current state** |
 | [../PROJECT_SPECIFICATION_V1.md](../PROJECT_SPECIFICATION_V1.md) | Original vision, principles, priorities | **Authoritative — vision** |

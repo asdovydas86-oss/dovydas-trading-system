@@ -32,6 +32,10 @@ impossible before. Greater internal complexity alone is not sufficient value.
 never asked to estimate what arithmetic can produce. AI interprets structured facts — conflicts,
 scenarios, uncertainty, the strongest opposing case — and never produces the facts themselves.
 
+**AI cost is an engineering resource.** Model selection (Sonnet default, Opus only for specific
+cases) and session boundaries (`/clear`, `/compact`) follow
+[`docs/development/AI_ENGINEERING_WORKFLOW_AND_COST_POLICY.md`](docs/development/AI_ENGINEERING_WORKFLOW_AND_COST_POLICY.md).
+
 ## Git safety
 
 **Never commit, merge, rebase, tag or push without explicit authorization from the owner.** Reading,

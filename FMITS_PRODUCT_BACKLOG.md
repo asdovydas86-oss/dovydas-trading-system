@@ -11,7 +11,7 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `8121050b9d36a22f9a20995c98c5be1206911c33` (Milestone AK) |
+| **Last verified against** | `a728f3b9f1dbf70c3e00fcfb97b66d60872f8ece` (Milestone AL) |
 | **Verified on** | 2026-08-04 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -70,18 +70,18 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AK commit** | `8121050b9d36a22f9a20995c98c5be1206911c33` |
-| **HEAD** | this documentation commit, on top of `8121050` |
-| **`origin/main`** | `44685de` — **behind local main by the two AK commits; not pushed** |
+| **Milestone AL commit** | `a728f3b9f1dbf70c3e00fcfb97b66d60872f8ece` |
+| **HEAD** | this documentation commit, on top of `a728f3b` |
+| **`origin/main`** | `44685de` — **behind local main by four commits (AK and AL); not pushed** |
 | **Working tree** | clean |
-| **Test count** | **3,702 passing**, identically under `-W error` |
-| **Public exports / collisions** | 212 / 0 (183 before AK) |
+| **Test count** | **3,766 passing**, identically under `-W error` |
+| **Public exports / collisions** | 228 / 0 (212 before AL) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 |
-| **Latest completed milestone** | **AK — Swing Trading Workspace v1** (`8121050`) |
+| **Latest completed milestone** | **AL — Decision Context Engine v1** (`a728f3b`) |
 | **Product Value Level** | **Level 2 — usable swing-analysis assistant: one page carrying facts, regime, evidence and conflicts** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **AL — Deterministic daily workflow v1** (not started) |
+| **Immediate next milestone** | **AN — Deterministic daily workflow v1** (not started) |
 
 ### Current user-visible capability
 
@@ -119,44 +119,43 @@ close, and the inherited limitations — computed from live exchange data.
 
 Exactly one item.
 
-### `AL` — Deterministic daily workflow v1
+### `AN` — Deterministic daily workflow v1
 
 | Field | Value |
 |---|---|
-| **ID** | AL *(was AK before the workspace took that letter — see §11 note)* |
+| **ID** | AN *(was AL until the Decision Context Engine took that letter — §11)* |
 | **Epic** | EP-03 Daily Market Intelligence |
 | **Status** | **NOW** |
 | **Priority** | High |
 | **Estimated size** | 4–6 weeks *(source: reports/0005 Phase 4)* |
-| **Confidence** | Medium — scheduling has no owner in any architecture layer yet |
+| **Confidence** | Medium — scheduling still has no owner in any architecture layer |
 
 **Product value.** **This is v1** — the first version genuinely useful daily without the TradingView
 prompt doing the analysis.
 
 **What the owner can do after this that was impossible before.** Open the system each morning and be
-told what changed and what deserves attention, before asking. Requires scanning over a watchlist, a
-generated brief, and scheduling.
+told what changed and what deserves attention, before asking.
 
-**Why now.** Its dependency is met. `AK` delivered the per-instrument page; a daily workflow is that
-page run over a watchlist, diffed, and delivered — which is why the `Workspace` was built as a
-serializable object rather than as printed output.
+**Why now.** Both dependencies are met. `AK` delivered the per-instrument page as a serializable
+object, and `AL` delivered the filter: `reports/0005` Phase 4 names *"alert fatigue from an
+unfiltered brief"* as this milestone's principal risk, and a brief can now exclude instruments whose
+analysis the system judges insufficient — using a judgement that exists outside the brief.
 
-**Dependencies.** AK (done, `8121050`).
+**Dependencies.** AK (done) **and** AL (done, `a728f3b`).
 **Acceptance.** A scheduled run produces a brief without interaction · scanning ranks a watchlist on
 computed facts with stated reasons · every run is archived · failures are visible.
 **Out of scope.** A UI — text output is sufficient and much cheaper.
 **Related.** `reports/0004` §12 Level 3 · `reports/0005` Phase 4.
 
-> **Not started.** This item is sequenced, not in progress. No scanning, brief or scheduling code
-> exists in the repository.
+> **Not started.** No scanning, brief or scheduling code exists in the repository.
 
 ## 6. NEXT
 
 The forced sequence. Each item is blocked on the one above it.
 
-*AK shipped; the daily workflow moved to NOW.*
+*AL shipped; the daily workflow moved to NOW.*
 
-### `AM` — Memory / decision archive
+### `AO` — Memory / decision archive
 
 | Field | Value |
 |---|---|
@@ -166,7 +165,7 @@ The forced sequence. Each item is blocked on the one above it.
 **What the owner can do after this that was impossible before.** Ask *"what did I think about this in
 October, and was I right?"* and get an answer. Until this exists, daily use accumulates nothing.
 
-**Dependencies.** AL, and **OPEN DECISION D-01 (persistence schema)** must be settled first. `AK`
+**Dependencies.** AN, and **OPEN DECISION D-01 (persistence schema)** must be settled first. `AK`
 made this materially easier: a `Workspace` is a complete, schema-versioned object, so what gets
 archived is already decided.
 **Related.** `PROJECT_SPECIFICATION_V1.md` §25 · `reports/0004` C-159 · `reports/0005` Phase 5.
@@ -214,6 +213,35 @@ Repository-verified only. Every SHA below was confirmed to exist with `git cat-f
 The **complete** 30-milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the three most recent product-relevant milestones.
+
+### `AL` — Decision Context Engine v1 · **DONE**
+
+| Field | Value |
+|---|---|
+| **Commit** | **`a728f3b9f1dbf70c3e00fcfb97b66d60872f8ece`** |
+| **ADR** | [ADR-0026](docs/adr/ADR-0026-decision-context-boundary.md) |
+| **Design** | [DECISION_CONTEXT_V1.md](docs/design/DECISION_CONTEXT_V1.md) |
+| **Review** | [DECISION_CONTEXT_V1_REVIEW.md](docs/reviews/DECISION_CONTEXT_V1_REVIEW.md) — no P0, no P1, **2 P2 fixed**, 3 P3 |
+| **Tests** | 3,702 → **3,766** (+64). Mutation 43/43, zero survivors |
+
+**Product value delivered.** The page now says whether it can be trusted. Measured before the work
+began: a 12-candle page and a 260-candle page rendered nearly identically, because a section's status
+reports whether it produced output rather than whether the output is sound. 12 candles now reads
+**insufficient**, 40 **limited**, 260 **sufficient**.
+
+**What the owner can now do that was impossible before.** See, in one line, whether an analysis rests
+on enough data — and when it does not, exactly which requirement is unmet and which layer decided.
+
+**Why this preceded the daily workflow.** That milestone's named principal risk is an unfiltered brief.
+The filter is this judgement, and building it inside the brief would have meant extracting it later.
+
+**Limitations shipped with it.** The judgement is made about the primary timeframe · `SUFFICIENT`
+means the data each layer asked for is present, not that the reading is correct · `strict` is one
+flag, deliberately not a per-requirement override.
+
+**Status note.** DONE on repository evidence: the commit exists, the suite is green under `-W error`,
+coverage is 100 % on all four new modules, mutation is clean, the review is complete and all four
+real-data surfaces work.
 
 ### `AK` — Swing Trading Workspace v1 · **DONE**
 
@@ -439,7 +467,7 @@ known before sequencing.
 
 ## 10. Open decisions
 
-Carried, not solved. None of these blocks AL.
+Carried, not solved. None of these blocks AN.
 
 | ID | Decision | Blocks | Source |
 |---|---|---|---|
@@ -482,6 +510,13 @@ Carried, not solved. None of these blocks AL.
    milestone it unblocks (AI) before the work started, and the DONE row is written against that
    claim rather than around it.
 
+### Milestone letters: two shifts, both recorded
+
+The Decision Context Engine took `AL`, so the two unshipped items below it shifted again: daily
+workflow `AL` → **`AN`**, memory `AM` → **`AO`**. Safe only because neither had shipped — no
+commit, ADR or design document cites the old letters. `AM` is deliberately left unused rather than
+reassigned, so no reader mistakes a renumbered item for the one they remember.
+
 ### Milestone letters: the workspace took `AK`
 
 The board previously read `AJ` = Swing Trading Workspace, `AK` = daily workflow, `AL` = memory. The
@@ -502,4 +537,4 @@ not edited.
 
 ---
 
-*Living document · last verified against `e589411` on 2026-08-02*
+*Living document · last verified against `a728f3b` on 2026-08-04*

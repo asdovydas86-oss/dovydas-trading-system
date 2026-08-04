@@ -7,7 +7,7 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `8121050b9d36a22f9a20995c98c5be1206911c33` (Milestone AK) |
+| **Last verified against** | `a728f3b9f1dbf70c3e00fcfb97b66d60872f8ece` (Milestone AL) |
 | **Verified on** | 2026-08-04 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -67,7 +67,7 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `8121050` — what the owner can do today.**
+**As of `a728f3b` — what the owner can do today.**
 
 ```
 fmits swing  BTCUSDT                            # the whole page, end to end
@@ -79,6 +79,9 @@ python -m fmis.pipeline swing BTCUSDT           # works without reinstalling
 
 **Delivered:**
 
+- a **statement of whether the analysis can be trusted**: five named requirements, each delegating
+  its rule to the layer that declared it, reported as sufficient, limited or insufficient with the
+  unmet ones named;
 - a **single-page swing workspace**: instrument and data quality, regime per role, structure per
   role, levels, evidence by family and the **disagreements between them** — with risk, portfolio,
   trade plan and AI interpretation shown as explicitly unavailable, each naming what its absence
@@ -124,6 +127,46 @@ makes no directional claim. Every rung of the automation ladder remains unstarte
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-04 · `AL` — Decision Context Engine v1
+
+**Status:** Released · **reliability, not a new capability**
+**Commit:** `a728f3b9f1dbf70c3e00fcfb97b66d60872f8ece`
+Validated before versioning: 3,766 tests green including `-W error`, coverage 100 % on all four new
+modules, 43 mutation probes all detected with zero survivors, independent review complete, all four
+real-data surfaces working.
+
+**Why this is recorded.** It adds no new thing to *do*, and §1 admits it on the other ground: it
+**materially improves the reliability** of the capability `AK` shipped.
+
+**What it changes for the owner.** The page now says whether it can be trusted. Measured before the
+work began, a 12-candle analysis and a 260-candle analysis rendered nearly identically — a section's
+status reported whether it *produced output*, not whether the output was *sound*. A 40-candle page
+showed its regime section as available while two of three regime dimensions underneath read
+insufficient. Those three cases now read **insufficient**, **limited** and **sufficient**, and when the
+answer is not sufficient the page names which requirement is unmet and which layer decided.
+
+**Limitations.**
+
+- The judgement is made about the **primary timeframe**. The other views contribute their adequacy but
+  the requirements are evaluated against the one a setup would be built on.
+- **Sufficient does not mean correct.** It means the data each layer asked for is present. A sufficient
+  context over a wrong reading is still a wrong reading, and the page says so.
+- **Conflicts do not affect it.** Sufficiency is about what is available, not whether it agrees.
+- **No score.** Three states and five named checks; a number would compress the information a reader
+  needs in order to disagree.
+
+**Safety / risk notes.** No direction, no recommendation, no sizing. This milestone **reduces** the
+chance of acting on an analysis the system already knew was thin.
+
+**Related.** ADR: [ADR-0026](docs/adr/ADR-0026-decision-context-boundary.md) ·
+Design: [DECISION_CONTEXT_V1](docs/design/DECISION_CONTEXT_V1.md) ·
+Review: [DECISION_CONTEXT_V1_REVIEW](docs/reviews/DECISION_CONTEXT_V1_REVIEW.md) — no P0, no P1, two P2
+found and fixed, three P3.
+
+**Breaking changes.** None. `facts`, `mtf` and `regime` are unchanged; `swing` gains a section.
 
 ---
 
@@ -444,7 +487,7 @@ fact that matters — the product began on 2026-08-02.
 
 > **Unreleased. Planned. Not available.** Nothing in this section exists in the repository.
 
-### `AL` — Deterministic daily workflow v1 — **UNRELEASED**
+### `AN` — Deterministic daily workflow v1 — **UNRELEASED**
 
 **Status:** NOW on the [product backlog](FMITS_PRODUCT_BACKLOG.md) · **not started** · no commit, no
 design and no ADR exists
@@ -453,9 +496,8 @@ design and no ADR exists
 generated, and a scheduled run that happens without being asked.
 
 **What it will change for the owner.** Not yet decided in detail, and deliberately not described here
-as though it were. Its precondition is met: `AK` delivered the per-instrument page, and a daily
-workflow is that page run over a watchlist, diffed and delivered — which is why the workspace was
-built as a serializable object rather than as printed output.
+as though it were. Both preconditions are now met: `AK` delivered the page as a serializable object
+and `AL` delivered the filter that keeps a brief from reporting analyses the system knows are thin.
 
 No further capability is listed. The sequence after it is on the backlog — this changelog records what
 shipped, not what is planned.
@@ -508,4 +550,4 @@ and mark the entry Foundational.
 
 ---
 
-*Living document · last verified against `8121050` on 2026-08-04*
+*Living document · last verified against `a728f3b` on 2026-08-04*

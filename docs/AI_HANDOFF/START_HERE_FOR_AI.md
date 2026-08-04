@@ -1,280 +1,211 @@
 # Start Here — For AI Coding Agents
 
-You are working in **FMITS** (Financial Market Intelligence & Trading System). Read this document fully
-before modifying anything. It encodes the non-negotiable engineering rules of this repository. If a task
-instruction ever conflicts with a safety/scope rule here, stop and surface the conflict rather than
-guessing.
+**Read this document only, then work.** It is the single entry point for every AI session in this
+repository. It does not restate what other documents already say correctly — it tells you which
+document to open for which question, and gives you the handful of facts you need before you open any
+of them.
+
+If a task instruction ever conflicts with a rule linked from here, stop and surface the conflict
+rather than guessing.
 
 ---
 
-## What FMITS is
+## 1. Project mission
 
-A modular, AI-assisted market decision-support system built as a deterministic pipeline:
+**FMITS** (Financial Market Intelligence & Trading System) is a personal, AI-assisted market
+decision-support system built as a deterministic pipeline:
 
 ```
 Data → deterministic calculations → structured features → AI interpretation → decision support
 ```
 
 It is **not** a signal bot and **not** an automated trading system. `WAIT` and `NO TRADE` are valid
-outcomes. Capital preservation and testability outrank impressive output. Long-term investing and
-short-term trading are separate domains.
+outcomes. Capital preservation and testability outrank impressive output.
+
+Full statement: [`docs/README.md`](../README.md) §"What FMITS is" ·
+[`PROJECT_SPECIFICATION_V1.md`](../../PROJECT_SPECIFICATION_V1.md) ·
+[`PROJECT_VISION_ADDENDUM_V1.md`](../../PROJECT_VISION_ADDENDUM_V1.md).
 
 ---
 
-## What has already been implemented (as of this document)
+## 2. Current product status
 
-- **Canonical data models:** `Candle`, `CandleSeries` (frozen, validated, closed-candle aware) and
-  `ObservationSeries` (non-OHLC timestamped numeric series).
-- **Canonical time contract:** every canonical timestamp must use a *permanent* zero-offset timezone —
-  validated, never converted. Read [../adr/ADR-0001-canonical-utc-timestamps.md](../adr/ADR-0001-canonical-utc-timestamps.md)
-  before touching anything that handles a timestamp.
-- **Observation reduction:** `candle_series_to_observations(series, field, *, series_id=None)` +
-  `CandleField` enum (`fmis.data`) — a pure, closed-candles-only bridge from a candle field to an
-  `ObservationSeries`. The field is **required** (no default); pass a `CandleField`, never a raw string.
-- **Trading context (`fmis.trading_context`):** `TradingObjective` (SWING_TRADE, DAY_TRADE) and the
-  frozen `TradingAnalysisContext` (objective, primary/supporting timeframes, optional benchmark and
-  notes). Descriptive **only** — no behaviour, imports nothing from `fmis`, and nothing below imports it.
-  **Long-term investing is NOT a trading objective**: it becomes its own module with its own context and
-  interpretation. Never infer the objective from a timeframe, never add per-objective branching here, and
-  never add direction/entry/stop/target/size/risk fields. Rules in
-  [../adr/ADR-0009-trading-analysis-context-boundary.md](../adr/ADR-0009-trading-analysis-context-boundary.md).
+Read **[`CURRENT_STATE.md`](CURRENT_STATE.md)** for the numbers (commit, test count, exports,
+milestone). Do not trust a remembered number — read the file; it is updated every milestone and this
+document is not.
 
-  > Shared calculations do not imply shared decision logic.
+The durable facts, unlikely to change milestone to milestone:
 
-- **Market structure (`fmis.market_structure`):** `detect_swings(series, left_bars=2, right_bars=2)` ->
-  `tuple[SwingPoint, ...]`. **Closed candles only**; a swing confirms only after `right_bars` further
-  candles have closed, which is what makes it **non-repainting** — never emit a provisional swing.
-  Comparison is **strict on the left, `>=` on the right**, so a plateau gives one point (its first bar)
-  while separated equal highs stay two. `SwingPoint.index` indexes `series.closed().candles`. **No
-  interpretation here** — BOS, CHoCH, trend, S/R and liquidity are all later milestones. Rules in
-  [../adr/ADR-0012-market-structure-foundation.md](../adr/ADR-0012-market-structure-foundation.md).
-
-  `compare_swings` / `compare_swing_sequence` then compare each swing against the previous swing **of the
-  same type** into a numeric `SwingRelation` (HIGHER/LOWER/EQUAL — never bullish/bearish). Price
-  comparison is **exact**: never add an epsilon, because no tick-size abstraction exists to calibrate one.
-  Input order is validated, **never sorted**. Rules in
-  [../adr/ADR-0013-swing-relationship-foundation.md](../adr/ADR-0013-swing-relationship-foundation.md).
-
-  `label_swing` / `label_swing_sequence` then name the pairing: `StructuralSwingLabel` has exactly
-  HIGHER_HIGH, LOWER_HIGH, EQUAL_HIGH, HIGHER_LOW, LOWER_LOW, EQUAL_LOW. **Full names only** — never add
-  `HH`/`HL`/`LH`/`LL` as API. **Never fold EQUAL_HIGH/EQUAL_LOW away** or rename them "double top",
-  "support" or "liquidity". **Naming is not interpreting**: HIGHER_HIGH is not an uptrend and LOWER_LOW is
-  not a short signal; BOS, CHoCH and trend are later milestones. Rules in
-  [../adr/ADR-0014-structural-swing-label-foundation.md](../adr/ADR-0014-structural-swing-label-foundation.md).
-
-  `derive_structural_sequence_state` finally reads the **latest HIGH-side label beside the latest
-  LOW-side label**. `StructuralSequenceStateType` has exactly SHIFTED_HIGHER, SHIFTED_LOWER, EXPANDED,
-  CONTRACTED, UNCHANGED, INSUFFICIENT_STRUCTURE — five states partitioning all nine combinations plus one
-  for a missing side. **Never add a catch-all member** (MIXED/OTHER/UNKNOWN): the partition is already
-  complete, and a catch-all is where ambiguity hides. **Never fabricate a state from one side.** Both
-  source `StructuralSwing` objects stay on the result because the grouping is lossy — read
-  `latest_high.label` / `latest_low.label` rather than growing the enum.
-
-  > **The one exception to non-repainting in this package.** Swings, comparisons, labels and history
-  > snapshots are settled forever once emitted. `derive_structural_sequence_state`'s single answer is by
-  > design a statement about the *latest* pair and is **expected to change** when a newer swing is
-  > confirmed — a new fact, not a revision. Never describe that single answer as non-repainting or cache
-  > it as permanent.
-
-  `derive_structural_sequence_state_history` records the state at every candle that changed it, one
-  `StructuralSequenceStateSnapshot` each. Outside-bar HIGH/LOW pairs are applied **atomically**;
-  `INSUFFICIENT_STRUCTURE` snapshots are **recorded, not suppressed**; `index`/`timestamp` are computed
-  projections, never stored. **Never add a transition type, a "changed" flag, a direction or a
-  magnitude** — recording a sequence is not reading it, and those are the substance of trend/BOS/CHoCH.
-
-  > **State the guarantee narrowly.** The history is prefix-stable under candle-series extension and
-  > complete structural-group extension — **not** under an arbitrary cut inside a same-candle HIGH/LOW
-  > group. Never widen this claim. Rules in
-  > [../adr/ADR-0016-structural-sequence-state-history-foundation.md](../adr/ADR-0016-structural-sequence-state-history-foundation.md).
-
-  `SHIFTED_HIGHER` is not an uptrend, `CONTRACTED` is not consolidation, `EXPANDED` is not a breakout,
-  `UNCHANGED` is not a double top. Rules in
-  [../adr/ADR-0015-structural-sequence-state-foundation.md](../adr/ADR-0015-structural-sequence-state-foundation.md).
-- **Evidence taxonomy (`fmis.evidence`):** `EvidenceFamily` (ten subject areas) and the frozen slotted
-  `EvidenceDescriptor` (`family`, `name`, `description`), plus an immutable catalog. **A calculated
-  indicator is not automatically evidence** — a descriptor exists only for a concept the system genuinely
-  *classifies*, so the catalog holds six (TREND + MOMENTUM) and five families are deliberately empty.
-  Never add a score/weight/confidence/direction field, and never redefine supporting/conflicting or
-  availability — `EvidenceGroups`, `Alignment` and `OverallState` already own them. Imports nothing from
-  `fmis`; not wired to `decision_support` in either direction. Rules in
-  [../adr/ADR-0011-evidence-taxonomy.md](../adr/ADR-0011-evidence-taxonomy.md).
-
-  > A shared vocabulary is not shared interpretation.
-
-- **Decision support (`fmis.decision_support`):** `build_evidence_report(snapshot)` — organises a
-  snapshot into structured evidence. Consumes `AnalysisSnapshot` **only**; nothing below imports it.
-  **Classifies, never calculates** (the sole derived value, `atr_percent_of_close`, is isolated in
-  `derived.py` and AST-enforced). An RSI band is `NOT_DIRECTIONAL` by rule — "oversold" is never evidence
-  by itself; an alignment tie stays a tie. `OverallState` is WATCH/WAIT/INSUFFICIENT_DATA and carries
-  **no direction**. No BUY/SELL/target/stop/confidence anywhere, test-enforced. Rules in
-  [../adr/ADR-0008-decision-support-evidence-boundary.md](../adr/ADR-0008-decision-support-evidence-boundary.md).
-
-  ```python
-  from fmis.pipeline import analyze_symbol
-  from fmis.decision_support import build_evidence_report
-
-  report = build_evidence_report(analyze_symbol("BTCUSDT", "4h", limit=200))
-  ```
-- **Application layer (`fmis.pipeline`):** `analyze_symbol("BTCUSDT", "4h", limit=200)` — the end-to-end
-  workflow, and the **only** layer that may know about more than one engine. No engine may import it, and
-  **no formula may be defined in it** (test-enforced). Closed candles unconditionally; warm-up is a
-  result, insufficient data raises; a failed benchmark fails the whole call; downstream errors propagate
-  unwrapped. Rules in
-  [../adr/ADR-0007-application-layer-boundary.md](../adr/ADR-0007-application-layer-boundary.md).
-
-  ```python
-  from fmis.pipeline import analyze_symbol
-
-  snap = analyze_symbol("BTCUSDT", "4h", limit=200)              # technical snapshot
-  cmp = analyze_symbol("BTCUSDT", "1d", limit=90,                # vs a benchmark
-                       benchmark_symbol="ETHUSDT")
-  ```
-- **Provider adapter (`fmis.providers.binance`):** `fetch_klines("BTCUSDT", "4h", limit=200)` — public
-  Binance spot klines, **no API key**, `urllib` only. It parses the provider's string prices (the
-  ingestion boundary rejects those on purpose) and decodes through `fmis.ingest`; it never constructs
-  `Candle` directly. Transport and clock are **injected**, so tests never touch the network or
-  wall-clock. Provider errors raise via the `BinanceError` hierarchy and are never turned into an empty
-  series. Public data only — no auth, private endpoints, websockets, trading, or retries. Rules in
-  [../adr/ADR-0006-provider-adapter-contract.md](../adr/ADR-0006-provider-adapter-contract.md).
-- **Ingestion boundary (`fmis.ingest`):** `decode_candle`, `decode_candle_series`,
-  `decode_candle_series_from_json` — the only supported way for outside data to become a canonical
-  `CandleSeries`. **Strict:** nothing is coerced, repaired, sorted, deduplicated, or filtered; missing
-  **and** unexpected fields both raise; errors carry the record index. It is a **decoder, not a provider
-  adapter** — no transport, network, or credentials belong here. Domain invariants stay in
-  `Candle`/`CandleSeries` and must never be re-implemented. Rules in
-  [../adr/ADR-0005-ingestion-boundary-strictness.md](../adr/ADR-0005-ingestion-boundary-strictness.md).
-- **Alignment (`fmis.alignment`):** `align_intersection` — **strict timestamp intersection only**, with an
-  immutable `AlignmentReport`. It is a **policy layer, separate from `fmis.data`** (ADR-0002). No
-  interpolation, forward-fill, resampling, or timezone conversion exists anywhere, and none may be added
-  without an explicit, named, documented policy (a new module in `fmis.alignment`, never in `fmis.data`).
-- **Deterministic Feature Engine:** `FeatureEngine`, `FeatureRegistry`, `FeatureResult`,
-  `FeatureContext`, `FeatureSet`, `Feature` protocol, `BaseFeature`.
-- **Tier-1 indicators:** EMA, ATR, RSI, MACD, plus shared kernels `sources.py` (OHLC vocabulary) and
-  `ema_math.py` (EMA math).
-- **Volume measurements (`fmis.features.volume`, Tier-2):** `AverageVolume` and `RelativeVolume`, sharing
-  one `trailing_mean` kernel. `relative_volume = current_volume / average_volume`, baseline = the
-  `lookback` candles **preceding** the latest one (excluded from its own comparison; warm-up
-  `lookback + 1`; default 20). Zero baseline -> `value=None` + `undefined_reason`, never infinity or an
-  epsilon. **Measurements only — never add a label or threshold here**; that is a later evidence
-  milestone. Rules in [../adr/ADR-0010-volume-foundation.md](../adr/ADR-0010-volume-foundation.md).
-
-  > Shared calculation does not mean identical interpretation: crypto, HKEX, Shanghai/Shenzhen, mining
-  > and large-cap AI names differ in session, auction, price-limit and venue structure.
-
-- **Other Tier-2 packages** (`trend`, `momentum`, `volatility`, `market_structure`,
-  `support_resistance`, `pattern_detection`): **placeholders only — no calculation code.**
-- **Relative Value Engine (`fmis.relative_value`, v1a):** five scalar, fact-only metrics —
-  `period_return`, `relative_return`, `realized_volatility`, `volatility_ratio`, `pearson_correlation` —
-  over **simple** returns, **unannualized**, no rolling windows. Returns a `RelativeValueResult`
-  (OK/UNDEFINED + reason + provenance). Consumes `ObservationSeries`; **requires inputs already aligned**
-  and never aligns itself. Rules in [../adr/ADR-0004-rve-v1a-return-and-result-policy.md](../adr/ADR-0004-rve-v1a-return-and-result-policy.md).
-  It must **not** import `fmis.features` and must **not** call `fmis.alignment`.
-- **Tests:** 2073 passing.
-
-For the precise, always-current snapshot (test count, latest commit, next milestone) read
-[CURRENT_STATE.md](CURRENT_STATE.md). Do not trust your memory of these numbers — read the file.
-
-Everything not listed above is **Planned** or **Deferred**. Never write code that assumes an unbuilt
-module exists.
+- **Product surface:** five CLI commands — `facts`, `mtf`, `regime`, `swing`, `daily` — each a strict
+  superset of the one before it in what it composes, never in what it computes.
+- **Product Value Level 2** — a usable swing-analysis assistant, one page per instrument carrying
+  facts, regime, evidence and conflicts, now runnable across a watchlist in one command. Ladder in
+  [`reports/0004`](../../reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12.
+- **The deterministic structural chain is complete**, end to end, from a candle series to a
+  multi-timeframe, regime-classified, conflict-checked workspace with a stated decision-context
+  verdict. Nothing in that chain is Planned — everything above it is.
+- No AI interpretation layer exists yet. No direction, score, ranking or recommendation exists
+  anywhere in the product — this is enforced by tests, not by convention.
 
 ---
 
-## Authoritative documents
+## 3. High-level architecture
 
-- **Architecture & boundaries:** [../ARCHITECTURE_AND_ROADMAP_V1.md](../ARCHITECTURE_AND_ROADMAP_V1.md)
-  — authoritative for module boundaries, dependency direction, the Relative Value Engine spec, the
-  roadmap, and the decision records (D1–D11).
-- **Architecture review:** [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_2026-07-24.md)
-  — amends the above where code and document diverged (§5). Read its findings **R1–R14** before starting
-  any new milestone; two of them (R1, R2) block the Relative Value Engine.
-- **Decisions:** [../adr/](../adr/README.md) — one decision per file, with the alternatives that were
-  rejected and why.
-- **Vision & principles:** [../../PROJECT_SPECIFICATION_V1.md](../../PROJECT_SPECIFICATION_V1.md) and
-  [../../PROJECT_VISION_ADDENDUM_V1.md](../../PROJECT_VISION_ADDENDUM_V1.md).
-- **Current snapshot:** [CURRENT_STATE.md](CURRENT_STATE.md).
-- **Directory rules:** [../REPOSITORY_MAP.md](../REPOSITORY_MAP.md).
+Two things to hold in your head, and nothing more — the detail lives in the linked documents.
 
-If two documents ever disagree, the architecture document wins on architecture; the vision specs win on
-principles; and if the *code* disagrees with a doc about current state, the code is the truth — fix the
-doc (see "Review-first workflow").
+**The target layering** (L0 kernel → L11 memory/learning), aspirational and only partially built:
+[`reports/0003`](../../reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11 has the full
+diagram. Built today: L0 (canonical kernel) through L5 (deterministic context, including
+`fmis.market_regime`) and the parts of L7 (`fmis.evidence`, `fmis.decision_support`) that a composition
+root reaches. L6, L8 and above are Planned.
 
----
+**The composition chain that actually exists**, per [ADR-0007](../adr/ADR-0007-application-layer-boundary.md)
+("a composition root may import every engine below it; no engine may import a composition root"):
 
-## Always read before modifying code
+```
+engines (L0–L5, L7)  →  fmis.pipeline  →  fmis.workspace  →  fmis.daily
+                         (one instrument)  (one page)         (a watchlist)
+```
 
-1. [CURRENT_STATE.md](CURRENT_STATE.md) — what exists and what the next milestone is.
-2. [../ARCHITECTURE_AND_ROADMAP_V1.md](../ARCHITECTURE_AND_ROADMAP_V1.md) — the boundary you must stay
-   inside.
-3. [../REPOSITORY_MAP.md](../REPOSITORY_MAP.md) — allowed/forbidden dependencies for the directory you
-   are touching.
-4. The nearest existing sibling. New indicator? Read `ema.py`/`atr.py`/`rsi.py`/`macd.py` and their
-   tests first, and match their structure.
+Each arrow is a **strict superset**, never a new computation — `fmis.workspace` calls no engine
+directly, and `fmis.daily` calls no engine or builder except `fmis.workspace`'s own composition root.
+This is verified by an AST-based test in every milestone that adds a layer; see any recent design
+document's "Invariants" table for the pattern.
+
+For the concrete, current directory-by-directory dependency rules (what may import what, right now):
+[`REPOSITORY_MAP.md`](../REPOSITORY_MAP.md).
 
 ---
 
-## The most important engineering rules
+## 4. Repository navigation
 
-### Deterministic calculations
-- If a value can be computed objectively, **code computes it** — never AI, never a visual guess.
-- **Closed candles only.** Operate on `series.closed()`; a forming bar must never change an output.
-- **Explicit warm-up.** Derive the exact minimum observation count; below it return an explicit
-  insufficient-data state (`value=None` + metadata), never a guessed number.
-- **Reproducible & pure.** No wall-clock, no randomness, no ambient state. Same input → same output.
-- **Immutable results.** Results are frozen; metadata (and any structured value) is a read-only,
-  defensively-copied mapping.
-- **Provenance.** Record parameters, observation counts, and the producing module in metadata.
-- **No hidden signals.** A low-level feature returns a number or a small structured fact — never
-  "bullish", a score, or a trade.
-
-### AI interpretation
-- The AI layer is **Planned**, not built. When it exists, it will *interpret* deterministic facts —
-  conflicts, scenarios, the strongest opposing case, uncertainty. It will **never** compute what code
-  can compute, and **never** override a deterministic fact. Its outputs are non-deterministic and are
-  therefore not stored as `FeatureResult`s.
-- Until then: do not put interpretation, directional labels, or scoring anywhere in the deterministic
-  layers.
-
-### Dependency direction
-- **Dependencies point toward the deterministic core; nothing depends on a later pipeline stage.**
-- `fmis.data` is the kernel and imports nothing internal — keep it that way.
-- The Feature Engine must never import a concrete feature (discovery is via the registry); indicators
-  must never import sibling indicators (use the shared kernels); nothing deterministic may import AI,
-  strategy, or execution code; provider/TradingView types must never become canonical models.
-- Full permitted/forbidden lists: architecture doc §5.
-
-### Testing
-- Verify against **independently derived** expected values (hand calculations, arithmetic means, exact
-  `fractions`) — **never** by calling the implementation under test.
-- Test warm-up boundaries on **both** sides (exactly-enough vs one-short).
-- The full suite must be green before and after your change.
-
-### Small milestones
-- Do one small thing per milestone: one implementation → audit → commit → push cycle. Do not bundle
-  unrelated changes. Do not refactor opportunistically outside the stated scope.
-- Respect the stated development order: research → explicit rules → tests → backtesting → robustness →
-  paper trading → shadow mode → controlled live testing. Live execution is **not** a near-term priority.
-
-### Review-first workflow
-- Inspect before you write; verify claims against the live repository rather than assuming.
-- After a change: run the full suite, run `git diff --check`, and reconcile documentation with reality
-  (update [CURRENT_STATE.md](CURRENT_STATE.md) when the state changes).
-- Do not stage, commit, or push unless the task explicitly asks for it. When it does, stage only the
-  intended files and use a precise commit message.
+| I need... | Go to |
+|---|---|
+| **Architecture** — target layering, module boundaries, roadmap | [`ARCHITECTURE_AND_ROADMAP_V1.md`](../ARCHITECTURE_AND_ROADMAP_V1.md), [`reports/0003`](../../reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) |
+| **Current directory rules** — what may import what | [`REPOSITORY_MAP.md`](../REPOSITORY_MAP.md) |
+| **ADRs** — one accepted decision per file, why it was made this way | [`adr/README.md`](../adr/README.md) — 26 to date |
+| **Backlog** — what's NOW / NEXT / LATER / DONE | [`FMITS_PRODUCT_BACKLOG.md`](../../FMITS_PRODUCT_BACKLOG.md) |
+| **Changelog** — what the product can actually do, and since when | [`FMITS_PRODUCT_CHANGELOG.md`](../../FMITS_PRODUCT_CHANGELOG.md) |
+| **Current state** — commit, test count, exports, active milestone | [`CURRENT_STATE.md`](CURRENT_STATE.md) |
+| **Design docs** — the reasoning behind a shipped milestone | [`docs/README.md`](../README.md) index — every design doc is paired with its review |
+| **Reviews** — independent verification of a shipped milestone (mutation results, adversarial cases, P0–P3 findings) | same index, `reviews/` rows |
+| **Testing bar** — this repo's actual standard | no single canonical guide; the bar is demonstrated repeatedly in the reviews above: 100 % line coverage plus **mutation testing with zero survivors**, byte-identical source restoration verified by SHA-256. Read one recent review (e.g. [`DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md`](../reviews/DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md)) for the concrete pattern before writing tests for a new milestone. |
+| **Workflow** — how a milestone actually gets built | [`CLAUDE.md`](../../CLAUDE.md) "Working principles" and "Operational reports"; the paper trail is [`reports/README.md`](../../reports/README.md). No dedicated engineering-workflow document exists yet — this section and §6 below are the closest thing to one. |
+| **Git safety rules** | [`CLAUDE.md`](../../CLAUDE.md) "Git safety" — read before any commit, push, or history-changing command |
 
 ---
 
-## What must never be violated
+## 5. Current active milestone
 
-1. Never break the dependency direction (no upward/downstream imports; kernel stays import-free).
-2. Never put a signal, score, directional label, threshold-as-decision, or cross-asset logic inside the
-   Feature Engine.
-3. Never let a provider-specific type become a canonical domain model.
-4. Never introduce look-ahead bias or silently forward-fill data (critical for the Planned Relative
-   Value Engine).
-5. Never derive test expectations from the code under test.
-6. Never document a Planned/Deferred module as if it exists.
-7. Never add a runtime dependency or plan premature databases, APIs, ML, graph analysis, or live
-   execution.
-8. Never modify production code, tests, or `pyproject.toml` during a documentation-only milestone.
+Read the **"Current milestone"** section at the top of [`CURRENT_STATE.md`](CURRENT_STATE.md) and the
+single **NOW** item in [`FMITS_PRODUCT_BACKLOG.md`](../../FMITS_PRODUCT_BACKLOG.md) §5 — there is
+exactly one, by rule. Both are kept current at the end of every milestone; this document is not, so
+never answer "what's being worked on" from memory of a past session.
 
-When in doubt, prefer the smaller, more reversible, better-tested change — and ask.
+---
+
+## 6. Engineering workflow
+
+The cycle, observable across every shipped milestone in [`docs/README.md`](../README.md)'s index:
+
+**design → implement → independently review → commit → (separately authorized) push.**
+
+- One milestone does one thing. [`CLAUDE.md`](../../CLAUDE.md): *"Do one small thing per milestone...
+  Do not bundle unrelated changes."*
+- A milestone that changes architecture gets a design document in `docs/design/` before code, and an
+  ADR in `docs/adr/` if it establishes a new boundary — not every milestone needs one; several recent
+  ones explicitly note *"no ADR required"* because they composed existing boundaries.
+- Every milestone gets an independent review in `docs/reviews/`, re-deriving claims from the live
+  repository rather than trusting the implementation's own account of itself. The reviews consistently
+  find real defects that 100 % line coverage alone did not catch — that pattern is the reason mutation
+  testing is mandatory, not optional.
+- Dated, point-in-time work (audits, cross-cutting analyses) goes in `reports/`, numbered sequentially
+  and indexed in [`reports/README.md`](../../reports/README.md) — never in `docs/`, which holds
+  *standing* documentation that gets updated in place.
+- Commits and pushes follow [`CLAUDE.md`](../../CLAUDE.md) "Git safety" exactly. Never commit, merge,
+  rebase, tag or push without the owner's explicit authorization for that specific action.
+
+---
+
+## 7. Model selection policy
+
+No formal cost-tracking policy exists for this repository yet. The guidance below is a recommendation
+derived from how work has actually been scoped across past milestones — apply judgement, and prefer
+asking the owner over guessing on a genuinely ambiguous case.
+
+**Favor Opus when:**
+- the task is *architecture-first* — the scope itself is in question and must be resolved by reasoning
+  before any code is written (e.g. "determine whether X is even the correct next milestone");
+- the task is an *independent review* — adversarially re-deriving another session's claims, finding
+  what its own tests didn't catch;
+- the design has several defensible directions and the choice has long-lived consequences (a new
+  package boundary, a new ADR, a schema).
+
+**Favor Sonnet when:**
+- an architecture or design document is already **accepted**, and the task is to implement it without
+  redesigning it (explicitly the common case — most `IMPLEMENTATION ONLY` milestones);
+- the task is mechanical: a new indicator following an existing sibling's shape, a test suite for an
+  already-designed module, a documentation sync after a milestone lands;
+- the task is bounded and reversible, and a wrong first attempt costs little to correct.
+
+When a task starts ambiguous and narrows (e.g. a design phase followed by an implementation phase),
+it is reasonable to switch models at that boundary rather than run the whole task on one tier.
+
+---
+
+## 8. Session policy
+
+- **New session per milestone.** A milestone is already the repository's unit of work — see §6 — so
+  it is also the natural session boundary. Starting a new milestone in a fresh session means this
+  document, `CURRENT_STATE.md` and the backlog are read once, cleanly, rather than accumulated on top
+  of an unrelated prior task's context.
+- **`/clear`** between unrelated tasks in the same terminal session — before switching from one
+  milestone or investigation to a genuinely unrelated one. Do not carry a prior milestone's working
+  context into a new one; re-read §5 fresh instead.
+- **`/compact`** when a single milestone's session has grown long (a long design discussion, a long
+  review) but you are continuing the *same* task — compaction preserves the thread; `/clear` does not.
+- Prefer ending a session at a milestone boundary (after commit, before the next design phase) over
+  mid-implementation — resuming mid-implementation from a compacted or fresh context risks losing a
+  constraint that was only stated once, earlier in the conversation.
+
+---
+
+## 9. Reading policy
+
+Read the **minimum** authoritative documentation for the task, not everything linked from here.
+
+For almost any task, that minimum is: this document, then [`CURRENT_STATE.md`](CURRENT_STATE.md), then
+whichever single row of §4's table matches the task. Read a design document or an ADR in full only
+when you are about to touch the boundary it governs. Read `ARCHITECTURE_AND_ROADMAP_V1.md` or
+`reports/0003` in full only when the task is itself architectural. Never read the entire `reports/`
+directory to answer a question one recent report already answers — use
+[`reports/README.md`](../../reports/README.md)'s index to find the specific one.
+
+If two documents disagree: an **ADR** wins over `ARCHITECTURE_AND_ROADMAP_V1.md` on the decision it
+covers ([`CLAUDE.md`](../../CLAUDE.md)); the **live code** wins over any document about current state —
+fix the document, per §6's review-first workflow, rather than trusting the stale one.
+
+---
+
+## 10. Project principles
+
+The non-negotiable rules live in [`CLAUDE.md`](../../CLAUDE.md) — read it in full; it is short.
+In one line each, so you know what to expect before you open it: **product first, not documentation** ·
+**deterministic first, AI second** · **every milestone must increase product value** · **git history is
+never rewritten without explicit authorization**.
+
+The vision and domain principles — why `WAIT`/`NO TRADE` are valid outcomes, why long-term investing
+and short-term trading are kept as separate domains, capital preservation over impressive output — live
+in [`PROJECT_SPECIFICATION_V1.md`](../../PROJECT_SPECIFICATION_V1.md) and
+[`PROJECT_VISION_ADDENDUM_V1.md`](../../PROJECT_VISION_ADDENDUM_V1.md). Read them before proposing
+anything that touches what the system is *for*, as opposed to how one module is built.
+
+The engine-level engineering rules (closed-candles-only, no epsilon comparisons, no hidden signals,
+dependency direction, immutable results) are owned by the ADRs, not by this document — see §4's ADR
+row. Restating them here would duplicate them and let this document drift out of sync with the rule it
+is quoting; that duplication is exactly what this rewrite removed.
+
+---
+
+**When in doubt:** prefer the smaller, more reversible, better-tested change, and ask the owner rather
+than guess on anything this document doesn't resolve.

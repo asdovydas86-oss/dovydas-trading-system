@@ -14,6 +14,13 @@ repo — see `.env.example` and `docs/SETUP.md`.
 - `docs/` — setup and usage docs
 - `prompts/` — reusable prompt snippets for chart analysis / Pine Script work
 
+## AI Session Entry
+
+Every new AI session starts from
+[`docs/AI_HANDOFF/START_HERE_FOR_AI.md`](docs/AI_HANDOFF/START_HERE_FOR_AI.md) — the single entry
+point for engineering rules, current status, architecture and navigation. Read only that document
+first; it links to everything else on demand.
+
 ## Product documents
 
 Living operational documents, updated as work moves:

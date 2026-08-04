@@ -1,5 +1,8 @@
 # Current State
 
+**Arriving fresh?** Start at [`START_HERE_FOR_AI.md`](START_HERE_FOR_AI.md) instead — this file is the
+data it points you to, not an entry point on its own.
+
 **Snapshot document.** This file records the repository as it is **today**. It is the one document that
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.

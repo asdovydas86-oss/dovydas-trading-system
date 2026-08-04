@@ -35,12 +35,14 @@ Exit codes: ``0`` success · ``1`` a data or provider failure the user can act o
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Sequence
 
 from fmis.market_structure import DEFAULT_LEFT_BARS, DEFAULT_RIGHT_BARS
 from fmis.pipeline.market_analysis import PipelineError
+from fmis.daily import DailyRunError, render_daily_run, run_daily
 from fmis.market_regime import RegimePolicy
 from fmis.workspace import render_workspace, workspace_for_symbol
 from fmis.pipeline.regime import (
@@ -367,6 +369,96 @@ SWING_COMMAND = Command(
 )
 
 
+def _configure_daily(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "symbols",
+        nargs="+",
+        metavar="SYMBOL",
+        help=(
+            "the daily universe, in the order it should be reported. A universe "
+            "kept in a file is supplied by the shell: fmits daily $(cat list.txt)"
+        ),
+    )
+    parser.add_argument(
+        "-n", "--limit", type=int, default=None,
+        help="candles to request per timeframe, applied to every symbol",
+    )
+    parser.add_argument(
+        "--left-bars", type=int, default=DEFAULT_LEFT_BARS,
+        help=f"swing detection left neighbours (default: {DEFAULT_LEFT_BARS})",
+    )
+    parser.add_argument(
+        "--right-bars", type=int, default=DEFAULT_RIGHT_BARS,
+        help=f"swing detection right neighbours (default: {DEFAULT_RIGHT_BARS})",
+    )
+    for role in (TimeframeRole.CONTEXT, TimeframeRole.SETUP, TimeframeRole.EXECUTION):
+        default = DEFAULT_TIMEFRAMES[role]
+        parser.add_argument(
+            f"--{role.value}", default=default, metavar="INTERVAL",
+            help=f"interval playing the {role.value} role (default: {default})",
+        )
+    parser.add_argument(
+        "--band", type=float, default=None, metavar="FRACTION",
+        help="regime policy band, applied identically to every symbol",
+    )
+    parser.add_argument(
+        "--transition-lookback", type=int, default=None, metavar="BARS",
+        help="regime transition lookback, applied identically to every symbol",
+    )
+    parser.add_argument(
+        "--reference-time", default=None, metavar="ISO8601",
+        help=(
+            "instant the run is stamped with (default: now). Supply it to make "
+            "the rendered index reproducible."
+        ),
+    )
+
+
+def _run_daily_command(args: argparse.Namespace) -> int:
+    """Run the universe and print the index.
+
+    An invalid universe is a caller error and is reported as one, with a
+    non-zero exit code and no partial page. A symbol that failed is *not* a
+    caller error: it appears as a row, and the run still exits zero, because the
+    other symbols succeeded and the report is true.
+    """
+    reference = _reference_time(args.reference_time, omit=False)
+    try:
+        run = run_daily(
+            args.symbols,
+            reference_time=reference,
+            timeframes={
+                TimeframeRole.CONTEXT: args.context,
+                TimeframeRole.SETUP: args.setup,
+                TimeframeRole.EXECUTION: args.execution,
+            },
+            limit=args.limit,
+            policy=_policy_from(args),
+            detection=_detection_from(args),
+        )
+    except DailyRunError as error:
+        print(f"fmits daily: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_daily_run(run))
+    return EXIT_OK
+
+
+DAILY_COMMAND = Command(
+    name="daily",
+    help="run the swing analysis across a daily universe",
+    description=(
+        "Analyse every requested symbol through the same Swing Workspace one at "
+        "a time, and print a compact readiness index: one row per symbol, in the "
+        "order requested, with the decision-context state and the regime beside "
+        "it. A symbol that fails reports why and does not stop the run. This is "
+        "a readiness index, not a ranking: no score, no direction and no "
+        "recommendation is produced."
+    ),
+    configure=_configure_daily,
+    run=_run_daily_command,
+)
+
+
 FACTS_COMMAND = Command(
     name="facts",
     help="print the deterministic fact sheet for one symbol on one timeframe",
@@ -399,6 +491,7 @@ COMMANDS: tuple[Command, ...] = (
     MTF_COMMAND,
     REGIME_COMMAND,
     SWING_COMMAND,
+    DAILY_COMMAND,
 )
 
 

@@ -270,9 +270,9 @@ def test_provenance_is_rendered_for_every_answered_section() -> None:
 # ============ 6. the CLI ====================================================
 
 
-def test_the_registry_carries_four_commands() -> None:
+def test_the_registry_carries_five_commands() -> None:
     names = [command.name for command in cli_module.COMMANDS]
-    assert names == ["facts", "mtf", "regime", "swing"]
+    assert names == ["facts", "mtf", "regime", "swing", "daily"]
     assert len(set(names)) == len(names)
 
 

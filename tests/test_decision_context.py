@@ -467,8 +467,14 @@ def test_the_engine_reads_no_clock_and_no_network() -> None:
 
 
 def test_no_engine_below_imports_this_package() -> None:
+    """Only the application layer may consume this engine.
+
+    `fmis.daily` (Milestone AN) joins `fmis.workspace` as a permitted importer:
+    both are composition roots above this package, which is the direction
+    ADR-0007 allows. No engine has been permitted anything.
+    """
     root = PACKAGE_DIR.parent
-    permitted = {root / "workspace", PACKAGE_DIR}
+    permitted = {root / "workspace", root / "daily", PACKAGE_DIR}
     for py in root.rglob("*.py"):
         if py.parent in permitted:
             continue

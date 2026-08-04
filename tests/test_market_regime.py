@@ -625,6 +625,7 @@ def test_no_engine_below_imports_this_package() -> None:
         root / "pipeline",
         root / "workspace",
         root / "decision_context",
+        root / "daily",  # AN: a second application-layer root, above the workspace
         PACKAGE_DIR,
     }
     for py in root.rglob("*.py"):

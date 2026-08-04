@@ -4,14 +4,66 @@
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AL — Decision Context Engine v1 (2026-08-04).
-**Latest commit at time of writing:** `6ebf1e0` — `docs(product): record Milestone AK release`
-(Milestones AF through AI are pushed; AK is committed and unpushed; the Milestone AL changes are
-uncommitted at time of writing).
+**Last updated for:** Milestone AN — Deterministic Daily Workflow v1 (2026-08-04).
+**Latest commit at time of writing:** `7ec5b3e` — the last pushed commit. Milestones AF through AL are
+pushed; the Milestone AN changes are committed on top of it and **not pushed**.
 
 ---
 
 ## Current milestone
+
+- **AN — Deterministic Daily Workflow v1**: the first capability that answers about **more than one
+  symbol**. Design in [the design document](../design/DETERMINISTIC_DAILY_WORKFLOW_V1.md); independent
+  review in [the review record](../reviews/DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md). It created no
+  new boundary — `fmis.daily` composes AK and AL under ADR-0007's existing application-layer rule — so
+  **no ADR was written**.
+
+  **The problem it solved.** Every capability before AN answered about one symbol. An owner watching
+  eight instruments ran eight commands, read eight ~270-line pages, and held the comparison in their
+  head. Worse, a symbol whose fetch failed was a command that scrolled past: a morning where three
+  symbols were analysed and a fourth silently was not looked exactly like a morning where all four
+  were.
+
+  **What shipped:** `fmis.daily` — a second application-layer root above `fmis.workspace` — with a
+  frozen, schema-versioned `DailyRun` model, a sequential runner with per-symbol error isolation, a
+  compact terminal readiness index and the `fmits daily SYMBOL...` command.
+
+  **A readiness index, never a ranking.** Rows stay in the order the caller typed, because a sorted
+  list is a claim: ordering by readiness produces a page whose top row reads as the best idea whatever
+  the header says. Twenty-one forbidden words are asserted over every public name, and an AST scan
+  asserts the package contains exactly **one** `sorted()` — which orders duplicate symbol names inside
+  an error message.
+
+  **`INSUFFICIENT` is not `FAILED`, and that distinction is the model's point.** An insufficient
+  analysis happened and rests on too little — a fact about the market's data. A failed one did not
+  happen — a fact about the network. Conflating them tells the owner they are having a thin-data
+  morning when they are in fact having an outage.
+
+  **A defect is never rendered as a market failure.** Only six named exception types become results;
+  a `KeyError` from inside FMITS propagates and stops the run, because a report that shows an internal
+  bug as an ordinary outage teaches the owner to ignore both.
+
+  **Sequential, and measured rather than assumed.** Compute is **22 ms per symbol** and linear; a live
+  three-symbol run took 4.58 s wall, of which FMITS compute was **1.4 %**. A daily run is entirely
+  network-bound, so concurrency would buy wall-clock at the cost of rate-limit exposure and a much
+  harder isolation story. A test asserts no concurrency primitive appears in the module.
+
+  **Four import guards were widened** — `decision_context`, `market_regime`, `multi_timeframe`,
+  `structural_facts` — to name `fmis.daily` as an application-layer importer, the same widening AK
+  performed for `fmis.workspace` and in the direction ADR-0007 permits. **No engine gained a
+  permission**, and a subprocess test asserts `import fmis.pipeline` still does not load the new layer.
+
+  **Quality.** 3,766 → **3,905 tests** (+139), identically under `-W error`. Coverage **100 %** on all
+  four `fmis.daily` modules and on `pipeline/cli.py`. **81 mutation probes, 81 detected, 0 survivors,
+  0 no-ops**, byte-identical restoration. Exports 242 / 0 collisions, cycles 0, runtime dependencies 0.
+
+  **The review found two P2s, both fixed, and both about a value rather than a layout.** The page
+  printed `2026-08-04T08:0` — a 32-character regime silently overflowed a 30-column field, pushed the
+  timestamp past the page edge, and the row's truncation cut a *different* value in half. Every width
+  test passed, because the line fitted; the value inside it did not. And the run recorded
+  `("", "", "")` as the intervals it had used when the caller supplied none, while every symbol had in
+  fact been analysed at 1w/1d/4h. **Five probes survived their first run and three were no-ops**
+  against a suite that already had 100 % line coverage.
 
 - **AL — Decision Context Engine v1**: an **architecture-first** milestone. The board's NOW item was
   the daily workflow; the first work was proving which milestone was correct. Contracts in
@@ -683,11 +735,32 @@ Reconstructed from git history (`git log --oneline`):
 
 | Multi-Timeframe Fact Sheet v1 (AG) | uncommitted at time of writing | `fmis.pipeline.multi_timeframe` — `TimeframeRole`, `TimeframeView`, `MultiTimeframeFactSheet`, `DEFAULT_TIMEFRAMES`, `MULTI_TIMEFRAME_LIMITATIONS`, `swing_features`, `build_multi_timeframe_facts`, `multi_timeframe_facts_for_symbol`; plus `render_multi_timeframe_sheet`, the `fmits mtf` command and a declared CLI command registry. No engine added; no cross-timeframe synthesis; see [ADR-0023](../adr/ADR-0023-multi-timeframe-composition.md) |
 
+| Confirmation-Delay Provenance v1 (AH) | `9948349` | `SwingPoint.confirmation_bars` / `knowable_from`, `LevelOrigin.confirmation_bars`, `StructureBreak.eligible_from` as a projection; `derive_structure_breaks` no longer takes a delay. **Closes ADR-0020 D1**; see [ADR-0024](../adr/ADR-0024-confirmation-delay-provenance.md) |
+
+| Market Regime Engine v1 (AI) | `cd4bb57` | `fmis.market_regime` — three environment dimensions, never a direction and never collapsed; plus `fmis.pipeline.regime` and `fmits regime`; see [ADR-0025](../adr/ADR-0025-market-regime-engine-v1.md) |
+
+| Swing Trading Workspace architecture (AJ) | design only | Accepted architecture, no code |
+
+| Swing Trading Workspace v1 (AK) | `8121050` | `fmis.workspace` — a frozen `Workspace`, eleven sections with the unbuilt ones rendered, deterministic conflict detection, a renderer, `fmits swing`. Makes the third dependency island reachable. No ADR — no new decision |
+
+| Decision Context Engine v1 (AL) | `a728f3b` | `fmis.decision_context` — one question, five delegating requirements, a policy carrying **no numbers**; plus a twelfth workspace section; see [ADR-0026](../adr/ADR-0026-decision-context-boundary.md) |
+
+| Deterministic Daily Workflow v1 (AN) | committed with this milestone | `fmis.daily` — a frozen `DailyRun`, a sequential runner with per-symbol error isolation, a compact readiness index, `fmits daily`. **An index, never a ranking.** No ADR — no new boundary |
+
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 
 ## Test count
 
-**3404 passing** (`uv run pytest`, ~4.9 s), identically with `-W error`. Per module:
+**3,905 passing** (`uv run pytest`, ~8 s), identically with `-W error`.
+
+> **The per-module table below is a partial breakdown and has not been maintained since Milestone AG**
+> (it totals 3,404). The headline figure above is the measured one. The suites added since are:
+> `test_confirmation_provenance.py` (AH), `test_market_regime.py` and `test_pipeline_regime.py` (AI),
+> `test_workspace_models.py`, `test_workspace_build.py` and `test_workspace_render.py` (AK),
+> `test_decision_context.py` (AL), and `test_daily_models.py`, `test_daily_runner.py` and
+> `test_daily_render.py` (AN, **+139**).
+
+Per module:
 
 | Module | Tests |
 |---|---|
@@ -946,98 +1019,36 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 
 ## Immediate next milestone
 
-The **deterministic structural chain is complete**:
+The **deterministic structural chain is complete**, and so is the product surface above it:
 
     CandleSeries -> Swings -> Relationships -> Labels -> Sequence State -> Structural Trend
                  -> Series Context -> Level Crossing -> Break of Structure -> Change of Character
+                 -> Structural Fact Sheet -> Multi-Timeframe Sheet -> Regime -> Workspace
+                 -> Decision Context -> Daily Run
 
 Every stage is pure, non-repainting, exactly prefix-stable, identity-carrying and single-implementation.
-Nothing in the chain remains to be built before a consumer can read structure end to end.
+After AN, one command analyses a whole watchlist and the results are a first-class object.
 
-**Recommended next: Milestone AH — carry the confirmation delay on `LevelOrigin` (ADR-0020 D1).**
-*(Renumbered: AG became the Multi-Timeframe Fact Sheet, which reuses AF's single caller and therefore
-kept the hazard contained rather than reopening it.)*
-Still the single largest correctness hazard in the chain, and still the only one a caller can trip
-without any error being raised — but the case is now **measured rather than argued**. Milestone AF's
-review ran 300 seeded series x 5 wrong delays: **36.1 % of mismatched calls produced materially
-different breaks**, 155 of those also changed the number of changes of character, and **not one raised
-an error**. Comparing break *counts* finds nothing; only comparing break *identity* exposes it.
+**Recommended next: Milestone AO — Memory / decision archive.**
 
-Milestones AF and AG **contain** the hazard for the only caller that exists — `DetectionSettings`
-single-sources the delay, so a mismatch is unrepresentable through the fact sheet — but containment is
-per-caller and does not generalise. The second consumer of `derive_structure_breaks` reopens it.
+**Why it is next.** It is the board's NOW item, it is the only **Critical** priority remaining, and
+four of the project's nine success criteria depend on it. Until it exists, daily use accumulates
+nothing: the owner cannot ask *"what did I think about this in October, and was I right?"*
 
-What AG must decide: whether the delay rides on `SwingPoint` (flowing to `LevelOrigin` through
-`SwingComparison` and `StructuralSwing`) or is attached later; and what happens to the 69 `SwingPoint`
-construction sites in tests. A `right_bars` parameter on `structural_levels` is **not** an option — AF
-rejected it as a fake fix that relocates the hand-matching while making a wrong value look like
-recorded provenance. Today `confirmation_bars` must be supplied to `derive_structure_breaks` and matched **by
-hand** to the `right_bars` used for detection, and **a mismatch is undetectable** — it silently changes
-which level is the reference at every bar, and therefore which breaks and which changes of character
-exist. It changes a shipped model (`LevelOrigin` gains a field, and `structural_levels` must populate it),
-so it needs its own milestone and ADR. Milestone AE did **not** make it worse — CHoCH takes no
-configuration at all — but it also did not fix it, and every layer above will inherit it.
+**It is blocked, and the blocker must be settled first.** **OPEN DECISION D-01 — the persistence
+schema.** Three milestones have now raised the same question from different directions, and it is the
+same answer for all of them: `Workspace` (AK P3-3), `MarketRegime`, `StructuralFactSheet` and
+`DailyRun` (AN P3-4) all carry `MappingProxyType` metadata and are therefore all unpicklable. The
+decision belongs to every metadata-carrying model at once, not to whichever milestone reaches it first.
 
-Then, in the order the market-structure architecture review §15 fixed:
+**What AN made easier.** A run is now a complete, schema-versioned object holding real workspaces by
+reference, so *what* gets archived is already decided — only *how* is open. `DAILY_SCHEMA_VERSION` and
+`WORKSPACE_SCHEMA_VERSION` exist precisely so a stored artifact stays readable years later.
 
-- **Trend as a summary of the BOS and CHoCH histories**, consuming both and defining neither. This is the
-  last clause of review §15 and is now fully unblocked: both inputs exist, and a test in Milestone AE pins
-  that `fmis.structural_trend` currently imports neither, so the new dependency will be a deliberate,
-  reviewable widening rather than a drift. What it must decide: whether trend reads changes of character,
-  the break sequence, or both; how it reconciles a `StructuralTrendType` derived from swing labels with one
-  derived from breaks; and what it reports when the two disagree.
-- **Support / resistance candidates** — `PriceLevel`, break history and change-of-character history are now
-  the natural vocabulary.
-- **Volume Evidence v1b** — still the deferred half of Milestone T.
-- **Trading reasoning v1** — first consumer of `TradingAnalysisContext`.
-
-**Known follow-ups from Milestone AE** (each small, none blocking): a **two-sided break bar leaves
-character indeterminate**, so no change is claimed at the next break bar — deliberate, since the
-alternative is an intrabar claim, and resolving it needs sub-bar data the repository does not ingest (E1);
-a change of character is **never invalidated**, so anything wanting "failed CHoCH" builds it over the
-sequence (E2); **no trend interaction** exists in either direction, because reconciliation sits above both
-(E3); character is the **last break bar only**, not an accumulated run, because accumulation is trend's
-idea and `MINIMUM_DIRECTIONAL_SHIFTS` already owns it (E4); and there is **no minimum spacing** between
-changes, because a threshold would make historical results unreproducible without its setting (E8).
-
-**Known follow-ups from Milestone AD** (each small, none blocking): the reference level is the **most
-recent**, not the most extreme, so a run of lower highs makes each successive lower high the reference
-(D5); a break is **never invalidated**, so anything wanting "failed break" builds it over the sequence
-(D3); breaks are derived **per side independently**, with no cross-side reading, because that is CHoCH's
-job (D6); and the first swing of each type still yields no level (ADR-0019 D2), so the earliest reference
-on each side is missing.
-
-**Known follow-ups from Milestone AC** (each small, none blocking): `derive_level_crossings` has **no
-activation policy**, so it will report a crossing of a level whose origin is later — deliberate, since
-filtering is BOS's decision, but a naive consumer must apply it (D1); `structural_levels` omits the
-**first swing of each type**, which has no `StructuralSwing` and therefore no label (2 of 5 points on the
-real fixture, D2); event volume is **O(candles × levels)**, so a wide level set over a long series is
-large by design; and `GAPPED_BEYOND` versus `ALREADY_BEYOND` is the one distinction an event cannot
-self-validate, because it depends on the predecessor the event does not carry (D4).
-
-**Known follow-ups from Milestone AB** (each small, none blocking): the context-free primitives remain
-public and cannot tell whether their input came from one series — that is a deliberate compatibility
-choice, and the mitigation is that the safe path is now also the easy path; the contract **over-rejects**,
-so `" BTCUSDT"` and `"BTCUSDT"` will not combine and anything wanting them unified must normalize before
-building candles; and `SeriesIdentity`'s value validation is deliberately no stricter than
-`CandleSeries`', so tightening whitespace handling is a breaking change needing its own ADR.
-
-**Known follow-ups from Milestone AA** (each small, none blocking): `MINIMUM_DIRECTIONAL_SHIFTS` is a
-**policy no test can validate as correct**, only as correctly implemented — any disagreement with it is a
-disagreement about the number and should be argued as such, not by redefining the four members;
-persistence is unconditional, so nothing built on top may assume a sustained trend is *recent*; and
-`NEUTRAL` and `INDETERMINATE` must never be collapsed by a consumer, because that erases the difference
-between a choppy market and a quiet one.
-
-**Known follow-ups from Milestone Y** (each small, none blocking): the package now has two kinds of
-output with different stability guarantees, so any interface built on top must not describe the aggregate
-state as non-repainting; and the five states are deliberately coarser than their inputs, so a consumer
-needing more detail reads `latest_high.label` / `latest_low.label` rather than growing the enum.
-
-**Known follow-ups from Milestone X** (each small, none blocking): `StructuralSwing` is a thin wrapper, so
-a consumer reaching through `swing.comparison.current.price` repeatedly wants a projection rather than
-more fields on this type; the exact-equality limitation from ADR-0013 §4 is inherited verbatim, so
-`EQUAL_HIGH` fires only for bit-identical stored prices.
+**What must not happen first.** Scheduling, notification delivery and ranking were all considered and
+deliberately excluded from AN. Ranking is **withdrawn on principle** rather than deferred (a sorted
+list is a claim — see AN's design §3.4); scheduling still owns no architecture layer and needs one
+before it gets code.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting
@@ -1051,9 +1062,9 @@ accepted before any macroeconomic, fundamental-release, revised, or vintage-data
 
 ## Repository status
 
-- Working tree clean. **Milestone AE is merged locally and deliberately NOT pushed**, so `main` is ahead
-  of `origin/main` by the six Milestone AE commits (design, implementation, review — three branches, three
-  `--no-ff` merges). Nothing about the milestone is on the remote.
+- Working tree clean. **Milestone AN is committed locally and deliberately NOT pushed**, so `main` is
+  ahead of `origin/main` (`7ec5b3e`) by the two Milestone AN commits — implementation and product
+  documentation. Nothing about the milestone is on the remote. Milestones AF through AL are pushed.
 - TradingView MCP workflow is external to the Python package — **zero coupling to `src/`**.
 - `pyproject.toml` and `uv.lock` unchanged since Milestone AD; still **zero runtime dependencies**.
 

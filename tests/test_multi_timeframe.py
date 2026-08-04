@@ -842,7 +842,7 @@ def test_new_limitation_texts_are_fact_only() -> None:
 def test_registry_names_are_unique() -> None:
     names = [c.name for c in cli_module.COMMANDS]
     assert len(names) == len(set(names))
-    assert set(names) == {"facts", "mtf", "regime", "swing"}
+    assert set(names) == {"facts", "mtf", "regime", "swing", "daily"}
 
 
 def test_every_registered_command_is_reachable_from_the_parser() -> None:
@@ -955,9 +955,13 @@ def test_no_engine_imports_the_multi_timeframe_root() -> None:
     Widened for Milestone AK for the same reason as the fact-sheet root:
     `fmis.workspace` is above `fmis.pipeline`, and composing this root is what
     it exists to do.
+    Widened again for Milestone AN: `fmis.daily` is a second application-layer
+    root, above the workspace, and running the same analysis across a universe is
+    what it exists to do. The guard's direction is unchanged — an engine still
+    may not reach upward — and every engine remains covered.
     """
     root = Path(mtf_module.__file__).parent.parent
-    above = {"pipeline", "workspace"}
+    above = {"pipeline", "workspace", "daily"}
     for path in root.rglob("*.py"):
         if above & set(path.parts) or "__pycache__" in path.parts:
             continue

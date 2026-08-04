@@ -715,9 +715,13 @@ def test_no_engine_imports_the_fact_sheet_root() -> None:
     consumes this root, which is the direction ADR-0007 permits. What the guard
     still forbids is an engine — anything below the application layer — reaching
     upward, and every such package remains covered.
+    Widened again for Milestone AN: `fmis.daily` is a second application-layer
+    root, above the workspace, and running the same analysis across a universe is
+    what it exists to do. The guard's direction is unchanged — an engine still
+    may not reach upward — and every engine remains covered.
     """
     root = Path(sf_module.__file__).parent.parent
-    above = {"pipeline", "workspace"}
+    above = {"pipeline", "workspace", "daily"}
     for path in root.rglob("*.py"):
         if above & set(path.parts) or "__pycache__" in path.parts:
             continue

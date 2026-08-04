@@ -10,6 +10,8 @@ said about them together (Milestone AG)
 [ADR-0020](ADR-0020-break-of-structure-foundation-v1.md) (D1, still contained);
 [ADR-0022](ADR-0022-structural-fact-sheet-composition-root.md) (the root composed per view);
 `reports/0006` §5 (the implementation contract this executes)
+**Later note:** ADR-0020 D1, described below as "still contained, not fixed" (including limitation F1),
+is closed one milestone later by [ADR-0024](ADR-0024-confirmation-delay-provenance.md).
 
 ---
 

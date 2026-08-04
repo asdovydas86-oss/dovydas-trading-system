@@ -43,6 +43,12 @@
 
 # 2. Current repository state
 
+> **Superseded snapshot.** This section is frozen at the `e0ba4c1` baseline (147 tests, two packages).
+> The live repository has since grown to 30+ top-level packages and 3,905+ tests. For the actual
+> current package map and dependency rules, read
+> [`REPOSITORY_MAP.md`](REPOSITORY_MAP.md) and [`AI_HANDOFF/CURRENT_STATE.md`](AI_HANDOFF/CURRENT_STATE.md)
+> instead of this section.
+
 Everything in this section was verified by direct inspection of the working tree at the baseline commit.
 
 ## 2.1 Package/module map
@@ -237,6 +243,14 @@ These extend, and do not replace, `PROJECT_SPECIFICATION_V1.md` §3–§4.
 ---
 
 # 4. Proposed high-level architecture
+
+> **Status tags below are frozen at this document's baseline and are now wrong for several modules**
+> that have since shipped (e.g. §4.1 Provider Adapters and §7 the Relative Value Engine are `deferred`/
+> `planned` here but built; §9 Market Regime Engine shipped as Milestone AI with a different design than
+> proposed below — three separate dimensions, never a single regime type). For what is actually built
+> today, read [`AI_HANDOFF/CURRENT_STATE.md`](AI_HANDOFF/CURRENT_STATE.md)'s "Completed milestones" table
+> or [`REPOSITORY_MAP.md`](REPOSITORY_MAP.md); per [`CLAUDE.md`](../CLAUDE.md), the ADRs win where this
+> document and the live repository disagree.
 
 Status legend: **implemented** · **partial** · **planned** · **deferred**.
 Most modules below are `planned` or `deferred`. Listing a module here is *not* authorization to build it.
@@ -633,6 +647,13 @@ Following the precedent already established (147 tests, hand-derived expectation
 
 # 8. Composite Feature Layer
 
+> **Diverged from what shipped.** The market-structure/trend states proposed below as future Tier-2
+> packages *inside* the Feature Engine were instead built as **separate top-level packages**
+> (`fmis.market_structure`, `fmis.structural_trend`, `fmis.level_crossing`, `fmis.structure_break`,
+> `fmis.change_of_character`) — [ADR-0012](adr/ADR-0012-market-structure-foundation.md) explicitly
+> rejected the Feature abstraction for this content (a `SwingPoint` is not a `FeatureValue`). See
+> [`REPOSITORY_MAP.md`](REPOSITORY_MAP.md) for the boundaries that actually govern them today.
+
 **Difference from the RVE — the essential distinction:**
 
 | | Composite Feature Layer | Relative Value Engine |
@@ -657,6 +678,12 @@ components, and (d) never labelled with a direction at this layer.
 ---
 
 # 9. Market Regime Engine
+
+> **Shipped with a different design than proposed below.** Milestone AI built `fmis.market_regime`
+> ([ADR-0025](adr/ADR-0025-market-regime-engine-v1.md)): three separate, never-collapsed dimensions
+> (structure / volatility / participation), not the single "possible outputs" list sketched here, and it
+> deliberately never produces a directional label. Read ADR-0025 and
+> [`design/MARKET_REGIME_ENGINE_V1.md`](design/MARKET_REGIME_ENGINE_V1.md) for what was actually built.
 
 **Role:** produce an explicit, testable classification of the market environment that higher layers
 (strategy, risk, AI) can condition on — replacing the implicit, prompt-embedded regime judgment that the
@@ -685,6 +712,15 @@ liquidity expansion / contraction · correlation regime · crisis / stress regim
 ---
 
 # 10. Near-term development roadmap
+
+> **Superseded past Milestone J.** Milestones H and I shipped roughly as scoped below. From Milestone J
+> onward the project diverged from this plan: the J v1b/v1c RVE split (Milestones K/L) was superseded by
+> [ADR-0004](adr/ADR-0004-rve-v1a-return-and-result-policy.md)'s v1a/v1b scoping and never resumed under
+> those letters, and the M (Composite Feature)/N (Market Regime) milestones sketched below were not built
+> as scoped — the project went to ingestion/providers/pipeline/decision-support work instead, and Market
+> Regime eventually shipped at Milestone AI under ADR-0025's different design (§9 above). For what
+> actually happened, read [`AI_HANDOFF/CURRENT_STATE.md`](AI_HANDOFF/CURRENT_STATE.md)'s "Completed
+> milestones" table.
 
 Small milestones, each one implementation/audit/commit cycle, following the established rhythm.
 

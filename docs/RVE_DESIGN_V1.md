@@ -282,6 +282,12 @@ cannot invent a timestamp. The prohibition is structural, not documentary.
 
 # 7. Staged scope
 
+> **Superseded past v1a.** Milestone J shipped as **v1a**, scoped by
+> [ADR-0004](adr/ADR-0004-rve-v1a-return-and-result-policy.md) rather than exactly as sketched below
+> (simple returns, unannualized volatility, five metrics — not the indexed/ratio split this section
+> describes). Milestones K (v1b) and L (v1c) below were never built under those letters and have not
+> been resumed since. See ADR-0004 §5 for the actual deferred-metrics list.
+
 ## Milestone J — v1a (first implementation)
 
 `RelationshipDefinition`, `Transform`, the three result types, the engine skeleton, and three metrics:

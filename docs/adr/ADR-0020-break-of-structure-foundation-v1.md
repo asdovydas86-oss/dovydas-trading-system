@@ -5,6 +5,11 @@
 **Date:** 2026-07-31
 **Supersedes / amends:** nothing. Extends ADR-0012, ADR-0013, ADR-0018, ADR-0019.
 **Design:** [`docs/design/BREAK_OF_STRUCTURE_FOUNDATION_V1.md`](../design/BREAK_OF_STRUCTURE_FOUNDATION_V1.md)
+**Later note:** D1 (§6, the confirmation-delay hazard) is closed by
+[ADR-0024](ADR-0024-confirmation-delay-provenance.md). §7's `zip(breaks, breaks[1:])` CHoCH sketch is
+superseded by [ADR-0021](ADR-0021-change-of-character-foundation-v1.md), which found it infers a change
+from an ordering the layer below refuses to read as temporal. Both sections below are left as written,
+per this directory's convention that an ADR's body is not rewritten after acceptance.
 
 ---
 

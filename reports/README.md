@@ -47,7 +47,7 @@ Examples:
 - Reports are **never deleted** unless the user explicitly authorizes deletion.
 - Do **not** create generic `REPORT.md` files in the repository root.
 
-**Next available report number: `0008`**
+**Next available report number: `0009`**
 
 ## Metadata header
 
@@ -70,6 +70,7 @@ Each report should open with a short metadata table:
 
 | # | Date | Type | Title | Status | Branch / Commit | File |
 |---|---|---|---|---|---|---|
+| 0008 | 2026-08-04 | Audit | Documentation Consistency Audit | Final | `main` / `36f5a30` | [0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md](0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md) |
 | 0007 | 2026-08-02 | Readiness Check | Implementation Readiness Check | Final | `main` / `d132cea` + uncommitted AF | [0007_2026-08-02_IMPLEMENTATION_READINESS_CHECK.md](0007_2026-08-02_IMPLEMENTATION_READINESS_CHECK.md) |
 | 0006 | 2026-08-02 | Architecture Gate | Milestone AF Architecture Gate | Final | `main` / `d132cea` + AF | [0006_2026-08-02_MILESTONE_AF_ARCHITECTURE_GATE.md](0006_2026-08-02_MILESTONE_AF_ARCHITECTURE_GATE.md) |
 | 0005 | 2026-08-01 | Development Roadmap | FMITS Development Roadmap 2026–2027 | Final | `main` / `d132cea` | [0005_2026-08-01_FMITS_DEVELOPMENT_ROADMAP_2026_2027.md](0005_2026-08-01_FMITS_DEVELOPMENT_ROADMAP_2026_2027.md) |
@@ -212,6 +213,24 @@ that the next action was not a milestone but `git commit`. It also corrected a f
 mislead: 136 public exports measured **after** AF added nine, coinciding by accident with the
 pre-AF baseline recorded elsewhere.
 
+### 0008 — Documentation Consistency Audit
+
+**Date:** 2026-08-04 · **Type:** Audit · **File:** [`0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md`](0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md)
+
+A read-only-first consistency pass across every document in `docs/`, `reports/`, and the
+repository root, before resuming feature work on Milestone AO. Found the root `README.md` never
+mentioned FMITS or `src/fmis/` at all, describing a pre-FMITS scaffold; `ARCHITECTURE_AND_ROADMAP_V1.md`
+— required reading per `docs/README.md`'s onboarding order — frozen at a 147-test baseline with
+status tags wrong for several shipped modules and no notice pointing readers at what superseded it;
+and two ADRs (0020, 0023) missing forward pointers to the later ADR that closed the hazard they
+describe as open. Also found, but left unfixed as explicitly out of scope for a documentation-only
+pass: `CURRENT_STATE.md` and `FMITS_PRODUCT_BACKLOG.md` both claim Milestone AN is unpushed when five
+further commits have since landed and pushed, and `FMITS_PRODUCT_CHANGELOG.md` §5 still lists AN as
+unreleased against its own §3/§4. Zero broken links found across 79 markdown files. Fixed six files
+with additive staleness banners and one extended index table; recommended, but did not attempt,
+trimming `CURRENT_STATE.md`'s ~900 lines of full historical milestone narrative as the largest
+unrealized reading-cost saving in the repository.
+
 ## Implementation milestones executed from these reports
 
 Reports produce contracts; milestones deliver product. This table links each executed milestone to
@@ -221,6 +240,12 @@ its technical records in `docs/`. The current implementation state always lives 
 | Milestone | What it delivered | Records |
 |---|---|---|
 | **AF — First Light** | Connected the deterministic structural chain to real market data: a second composition root in `fmis.pipeline`, a single-timeframe deterministic fact sheet, and the repository's first product surface (`fmits facts SYMBOL`). No new engine. ADR-0020 D1 contained, not fixed | [ADR-0022](../docs/adr/ADR-0022-structural-fact-sheet-composition-root.md) · [design](../docs/design/STRUCTURAL_FACT_SHEET_V1.md) · [review](../docs/reviews/STRUCTURAL_FACT_SHEET_V1_REVIEW.md) |
+| **AG — Multi-Timeframe Fact Sheet v1** | A third composition root calling the AF root once per timeframe role (CONTEXT/SETUP/EXECUTION); no cross-timeframe synthesis. `fmits mtf SYMBOL`. Implementation contract was report 0006 §5 | [ADR-0023](../docs/adr/ADR-0023-multi-timeframe-composition.md) · [design](../docs/design/MULTI_TIMEFRAME_FACT_SHEET_V1.md) · [review](../docs/reviews/MULTI_TIMEFRAME_FACT_SHEET_V1_REVIEW.md) |
+| **AH — Confirmation-Delay Provenance v1** | Closed ADR-0020 D1: the confirmation delay now travels with the origin that earned it, rather than being a separately-supplied argument that could silently disagree with detection | [ADR-0024](../docs/adr/ADR-0024-confirmation-delay-provenance.md) · [design](../docs/design/CONFIRMATION_DELAY_PROVENANCE_V1.md) · [review](../docs/reviews/CONFIRMATION_DELAY_PROVENANCE_V1_REVIEW.md) |
+| **AI — Market Regime Engine v1** | The first interpretation-adjacent layer: `fmis.market_regime`, three separate environment dimensions (structure/volatility/participation), never collapsed into a direction. `fmits regime SYMBOL [--multi]` | [ADR-0025](../docs/adr/ADR-0025-market-regime-engine-v1.md) · [design](../docs/design/MARKET_REGIME_ENGINE_V1.md) · [review](../docs/reviews/MARKET_REGIME_ENGINE_V1_REVIEW.md) |
+| **AK — Swing Trading Workspace v1** | Made the third stranded dependency island reachable: `fmis.workspace`, eleven sections (unbuilt ones rendered rather than omitted), deterministic conflict detection that never resolves. `fmits swing SYMBOL`. No ADR — no new boundary | [design](../docs/design/SWING_WORKSPACE_V1.md) · [review](../docs/reviews/SWING_WORKSPACE_V1_REVIEW.md) |
+| **AL — Decision Context Engine v1** | `fmis.decision_context` answers one question — does this analysis contain enough trustworthy information to continue — and adds a twelfth workspace section; a policy object carrying no numbers | [ADR-0026](../docs/adr/ADR-0026-decision-context-boundary.md) · [design](../docs/design/DECISION_CONTEXT_V1.md) · [review](../docs/reviews/DECISION_CONTEXT_V1_REVIEW.md) |
+| **AN — Deterministic Daily Workflow v1** | The first capability answering about more than one symbol: `fmis.daily`, a per-symbol error-isolated sequential runner, a readiness index that is never a ranking. `fmits daily SYMBOL...`. No ADR — no new boundary | [design](../docs/design/DETERMINISTIC_DAILY_WORKFLOW_V1.md) · [review](../docs/reviews/DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md) |
 
 ## Archive policy
 

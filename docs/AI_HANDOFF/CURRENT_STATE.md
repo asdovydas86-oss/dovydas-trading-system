@@ -1045,10 +1045,18 @@ decision belongs to every metadata-carrying model at once, not to whichever mile
 reference, so *what* gets archived is already decided — only *how* is open. `DAILY_SCHEMA_VERSION` and
 `WORKSPACE_SCHEMA_VERSION` exist precisely so a stored artifact stays readable years later.
 
-**What must not happen first.** Scheduling, notification delivery and ranking were all considered and
-deliberately excluded from AN. Ranking is **withdrawn on principle** rather than deferred (a sorted
-list is a claim — see AN's design §3.4); scheduling still owns no architecture layer and needs one
-before it gets code.
+**What must not happen first.** Scheduling, notification delivery and opportunity ranking were all
+considered and deliberately excluded from AN. Scheduling still owns no architecture layer and needs
+one before it gets code.
+
+**Ranking — two different things, and only one is refused.** Sorting the daily index *by readiness*
+is a category error in any version, because a readiness state describes the analysis rather than the
+instrument (AN design §3.4). **Opportunity ranking is a different capability and remains on the
+roadmap**: `PROJECT_SPECIFICATION_V1.md` §10 lists market scanning and candidate ranking, its
+Opportunity Scanner ranks investments and swing trades, the vision addendum carries the same scanner,
+`reports/0005` Phase 4 carries C-164, and the backlog's `EP-02` and `EP-03` remain LATER · High. It is
+deferred to a milestone of its own, where it must be an explicit, deterministic, testable and
+backtested policy.
 
 **Required precursor milestone (not near-term):** an **availability-time model** must be designed and
 accepted before any macroeconomic, fundamental-release, revised, or vintage-data backtesting

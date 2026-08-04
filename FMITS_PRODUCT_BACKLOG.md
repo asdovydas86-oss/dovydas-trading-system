@@ -233,9 +233,26 @@ read *"A scheduled run produces a brief without interaction · scanning **ranks*
 computed facts with stated reasons · every run is **archived** · failures are visible."* The
 milestone brief explicitly forbade scheduling, ranking and persistence. AN therefore delivers the
 multi-symbol routine and **failures are visible**; scheduling belongs to no architecture layer yet,
-**ranking is prohibited on principle** (a sorted list is a claim — see the design §3.4), and
-archiving is AO, blocked on D-01. `reports/0005` Phase 4's acceptance is **partially deferred**, and
-the ranking clause should be considered **withdrawn** rather than pending.
+and archiving is `AO`, blocked on D-01. Three of Phase 4's four completion criteria are therefore
+**still open**, carried by `EP-02`, `EP-03` and `AO` — not met, and not withdrawn.
+
+**On ranking, precisely.** Two different things were being named by one word, and only one of them is
+refused:
+
+- **Ranking by readiness is a category error, permanently.** A decision-context state describes the
+  *analysis*, not the instrument, so sorting by it produces a list of picks out of a list of data
+  qualities. This is the design §3.4 argument, and it binds every future version of the daily index.
+- **Ranking opportunities remains a named FMITS capability, and is deferred, not withdrawn.**
+  `PROJECT_SPECIFICATION_V1.md` §10 lists *market scanning* and *candidate ranking* among the Swing
+  Trading Module's responsibilities, and its **Opportunity Scanner** *"ranks possible long-term
+  investments, swing trades and later short-term trades"*; `PROJECT_VISION_ADDENDUM_V1.md` carries the
+  same scanner; `reports/0005` Phase 4 carries **C-164 opportunity scanning over a watchlist**; and
+  this board's own **`EP-02`** (scanning, ranking) and **`EP-03`** (opportunity scanner) rows in §7
+  remain LATER · High. None of that is affected by AN.
+
+When a scanner is built it must rank on an **explicit, deterministic, testable and backtested
+policy** — a named milestone with its own ADR, evidence and acceptance criteria — never as a side
+effect of a workflow, and never on a readiness state.
 
 **Status note.** DONE on repository evidence: the suite is green under `-W error`, coverage is 100 %
 on all four new modules and on `pipeline/cli.py`, mutation is 81/81 with byte-identical source
@@ -495,16 +512,23 @@ known before sequencing.
 
 ## 10. Open decisions
 
-Carried, not solved. None of these blocks AN.
+Carried, not solved. **D-01 blocks the current NOW item, `AO`** — it is the only one that does.
+
+> **Milestone letters corrected here, 2026-08-04.** Three rows still carried letters from before the
+> two shifts recorded in §11, all of them meaning *the daily workflow* under its earlier name. D-01
+> read `AL`, which now names the shipped Decision Context Engine; D-05 and D-06 read `AK`, which now
+> names the shipped Swing Workspace. The blockers themselves are unchanged: AN shipped deliberately
+> without persistence, scheduling or a watchlist model, so all three decisions remain open and now
+> point at the epics and the milestone that actually carry them.
 
 | ID | Decision | Blocks | Source |
 |---|---|---|---|
-| **D-01** | Persistence and serialization schema | EP-18, AL | `ARCH` §13.8 · `reports/0006` §6 |
+| **D-01** | Persistence and serialization schema | EP-18, **`AO`** | `ARCH` §13.8 · `reports/0006` §6 |
 | **D-02** | Money / portfolio numeric types (`float` vs `Decimal`) | EP-04 | Review R11 · `reports/0005` §7.2 |
 | **D-03** | Availability-time model for released/revised data | EP-07, EP-08 | **ADR-0003 (formal gate)** |
 | **D-04** | Journal scope as a formal product capability | EP-18 | `reports/0004` §15.3 |
-| **D-05** | Scheduling ownership — belongs to no architecture layer | AK, EP-03 | `reports/0004` §13.5 |
-| **D-06** | Watchlist / universe model | AK, EP-03 | `reports/0004` §13.5 |
+| **D-05** | Scheduling ownership — belongs to no architecture layer | EP-03 — *not* AN, which shipped without it | `reports/0004` §13.5 |
+| **D-06** | Watchlist / universe model | EP-03, `AO` — AN takes its universe from the shell | `reports/0004` §13.5 |
 | **D-07** | CI and type-checking timing | EP-20 | `reports/0001` §10.2 |
 | **D-08** | Telegram as a delivery transport | EP-19 | `reports/0004` §15.2 |
 | **D-09** | Excel / CSV export ecosystem | EP-19 | `reports/0004` §15.2 · blocked by D-01 |

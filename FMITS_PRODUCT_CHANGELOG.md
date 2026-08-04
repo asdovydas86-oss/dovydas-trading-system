@@ -118,7 +118,8 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 | Support/resistance naming — levels are reported as *nearest above / below* | `EP-01` |
 | Portfolio or risk context, position sizing | `EP-04`, blocked on **D-02** |
 | Persistence — a run is printed, never stored | `AO`, blocked on **D-01** |
-| Ranking, scoring or scanning by attractiveness | **withdrawn on principle** — a sorted list is a claim; see AN's design §3.4 |
+| Opportunity scanning and candidate ranking | `EP-02`, `EP-03` — a **named future capability** (SPEC §10 and the Opportunity Scanner; vision addendum; `reports/0005` C-164). Deferred, not withdrawn, and it must arrive as an explicit, deterministic, testable, backtested policy |
+| Ranking *by readiness* — sorting the daily index by its own states | **never**, in any version. Readiness describes the analysis, not the instrument; see AN's design §3.4 |
 | Alerts, scheduling, unattended runs, notification delivery | `EP-03` — scheduling still owns no architecture layer |
 | Watchlist persistence — a universe is typed, or supplied by the shell | `AO`, blocked on **D-01** |
 | Any asset class other than crypto | `EP-05` |

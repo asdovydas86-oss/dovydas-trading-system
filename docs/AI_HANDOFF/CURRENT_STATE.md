@@ -745,7 +745,7 @@ Reconstructed from git history (`git log --oneline`):
 
 | Decision Context Engine v1 (AL) | `a728f3b` | `fmis.decision_context` — one question, five delegating requirements, a policy carrying **no numbers**; plus a twelfth workspace section; see [ADR-0026](../adr/ADR-0026-decision-context-boundary.md) |
 
-| Deterministic Daily Workflow v1 (AN) | committed with this milestone | `fmis.daily` — a frozen `DailyRun`, a sequential runner with per-symbol error isolation, a compact readiness index, `fmits daily`. **An index, never a ranking.** No ADR — no new boundary |
+| Deterministic Daily Workflow v1 (AN) | `74036a4` | `fmis.daily` — a frozen `DailyRun`, a sequential runner with per-symbol error isolation, a compact readiness index, `fmits daily`. **An index, never a ranking.** No ADR — no new boundary |
 
 (Earlier commits cover the initial audit and documentation of the pre-code repository state.)
 

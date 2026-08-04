@@ -7,7 +7,7 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `a728f3b9f1dbf70c3e00fcfb97b66d60872f8ece` (Milestone AL) |
+| **Last verified against** | `74036a4b81967618a809e420b85d320ab566d6b5` (Milestone AN) |
 | **Verified on** | 2026-08-04 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -67,18 +67,23 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `a728f3b` — what the owner can do today.**
+**As of `74036a4` — what the owner can do today.**
 
 ```
+fmits daily  BTCUSDT ETHUSDT SOLUSDT            # the morning routine, one row per symbol
 fmits swing  BTCUSDT                            # the whole page, end to end
 fmits regime BTCUSDT --multi                    # the environment, per role, with evidence
 fmits mtf    BTCUSDT -n 260                     # 1W context · 1D setup · 4H execution
 fmits facts  BTCUSDT --interval 4h --limit 200  # one timeframe, exhaustively
-python -m fmis.pipeline swing BTCUSDT           # works without reinstalling
+python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 ```
 
 **Delivered:**
 
+- a **repeatable multi-symbol routine**: one command runs the same analysis over a requested universe
+  under one set of settings, and prints one row per symbol in the order requested — with the symbols
+  that **failed, and why**, kept on the page. **Not a ranking**: no score, no order by any property of
+  the analysis, no direction;
 - a **statement of whether the analysis can be trusted**: five named requirements, each delegating
   its rule to the layer that declared it, reported as sufficient, limited or insufficient with the
   unmet ones named;
@@ -112,8 +117,10 @@ python -m fmis.pipeline swing BTCUSDT           # works without reinstalling
 | ~~Market regime classification~~ | **Delivered by `AI`** — see below |
 | Support/resistance naming — levels are reported as *nearest above / below* | `EP-01` |
 | Portfolio or risk context, position sizing | `EP-04`, blocked on **D-02** |
-| Persistence — a sheet is printed, never stored | `AL`, blocked on **D-01** |
-| Scanning, watchlists, alerts, scheduling, brief | `AK`, `EP-03` |
+| Persistence — a run is printed, never stored | `AO`, blocked on **D-01** |
+| Ranking, scoring or scanning by attractiveness | **withdrawn on principle** — a sorted list is a claim; see AN's design §3.4 |
+| Alerts, scheduling, unattended runs, notification delivery | `EP-03` — scheduling still owns no architecture layer |
+| Watchlist persistence — a universe is typed, or supplied by the shell | `AO`, blocked on **D-01** |
 | Any asset class other than crypto | `EP-05` |
 | Backtesting, paper trading, shadow mode, execution | `EP-14` … `EP-17` |
 
@@ -127,6 +134,51 @@ makes no directional claim. Every rung of the automation ladder remains unstarte
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-04 · `AN` — Deterministic Daily Workflow v1
+
+**Status:** Released · **fifth user-visible product capability**
+**Commit:** `74036a4b81967618a809e420b85d320ab566d6b5`
+Validated before versioning: 3,905 tests green including `-W error`, coverage 100 % on all four new
+modules and on `pipeline/cli.py`, 81 mutation probes all detected with zero survivors and zero no-ops
+and byte-identical source restoration, independent review complete, and `fmits daily` run against
+live Binance data including a deliberately invalid symbol.
+
+**What the owner can now do that was impossible before.** Analyse a whole watchlist in **one
+command**. Every capability before this answered about one symbol; watching eight instruments meant
+eight commands and eight ~270-line pages, held side by side in the owner's head. `fmits daily` runs
+the same analysis across the universe and prints **83 lines for fifty symbols**, each row carrying the
+decision-context state and the regime.
+
+**The part that matters most is the failure handling.** Before AN, a symbol whose fetch failed was a
+command that scrolled past — and a morning where three symbols were analysed and a fourth silently was
+not looked exactly like a morning where all four were analysed. A failed symbol now keeps its row,
+names its reason in the provider's own words, and the run still completes.
+
+**Limitations, printed on every run.**
+
+- **It is an index, not a ranking.** Rows appear in the order requested; nothing here says which
+  symbol is worth attention.
+- **A readiness state is not an opportunity.** It describes whether an analysis rests on enough data.
+- **No shared as-of.** Each symbol is fetched at a different instant, so rows are not comparable in
+  time.
+- **No substitution.** A failed symbol reports why and nothing more; no cached or previous analysis
+  stands in for it.
+- **At most 50 symbols per run** — a stated policy, so a run cannot be rate-limited halfway through.
+
+**Safety / risk notes.** No direction, no recommendation, no score, no sizing, and — deliberately —
+**no ranking**, which is the single thing a multi-symbol page most invites. A defect inside FMITS is
+never rendered as an ordinary market failure: unexpected exceptions stop the run rather than appearing
+as a row.
+
+**Related.** ADR: none — no new boundary was created ·
+Design: [DETERMINISTIC_DAILY_WORKFLOW_V1](docs/design/DETERMINISTIC_DAILY_WORKFLOW_V1.md) ·
+Review: [DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW](docs/reviews/DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md)
+— no P0, no P1, two P2 found and fixed, one P3 fixed, three P3 documented.
+
+**Breaking changes.** None. `facts`, `mtf`, `regime` and `swing` are unchanged; `daily` is added.
 
 ---
 

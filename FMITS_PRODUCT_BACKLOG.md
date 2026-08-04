@@ -70,28 +70,35 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AL commit** | `a728f3b9f1dbf70c3e00fcfb97b66d60872f8ece` |
-| **HEAD** | this documentation commit, on top of `a728f3b` |
-| **`origin/main`** | `44685de` — **behind local main by four commits (AK and AL); not pushed** |
+| **Milestone AN commit** | `74036a4b81967618a809e420b85d320ab566d6b5` |
+| **HEAD** | this documentation commit, on top of `74036a4` |
+| **`origin/main`** | `7ec5b3e` — **behind local main by the two AN commits; not pushed** |
 | **Working tree** | clean |
-| **Test count** | **3,766 passing**, identically under `-W error` |
-| **Public exports / collisions** | 228 / 0 (212 before AL) |
+| **Test count** | **3,905 passing**, identically under `-W error` (3,766 before AN) |
+| **Public exports / collisions** | 242 / 0 (228 before AN) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 |
-| **Latest completed milestone** | **AL — Decision Context Engine v1** (`a728f3b`) |
+| **Latest completed milestone** | **AN — Deterministic Daily Workflow v1** (`74036a4`) |
 | **Product Value Level** | **Level 2 — usable swing-analysis assistant: one page carrying facts, regime, evidence and conflicts** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **AN — Deterministic daily workflow v1** (not started) |
+| **Immediate next milestone** | **AO — Memory / decision archive** (not started; blocked on open decision D-01) |
 
 ### Current user-visible capability
 
 ```
+fmits daily  BTCUSDT ETHUSDT SOLUSDT       # the morning routine, one row per symbol
 fmits swing  BTCUSDT                       # the whole page, end to end
 fmits regime BTCUSDT --multi               # the environment, per role, with evidence
 fmits mtf    BTCUSDT -n 260                # 1W context · 1D setup · 4H execution
 fmits facts  BTCUSDT --interval 4h         # one timeframe, exhaustively
-python -m fmis.pipeline swing BTCUSDT      # works without reinstalling
+python -m fmis.pipeline daily BTCUSDT      # works without reinstalling
 ```
+
+`daily` runs the **same** swing analysis across a requested universe, one symbol at a time, and
+prints a compact **readiness index**: one row per symbol, in the order requested, carrying the
+decision-context state and the regime beside it. A symbol that fails reports why and does not stop
+the run. It is **not a ranking** — no score, no direction, no recommendation — and the first
+limitation printed on every run says exactly that.
 
 `swing` is the **whole page in one command**: data quality, regime per role, structure per role,
 levels, evidence by family, and the disagreements between them — with risk, portfolio, trade plan and
@@ -119,56 +126,39 @@ close, and the inherited limitations — computed from live exchange data.
 
 Exactly one item.
 
-### `AN` — Deterministic daily workflow v1
+### `AO` — Memory / decision archive
 
 | Field | Value |
 |---|---|
-| **ID** | AN *(was AL until the Decision Context Engine took that letter — §11)* |
-| **Epic** | EP-03 Daily Market Intelligence |
+| **ID** | AO *(was AM until two milestone-letter shifts — §11)* |
+| **Epic** | EP-18 Knowledge & Research |
 | **Status** | **NOW** |
-| **Priority** | High |
-| **Estimated size** | 4–6 weeks *(source: reports/0005 Phase 4)* |
-| **Confidence** | Medium — scheduling still has no owner in any architecture layer |
+| **Priority** | **Critical** |
+| **Estimated size** | *(source: reports/0005 Phase 5)* |
+| **Confidence** | Blocked-dependent — **open decision D-01 must be settled first** |
 
-**Product value.** **This is v1** — the first version genuinely useful daily without the TradingView
-prompt doing the analysis.
+**Product value.** Closes the loop. Four of the project's nine success criteria depend on it.
 
-**What the owner can do after this that was impossible before.** Open the system each morning and be
-told what changed and what deserves attention, before asking.
+**What the owner can do after this that was impossible before.** Ask *"what did I think about this in
+October, and was I right?"* and get an answer. Until this exists, daily use accumulates nothing.
 
-**Why now.** Both dependencies are met. `AK` delivered the per-instrument page as a serializable
-object, and `AL` delivered the filter: `reports/0005` Phase 4 names *"alert fatigue from an
-unfiltered brief"* as this milestone's principal risk, and a brief can now exclude instruments whose
-analysis the system judges insufficient — using a judgement that exists outside the brief.
+**Why now.** AN made the case concrete rather than theoretical: a daily run is now a first-class,
+schema-versioned object holding real workspaces, so what would be archived is already decided. AK and
+AN both raised the same open decision (`Workspace` and `DailyRun` are equally unpicklable), and it is
+the same answer for both.
 
-**Dependencies.** AK (done) **and** AL (done, `a728f3b`).
-**Acceptance.** A scheduled run produces a brief without interaction · scanning ranks a watchlist on
-computed facts with stated reasons · every run is archived · failures are visible.
-**Out of scope.** A UI — text output is sufficient and much cheaper.
-**Related.** `reports/0004` §12 Level 3 · `reports/0005` Phase 4.
+**Dependencies.** AN (done) **and OPEN DECISION D-01 (persistence schema)**, which must be settled
+before implementation begins.
+**Related.** `PROJECT_SPECIFICATION_V1.md` §25 · `reports/0004` C-159 · `reports/0005` Phase 5.
 
-> **Not started.** No scanning, brief or scheduling code exists in the repository.
+> **Not started.** No persistence code exists in the repository.
 
 ## 6. NEXT
 
 The forced sequence. Each item is blocked on the one above it.
 
-*AL shipped; the daily workflow moved to NOW.*
-
-### `AO` — Memory / decision archive
-
-| Field | Value |
-|---|---|
-| **Epic** | EP-18 Knowledge & Research · **Status** NEXT · **Priority** **Critical** |
-| **Product value** | Closes the loop. Four of the project's nine success criteria depend on it |
-
-**What the owner can do after this that was impossible before.** Ask *"what did I think about this in
-October, and was I right?"* and get an answer. Until this exists, daily use accumulates nothing.
-
-**Dependencies.** AN, and **OPEN DECISION D-01 (persistence schema)** must be settled first. `AK`
-made this materially easier: a `Workspace` is a complete, schema-versioned object, so what gets
-archived is already decided.
-**Related.** `PROJECT_SPECIFICATION_V1.md` §25 · `reports/0004` C-159 · `reports/0005` Phase 5.
+*AN shipped; the memory / decision archive moved to NOW. §6 is empty until D-01 is settled and the
+item after the archive is sequenced — see §7 for the epics awaiting sequencing.*
 
 ---
 
@@ -212,7 +202,45 @@ Repository-verified only. Every SHA below was confirmed to exist with `git cat-f
 
 The **complete** 30-milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
-This section carries the three most recent product-relevant milestones.
+This section carries the four most recent product-relevant milestones.
+
+### `AN` — Deterministic Daily Workflow v1 · **DONE**
+
+| Field | Value |
+|---|---|
+| **Commit** | **`74036a4b81967618a809e420b85d320ab566d6b5`** |
+| **ADR** | none — no new boundary was created. `fmis.daily` composes AK and AL under ADR-0007's existing application-layer rule, and the review records why an ADR was not warranted |
+| **Design** | [DETERMINISTIC_DAILY_WORKFLOW_V1.md](docs/design/DETERMINISTIC_DAILY_WORKFLOW_V1.md) |
+| **Review** | [DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md](docs/reviews/DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md) — no P0, no P1, **2 P2 fixed**, 1 P3 fixed, 3 P3 documented |
+| **Tests** | 3,766 → **3,905** (+139). Mutation 81/81, zero survivors, zero no-ops |
+
+**Product value delivered.** A repeatable morning routine. Before AN every capability answered about
+one symbol; an owner watching eight instruments ran eight commands and read eight ~270-line pages.
+`fmits daily` runs the same analysis across a universe and prints **83 lines for fifty symbols**.
+
+**What the owner can now do that was impossible before.** Analyse a whole watchlist in one command,
+under one set of settings, and see at a glance which analyses rest on enough data — and, critically,
+**which symbols failed and why**. Before AN a symbol whose fetch failed was a command that scrolled
+past; nothing recorded that it had been skipped.
+
+**Limitations shipped with it, printed on every run.** It is an index, not a ranking · a
+decision-context state is not an opportunity · each symbol is fetched at a different instant, so the
+run has **no shared as-of** and rows are not comparable in time · a failed symbol gets no substituted
+cached analysis.
+
+**Deviation from the boarded acceptance criteria — recorded, not quietly dropped.** The board's line
+read *"A scheduled run produces a brief without interaction · scanning **ranks** a watchlist on
+computed facts with stated reasons · every run is **archived** · failures are visible."* The
+milestone brief explicitly forbade scheduling, ranking and persistence. AN therefore delivers the
+multi-symbol routine and **failures are visible**; scheduling belongs to no architecture layer yet,
+**ranking is prohibited on principle** (a sorted list is a claim — see the design §3.4), and
+archiving is AO, blocked on D-01. `reports/0005` Phase 4's acceptance is **partially deferred**, and
+the ranking clause should be considered **withdrawn** rather than pending.
+
+**Status note.** DONE on repository evidence: the suite is green under `-W error`, coverage is 100 %
+on all four new modules and on `pipeline/cli.py`, mutation is 81/81 with byte-identical source
+restoration, the review is complete with every P0–P2 fixed, and `fmits daily` was run against live
+Binance data including a deliberately invalid symbol.
 
 ### `AL` — Decision Context Engine v1 · **DONE**
 

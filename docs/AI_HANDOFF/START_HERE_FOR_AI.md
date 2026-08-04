@@ -1,9 +1,9 @@
 # Start Here — For AI Coding Agents
 
-**Read this document only, then work.** It is the single entry point for every AI session in this
-repository. It does not restate what other documents already say correctly — it tells you which
-document to open for which question, and gives you the handful of facts you need before you open any
-of them.
+**Read this document first. Then open only the authoritative sources it routes you to for the
+current task.** It is the single entry point for every AI session in this repository. It does not
+restate what other documents already say correctly — it tells you which document to open for which
+question, and gives you the handful of facts you need before you open any of them.
 
 If a task instruction ever conflicts with a rule linked from here, stop and surface the conflict
 rather than guessing.

@@ -540,20 +540,23 @@ fact that matters — the product began on 2026-08-02.
 
 > **Unreleased. Planned. Not available.** Nothing in this section exists in the repository.
 
-### `AN` — Deterministic daily workflow v1 — **UNRELEASED**
+### `AO` — Memory / decision archive — **UNRELEASED**
 
 **Status:** NOW on the [product backlog](FMITS_PRODUCT_BACKLOG.md) · **not started** · no commit, no
-design and no ADR exists
+design and no ADR exists · **blocked on open decision D-01** (persistence and serialization schema)
 
-**Capability it will add.** A reason to open the system each morning: a watchlist scanned, a brief
-generated, and a scheduled run that happens without being asked.
+**Capability it will add.** A record of past analyses the owner can return to — closing the loop `AN`
+made concrete: a daily run is now a complete, schema-versioned object, so *what* would be archived is
+already decided and only *how* remains open.
 
 **What it will change for the owner.** Not yet decided in detail, and deliberately not described here
-as though it were. Both preconditions are now met: `AK` delivered the page as a serializable object
-and `AL` delivered the filter that keeps a brief from reporting analyses the system knows are thin.
+as though it were, pending D-01.
 
 No further capability is listed. The sequence after it is on the backlog — this changelog records what
 shipped, not what is planned.
+
+*(This section previously listed `AN` here as unreleased; `AN` shipped 2026-08-04 and is recorded as
+released in §3 and §4 above.)*
 
 ## 6. Entry template
 
@@ -603,4 +606,4 @@ and mark the entry Foundational.
 
 ---
 
-*Living document · last verified against `a728f3b` on 2026-08-04*
+*Living document · last verified against `b13c37e` on 2026-08-05*

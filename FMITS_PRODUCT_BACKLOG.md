@@ -11,8 +11,8 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `a728f3b9f1dbf70c3e00fcfb97b66d60872f8ece` (Milestone AL) |
-| **Verified on** | 2026-08-04 |
+| **Last verified against** | `b13c37e` (Milestone AN + documentation-consistency audit, report 0008) |
+| **Verified on** | 2026-08-05 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -71,8 +71,8 @@ before?"* An item that cannot answer it does not belong here.
 | Fact | Value |
 |---|---|
 | **Milestone AN commit** | `74036a4b81967618a809e420b85d320ab566d6b5` |
-| **HEAD** | this documentation commit, on top of `74036a4` |
-| **`origin/main`** | `7ec5b3e` — **behind local main by the two AN commits; not pushed** |
+| **HEAD** | this reconciliation commit, on top of `b13c37e` |
+| **`origin/main`** | matches HEAD after this push — **AN, its pre-push correction, three later documentation commits and the documentation-consistency audit (report 0008) are all pushed** |
 | **Working tree** | clean |
 | **Test count** | **3,905 passing**, identically under `-W error` (3,766 before AN) |
 | **Public exports / collisions** | 242 / 0 (228 before AN) |
@@ -589,4 +589,4 @@ not edited.
 
 ---
 
-*Living document · last verified against `a728f3b` on 2026-08-04*
+*Living document · last verified against `b13c37e` on 2026-08-05*

@@ -7,9 +7,14 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AN — Deterministic Daily Workflow v1 (2026-08-04).
-**Latest commit at time of writing:** `7ec5b3e` — the last pushed commit. Milestones AF through AL are
-pushed; the Milestone AN changes are committed on top of it and **not pushed**.
+**Last updated for:** Milestone AN — Deterministic Daily Workflow v1 (2026-08-04); the Git-state lines
+below were corrected 2026-08-05 — AN was in fact pushed the same day it shipped, and this file had
+never been updated to say so.
+**Latest commit at time of writing:** this reconciliation commit, matching `origin/main`. AN's two
+commits (`74036a4`, `3a3df3d`) and its pre-push correction (`644324c`) reached `origin/main` on
+2026-08-04, followed by three documentation-only commits (`305f33c`, `2fbf403`, `36f5a30`) and the
+documentation-consistency audit (`b13c37e`, [report 0008](../../reports/0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md)).
+**Milestones AF through AN are pushed.**
 
 ---
 
@@ -1073,9 +1078,10 @@ accepted before any macroeconomic, fundamental-release, revised, or vintage-data
 
 ## Repository status
 
-- Working tree clean. **Milestone AN is committed locally and deliberately NOT pushed**, so `main` is
-  ahead of `origin/main` (`7ec5b3e`) by the two Milestone AN commits — implementation and product
-  documentation. Nothing about the milestone is on the remote. Milestones AF through AL are pushed.
+- Working tree clean. **Milestone AN is pushed** (`74036a4`, `3a3df3d`), corrected pre-push (`644324c`),
+  and followed by three documentation-only commits (`305f33c`, `2fbf403`, `36f5a30`) and the
+  documentation-consistency audit (`b13c37e`, report 0008) — all on `origin/main`. Milestones AF
+  through AN are pushed; nothing is committed locally that is not also on the remote.
 - TradingView MCP workflow is external to the Python package — **zero coupling to `src/`**.
 - `pyproject.toml` and `uv.lock` unchanged since Milestone AD; still **zero runtime dependencies**.
 

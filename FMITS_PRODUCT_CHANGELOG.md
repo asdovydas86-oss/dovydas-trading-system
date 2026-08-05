@@ -67,7 +67,7 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `74036a4` — what the owner can do today.**
+**As of `b40663f` (`AO`) — what the owner can do today.**
 
 ```
 fmits daily  BTCUSDT ETHUSDT SOLUSDT            # the morning routine, one row per symbol
@@ -75,6 +75,11 @@ fmits swing  BTCUSDT                            # the whole page, end to end
 fmits regime BTCUSDT --multi                    # the environment, per role, with evidence
 fmits mtf    BTCUSDT -n 260                     # 1W context · 1D setup · 4H execution
 fmits facts  BTCUSDT --interval 4h --limit 200  # one timeframe, exhaustively
+fmits swing  BTCUSDT --archive                  # archive the page durably
+fmits daily  BTCUSDT ETHUSDT --archive          # archive the whole run
+fmits archive list                              # every archived record, metadata only
+fmits archive show RECORD_ID                    # render a stored record, no network access
+fmits archive verify RECORD_ID                  # integrity check; omit the id to verify the archive
 python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 ```
 
@@ -105,7 +110,10 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
   level above and below the last close;
 - **warm-up status** stated per feature, so "not computed yet" never looks like a value;
 - **inherited limitations printed on every sheet**, each citing the ADR that owns it — now **six**,
-  since `ADR-0020 D1` was fixed and removed rather than left standing.
+  since `ADR-0020 D1` was fixed and removed rather than left standing;
+- **durable memory**: `--archive` on `swing`/`daily` records the complete page to a versioned,
+  integrity-checked record; `archive list`/`show`/`verify` read it back exactly, with no network
+  access and no recomputation. Snapshot reproduction only — not historical replay.
 
 **Explicitly not delivered:**
 
@@ -117,11 +125,13 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 | ~~Market regime classification~~ | **Delivered by `AI`** — see below |
 | Support/resistance naming — levels are reported as *nearest above / below* | `EP-01` |
 | Portfolio or risk context, position sizing | `EP-04`, blocked on **D-02** |
-| Persistence — a run is printed, never stored | `AO`, blocked on **D-01** |
+| ~~Persistence — a run is printed, never stored~~ | **Delivered by `AO`** — see above |
+| Historical replay — recomputing a past analysis from its original raw inputs | not archived yet; snapshot reproduction only |
+| A journal, discretionary notes, trade outcomes | `EP-18`, blocked on **D-04** |
 | Opportunity scanning and candidate ranking | `EP-02`, `EP-03` — a **named future capability** (SPEC §10 and the Opportunity Scanner; vision addendum; `reports/0005` C-164). Deferred, not withdrawn, and it must arrive as an explicit, deterministic, testable, backtested policy |
 | Ranking *by readiness* — sorting the daily index by its own states | **never**, in any version. Readiness describes the analysis, not the instrument; see AN's design §3.4 |
 | Alerts, scheduling, unattended runs, notification delivery | `EP-03` — scheduling still owns no architecture layer |
-| Watchlist persistence — a universe is typed, or supplied by the shell | `AO`, blocked on **D-01** |
+| Watchlist persistence as its own model — a universe is typed, or supplied by the shell | `EP-03`, **D-06** — unrelated to D-01; `AO` archives whatever universe it is given |
 | Any asset class other than crypto | `EP-05` |
 | Backtesting, paper trading, shadow mode, execution | `EP-14` … `EP-17` |
 
@@ -135,6 +145,57 @@ makes no directional claim. Every rung of the automation ladder remains unstarte
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-05 · `AO` — Memory & Decision Archive v1
+
+**Status:** Released · **sixth user-visible product capability**
+**Commit:** `b40663f178e612856d6420c966b8a71ca7966edc`
+Validated before versioning: 4,181 tests green including `-W error`, coverage 100 % line and branch on
+every new `fmis.archive` module and on `pipeline/cli.py`, 35 mutation probes (34 detected, 1
+proven-equivalent, 0 no-ops) and byte-identical source restoration, independent review complete with
+three P1s found and fixed, and `fmits swing --archive` / `fmits archive show` run against live Binance
+data with byte-identical rendered output and zero network calls on show.
+
+**What the owner can now do that was impossible before.** Ask *"what did I think about this in October,
+and was I right?"* Before `AO`, every analysis FMITS produced was discarded the moment the terminal
+closed. `fmits swing BTCUSDT --archive` and `fmits daily BTCUSDT ETHUSDT --archive` now record the
+complete page durably; `fmits archive list` shows every archived record without opening one; `fmits
+archive show RECORD_ID` renders a stored record exactly as it was, with no network access; `fmits
+archive verify` detects corruption and unsupported schema versions.
+
+**Snapshot reproduction only, and that is stated rather than implied.** A shown record is exactly what
+was archived — no recomputation, no re-fetch. `AO` does **not** replay history from raw market data; no
+candle history is archived, only the already-composed analysis. Historical replay is a future
+capability, not claimed here.
+
+**Limitations, printed nowhere as fine print — stated here directly.**
+
+- **No historical replay.** What the system would say *now*, given what it knew *then*, is not
+  answerable yet — that needs raw inputs this version does not store.
+- **No migration path.** A schema version outside the one this build supports (envelope or payload) is
+  rejected cleanly; an old record becomes unreadable rather than silently misread if either shape
+  changes before a migration exists.
+- **No concurrent-writer safety.** A second `fmits` process archiving at the same instant is not this
+  version's concern — documented, not guarded against.
+- **No retention or deletion.** Nothing in this milestone ever removes a record.
+
+**Safety / risk notes.** No `pickle`, no `eval`, no reflective deserialization — every record is decoded
+through explicit, hand-written codecs that reconstruct real, self-validating domain objects. No secrets,
+credentials or absolute filesystem paths are ever written to a record (verified: `metadata` is built
+only from deterministic engine outputs). An archive failure is reported distinctly from an analysis
+failure — a symbol that analysed correctly but could not be written to disk is never described as a
+failed analysis.
+
+**Related.** ADR: [ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md)
+(resolves D-01) ·
+Design: [MEMORY_AND_DECISION_ARCHIVE_V1](docs/design/MEMORY_AND_DECISION_ARCHIVE_V1.md) ·
+Review: [MEMORY_AND_DECISION_ARCHIVE_V1_REVIEW](docs/reviews/MEMORY_AND_DECISION_ARCHIVE_V1_REVIEW.md)
+— no P0, three P1 found and fixed, one P2 found and fixed, two P3.
+
+**Breaking changes.** None. `facts`, `mtf`, `regime`, `swing` and `daily` behave identically when
+`--archive` is not passed; `archive` and the two new flags are additive.
 
 ---
 
@@ -540,22 +601,10 @@ fact that matters — the product began on 2026-08-02.
 
 > **Unreleased. Planned. Not available.** Nothing in this section exists in the repository.
 
-### `AO` — Memory / decision archive — **UNRELEASED**
+No milestone is currently sequenced. `AO` shipped (recorded in §3 and §4 below) and D-01 is resolved;
+the next NOW item has not yet been chosen — see [the product backlog](FMITS_PRODUCT_BACKLOG.md) §5–§7.
 
-**Status:** NOW on the [product backlog](FMITS_PRODUCT_BACKLOG.md) · **not started** · no commit, no
-design and no ADR exists · **blocked on open decision D-01** (persistence and serialization schema)
-
-**Capability it will add.** A record of past analyses the owner can return to — closing the loop `AN`
-made concrete: a daily run is now a complete, schema-versioned object, so *what* would be archived is
-already decided and only *how* remains open.
-
-**What it will change for the owner.** Not yet decided in detail, and deliberately not described here
-as though it were, pending D-01.
-
-No further capability is listed. The sequence after it is on the backlog — this changelog records what
-shipped, not what is planned.
-
-*(This section previously listed `AN` here as unreleased; `AN` shipped 2026-08-04 and is recorded as
+*(This section previously listed `AN`, then `AO`, here as unreleased; both shipped and are recorded as
 released in §3 and §4 above.)*
 
 ## 6. Entry template
@@ -606,4 +655,4 @@ and mark the entry Foundational.
 
 ---
 
-*Living document · last verified against `b13c37e` on 2026-08-05*
+*Living document · last verified against Milestone `AO`'s own working tree on 2026-08-05*

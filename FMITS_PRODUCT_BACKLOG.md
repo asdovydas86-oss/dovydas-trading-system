@@ -11,7 +11,7 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `b13c37e` (Milestone AN + documentation-consistency audit, report 0008) |
+| **Last verified against** | Milestone AO's own working tree, uncommitted at time of writing (on top of `38705e9`) |
 | **Verified on** | 2026-08-05 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -70,18 +70,18 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AN commit** | `74036a4b81967618a809e420b85d320ab566d6b5` |
-| **HEAD** | this reconciliation commit, on top of `b13c37e` |
-| **`origin/main`** | matches HEAD after this push — **AN, its pre-push correction, three later documentation commits and the documentation-consistency audit (report 0008) are all pushed** |
-| **Working tree** | clean |
-| **Test count** | **3,905 passing**, identically under `-W error` (3,766 before AN) |
-| **Public exports / collisions** | 242 / 0 (228 before AN) |
+| **Milestone AO commit** | uncommitted at time of writing (this milestone's own working tree, on top of `38705e9`) |
+| **HEAD** | `38705e9` plus AO's two uncommitted commits (production + docs) |
+| **`origin/main`** | still `38705e9` — **AO is not pushed; push requires separate, explicit authorization** |
+| **Working tree** | AO's own changes, about to be committed locally |
+| **Test count** | **4,181 passing**, identically under `-W error` (3,905 before AO) |
+| **Public exports / collisions** | 255 / 0 (242 before AO — `fmis.archive` is new) |
 | **Import cycles** | 0 |
-| **Runtime dependencies** | 0 |
-| **Latest completed milestone** | **AN — Deterministic Daily Workflow v1** (`74036a4`) |
-| **Product Value Level** | **Level 2 — usable swing-analysis assistant: one page carrying facts, regime, evidence and conflicts** (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
+| **Runtime dependencies** | 0 (`coverage` used only as an ephemeral measurement tool, never added to `pyproject.toml`) |
+| **Latest completed milestone** | **AO — Memory & Decision Archive v1** (commit pending) |
+| **Product Value Level** | **Level 2 — usable swing-analysis assistant: one page carrying facts, regime, evidence and conflicts** — now with durable memory (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **AO — Memory / decision archive** (not started; blocked on open decision D-01) |
+| **Immediate next milestone** | **Not yet sequenced.** §6 (NEXT) is empty; see §7 for the epics awaiting sequencing now that D-01 no longer blocks any of them |
 
 ### Current user-visible capability
 
@@ -91,6 +91,11 @@ fmits swing  BTCUSDT                       # the whole page, end to end
 fmits regime BTCUSDT --multi               # the environment, per role, with evidence
 fmits mtf    BTCUSDT -n 260                # 1W context · 1D setup · 4H execution
 fmits facts  BTCUSDT --interval 4h         # one timeframe, exhaustively
+fmits swing  BTCUSDT --archive             # archive the page durably (Memory & Decision Archive)
+fmits daily  BTCUSDT ETHUSDT --archive     # archive the whole run
+fmits archive list                         # every archived record, metadata only
+fmits archive show RECORD_ID               # render a stored record, no network access
+fmits archive verify RECORD_ID             # integrity check; omit the id to verify the whole archive
 python -m fmis.pipeline daily BTCUSDT      # works without reinstalling
 ```
 
@@ -124,41 +129,21 @@ close, and the inherited limitations — computed from live exchange data.
 
 ## 5. NOW
 
-Exactly one item.
-
-### `AO` — Memory / decision archive
-
-| Field | Value |
-|---|---|
-| **ID** | AO *(was AM until two milestone-letter shifts — §11)* |
-| **Epic** | EP-18 Knowledge & Research |
-| **Status** | **NOW** |
-| **Priority** | **Critical** |
-| **Estimated size** | *(source: reports/0005 Phase 5)* |
-| **Confidence** | Blocked-dependent — **open decision D-01 must be settled first** |
-
-**Product value.** Closes the loop. Four of the project's nine success criteria depend on it.
-
-**What the owner can do after this that was impossible before.** Ask *"what did I think about this in
-October, and was I right?"* and get an answer. Until this exists, daily use accumulates nothing.
-
-**Why now.** AN made the case concrete rather than theoretical: a daily run is now a first-class,
-schema-versioned object holding real workspaces, so what would be archived is already decided. AK and
-AN both raised the same open decision (`Workspace` and `DailyRun` are equally unpicklable), and it is
-the same answer for both.
-
-**Dependencies.** AN (done) **and OPEN DECISION D-01 (persistence schema)**, which must be settled
-before implementation begins.
-**Related.** `PROJECT_SPECIFICATION_V1.md` §25 · `reports/0004` C-159 · `reports/0005` Phase 5.
-
-> **Not started.** No persistence code exists in the repository.
+Exactly one item, by rule — **currently empty.** `AO` shipped (§8) and D-01 is resolved
+([ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md)); no successor has been
+sequenced yet. Per the milestone brief that shipped `AO`, the next milestone is deliberately **not**
+started in the same session that closes this one — sequencing the next NOW item is the owner's decision,
+informed by §7's now-unblocked epics (EP-18's remaining scope — journal, searchable knowledge base — is
+the most direct continuation of `AO`, still gated by the separate, still-open **D-04** journal-scope
+decision; EP-02/EP-03 scanning and ranking are the other two carried-forward items AN's own completion
+note named as still open).
 
 ## 6. NEXT
 
 The forced sequence. Each item is blocked on the one above it.
 
-*AN shipped; the memory / decision archive moved to NOW. §6 is empty until D-01 is settled and the
-item after the archive is sequenced — see §7 for the epics awaiting sequencing.*
+*`AO` shipped and D-01 is resolved. §6 is empty until the owner sequences the next milestone — see §7
+for the epics newly unblocked and awaiting sequencing.*
 
 ---
 
@@ -186,7 +171,7 @@ Detail lives in `reports/0004` (capabilities) and `reports/0005` (phasing) — n
 | **EP-15** | Paper Trading | Simulated fills on unseen data, identical sizing/risk logic to live | LATER | Medium | EP-14 |
 | **EP-16** | Shadow Mode | Live data, real timing, **executes nothing** | LATER | Medium | EP-15 |
 | **EP-17** | Controlled Execution | Live orders under hard limits, kill switch, full logging, no withdrawal permission | LATER | Low | EP-16 + explicit human decision |
-| **EP-18** | Knowledge & Research | Decision archive, journal, searchable knowledge base, lessons learned | LATER | **Critical** | **D-01 persistence schema** |
+| **EP-18** | Knowledge & Research | Decision archive **(delivered by `AO`)**, journal, searchable knowledge base, lessons learned | LATER | **Critical** | **D-04 journal scope** |
 | **EP-19** | Reporting & Delivery | Dashboard, structured reports, exports, notifications, transports | LATER | Low | AK |
 | **EP-20** | Security & Operations | CI, type checking, system health, observability, AI budget, safety controls | LATER | Medium | **D-07 CI timing** |
 
@@ -203,6 +188,40 @@ Repository-verified only. Every SHA below was confirmed to exist with `git cat-f
 The **complete** 30-milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the four most recent product-relevant milestones.
+
+### `AO` — Memory & Decision Archive v1 · **DONE**
+
+| Field | Value |
+|---|---|
+| **Commit** | **`b40663f178e612856d6420c966b8a71ca7966edc`** |
+| **ADR** | [ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md) — resolves D-01 |
+| **Design** | [MEMORY_AND_DECISION_ARCHIVE_V1.md](docs/design/MEMORY_AND_DECISION_ARCHIVE_V1.md) |
+| **Review** | [MEMORY_AND_DECISION_ARCHIVE_V1_REVIEW.md](docs/reviews/MEMORY_AND_DECISION_ARCHIVE_V1_REVIEW.md) — no P0, **3 P1 found and fixed**, 1 P2 found and fixed, 2 P3 |
+| **Tests** | 3,905 → **4,181** (+276). Mutation 34/35 detected, 1 proven-equivalent, zero no-ops |
+
+**Product value delivered.** Durable memory. Before `AO`, `Workspace` (AK) and `DailyRun` (AN) were both
+first-class, schema-versioned objects with no consumer — every analysis was discarded the moment the
+terminal closed.
+
+**What the owner can now do that was impossible before.** Ask *"what did I think about this in October,
+and was I right?"* `fmits swing BTCUSDT --archive` / `fmits daily ... --archive` record the complete page
+durably; `fmits archive list/show/verify` read it back exactly, with no network access and no
+recomputation.
+
+**D-01 is resolved, closing the only decision blocking this item** (§10). Explicit UTF-8 JSON envelopes,
+hand-written codecs (no `pickle`, no reflection), a content-derived `record_id`, atomic single-record
+writes, and a metadata-only manifest.
+
+**Snapshot reproduction only, stated rather than implied.** No historical replay — no candle history is
+archived, only the already-composed model. No migration path yet: an unsupported schema version is
+rejected cleanly rather than guessed at.
+
+**Status note.** DONE on repository evidence: the suite is green under `-W error`, coverage is 100 %
+line and branch on every new `fmis.archive` module and on `pipeline/cli.py`, mutation is 34/35 with one
+proven-equivalent survivor and byte-identical source restoration, the review is complete with every
+P0–P2 fixed (three P1s found in `archive verify` itself and closed), and `fmits swing --archive` /
+`fmits archive show` were run against live Binance data with byte-identical rendered output and zero
+network calls on show.
 
 ### `AN` — Deterministic Daily Workflow v1 · **DONE**
 
@@ -512,26 +531,28 @@ known before sequencing.
 
 ## 10. Open decisions
 
-Carried, not solved. **D-01 blocks the current NOW item, `AO`** — it is the only one that does.
+Carried, not solved, except D-01 — closed this milestone.
 
-> **Milestone letters corrected here, 2026-08-04.** Three rows still carried letters from before the
-> two shifts recorded in §11, all of them meaning *the daily workflow* under its earlier name. D-01
-> read `AL`, which now names the shipped Decision Context Engine; D-05 and D-06 read `AK`, which now
-> names the shipped Swing Workspace. The blockers themselves are unchanged: AN shipped deliberately
-> without persistence, scheduling or a watchlist model, so all three decisions remain open and now
-> point at the epics and the milestone that actually carry them.
+> **Milestone letters corrected 2026-08-04.** Three rows once carried letters from before the two shifts
+> recorded in §11, all of them meaning *the daily workflow* under its earlier name — corrected in place;
+> see git history for the original text.
+
+> **D-01 resolved 2026-08-05** by [ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md)
+> (Milestone `AO`): explicit UTF-8 JSON envelopes, hand-written codecs, content-derived record IDs,
+> atomic single-record files plus a metadata-only manifest. Kept in this table, struck through rather
+> than deleted, so the decision's history and its blocked items remain traceable.
 
 | ID | Decision | Blocks | Source |
 |---|---|---|---|
-| **D-01** | Persistence and serialization schema | EP-18, **`AO`** | `ARCH` §13.8 · `reports/0006` §6 |
+| ~~**D-01**~~ | ~~Persistence and serialization schema~~ — **resolved, see above** | ~~EP-18, `AO`~~ | [ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md) |
 | **D-02** | Money / portfolio numeric types (`float` vs `Decimal`) | EP-04 | Review R11 · `reports/0005` §7.2 |
 | **D-03** | Availability-time model for released/revised data | EP-07, EP-08 | **ADR-0003 (formal gate)** |
 | **D-04** | Journal scope as a formal product capability | EP-18 | `reports/0004` §15.3 |
 | **D-05** | Scheduling ownership — belongs to no architecture layer | EP-03 — *not* AN, which shipped without it | `reports/0004` §13.5 |
-| **D-06** | Watchlist / universe model | EP-03, `AO` — AN takes its universe from the shell | `reports/0004` §13.5 |
+| **D-06** | Watchlist / universe model | EP-03 — `AO` archives whatever universe the shell supplies, taking no position on this decision | `reports/0004` §13.5 |
 | **D-07** | CI and type-checking timing | EP-20 | `reports/0001` §10.2 |
 | **D-08** | Telegram as a delivery transport | EP-19 | `reports/0004` §15.2 |
-| **D-09** | Excel / CSV export ecosystem | EP-19 | `reports/0004` §15.2 · blocked by D-01 |
+| **D-09** | Excel / CSV export ecosystem | EP-19 | `reports/0004` §15.2 — no longer blocked by D-01 |
 | **D-10** | Tax Center scope | EP-19 | `reports/0004` §15.2 — recommended out of scope |
 | **D-11** | Voice interface | EP-19 | `reports/0004` §15.2 |
 | **D-12** | AI model routing and budget | EP-20 | `reports/0004` §15.3 |

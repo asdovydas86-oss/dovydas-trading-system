@@ -490,6 +490,29 @@ cmp.relative_value.metrics["pearson_correlation"].value
 cmp.relative_value.alignment.aligned_observation_count
 ```
 
+## `src/fmis/archive/` — Memory & Decision Archive (Milestone AO)
+
+- **Purpose:** durable storage for a completed `Workspace`/`DailyRun` — versioned, integrity-checked JSON
+  records, never rendered text. Contracts: [ADR-0027](adr/ADR-0027-memory-and-decision-archive-persistence-schema.md).
+- **Responsibilities today:** `codec.py` (explicit, hand-written `Workspace`/`DailyRun` ↔ JSON-safe dict
+  codecs — no reflection, no `pickle`); `envelope.py` (the versioned envelope, and the content digest
+  that record identity is derived from); `identity.py` (`record_id` construction/validation);
+  `manifest.py` (the metadata-only `manifest.jsonl` index); `atomic.py` (the one atomic-publish
+  primitive); `storage.py` (`ArchiveStore` — the public entry point: archive/load/list/verify);
+  `render.py` (plain-text rendering for `archive list`/`archive verify`; `archive show` reuses the
+  existing `fmis.workspace`/`fmis.daily` renderers).
+- **Allowed dependencies:** `fmis.workspace`, `fmis.daily` (the models it persists); standard library
+  only (`json`, `hashlib`, `tempfile`, `pathlib`, `datetime`) — no runtime dependency added.
+- **Forbidden dependencies:** every engine, `fmis.workspace`, `fmis.daily`, and every `fmis.pipeline`
+  module **except** `pipeline/cli.py` — a test walks the repository and asserts nothing outside that one
+  file imports `fmis.archive` (mirroring [ADR-0007](adr/ADR-0007-application-layer-boundary.md) §1's rule
+  for `fmis.pipeline` over the engines). `pipeline/cli.py` is the one necessary exception because it is
+  the outermost edge and already imports `fmis.workspace`/`fmis.daily` directly to build the pages it
+  renders — `fmis.archive` sits beside them, consuming the same finished objects, not below them.
+- **Where a new record type would belong:** a new `RecordType` member plus a new `encode_*`/`decode_*`
+  pair in `codec.py` — never a generic reflective serializer that would silently include a field before
+  anyone decided the archive should carry it.
+
 ## `src/fmis/providers/` — provider adapters
 
 - **Purpose:** the only layer that knows an external API's shape. An adapter fetches from one concrete

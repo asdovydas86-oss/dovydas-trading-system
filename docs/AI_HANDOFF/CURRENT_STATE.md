@@ -7,18 +7,90 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AN — Deterministic Daily Workflow v1 (2026-08-04); the Git-state lines
-below were corrected 2026-08-05 — AN was in fact pushed the same day it shipped, and this file had
-never been updated to say so.
-**Latest commit at time of writing:** this reconciliation commit, matching `origin/main`. AN's two
-commits (`74036a4`, `3a3df3d`) and its pre-push correction (`644324c`) reached `origin/main` on
-2026-08-04, followed by three documentation-only commits (`305f33c`, `2fbf403`, `36f5a30`) and the
-documentation-consistency audit (`b13c37e`, [report 0008](../../reports/0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md)).
-**Milestones AF through AN are pushed.**
+**Last updated for:** Milestone AO — Memory & Decision Archive v1 (2026-08-05).
+**Latest commit at time of writing:** this milestone's own two commits (production + docs), local to
+`main` and **not yet pushed** — see [ADR-0027](../adr/ADR-0027-memory-and-decision-archive-persistence-schema.md)
+for the resolved D-01 decision this milestone implements.
+**Milestones AF through AN are pushed; AO is committed locally, pending explicit push authorization.**
 
 ---
 
 ## Current milestone
+
+- **AO — Memory & Decision Archive v1**: closes the loop. Before this milestone, every analysis FMITS
+  produced was discarded the moment the terminal closed. Design in
+  [the design document](../design/MEMORY_AND_DECISION_ARCHIVE_V1.md); contracts in
+  [ADR-0027](../adr/ADR-0027-memory-and-decision-archive-persistence-schema.md), which resolves
+  **D-01** (open since `reports/0006`, blocking `AO` alone per the backlog); independent review in
+  [the review record](../reviews/MEMORY_AND_DECISION_ARCHIVE_V1_REVIEW.md).
+
+  **The problem it solved.** `Workspace` (AK) and `DailyRun` (AN) were both first-class, schema-versioned
+  objects — not print statements — specifically so a future consumer could read them back. `AO` is the
+  first consumer that actually exists. The product question `FMITS_PRODUCT_BACKLOG.md` names directly —
+  *"what did I think about this in October, and was I right?"* — had no answer until now.
+
+  **What shipped:** `fmis.archive` — explicit, hand-written codecs (no `pickle`, no reflection) turning a
+  `Workspace`/`DailyRun` into a versioned, integrity-checked UTF-8 JSON record and back into an equal
+  object; a content-derived, collision-resistant `record_id`; atomic writes (`mkstemp`-same-dir → fsync →
+  `os.replace`) so a reader never observes a partial record; a metadata-only `manifest.jsonl` so listing
+  never opens a payload; and `fmits archive list/show/verify` plus `--archive`/`--archive-root` on
+  `swing`/`daily`.
+
+  **Snapshot reproduction only, and that is stated rather than implied.** `decode(encode(x)) == x`,
+  exactly — proven by a live run: `fmits swing BTCUSDT --archive` followed by `fmits archive show
+  RECORD_ID` reproduced **byte-identical** rendered text, with zero network calls. `AO` does not
+  recompute and does not replay history from raw inputs — no candle history is archived, only the
+  already-composed model — and ADR-0027 §2 names that gap explicitly rather than quietly implying more.
+
+  **`Workspace`/`DailyRun` are presentation-shaped, which shrank the codec's real job.** Every richer
+  domain object (`EvidenceReport`, `MarketRegime`, `DecisionContext`) is already flattened into
+  `Row`/`RowBlock`/`TableBlock`/`NoteBlock` strings before either root is built — confirmed by reading
+  `workspace/sections.py`, the same finding ADR-0026 made for a different reason. The codec therefore
+  handles roughly a dozen types, not the whole engine surface. `SymbolResult.context` — at runtime the
+  identical object already reachable through `SymbolResult.workspace` — is **re-derived on decode, never
+  encoded twice**, the duplicated-value pattern ADR-0016 §4 already rejected for a stored count.
+
+  **The record ID is content-derived, on purpose.** `{type}-{subject}-{UTC timestamp}-{digest prefix}`,
+  where the digest covers exactly `{record_type, schema_version, analysis_as_of, subject, payload}` —
+  deliberately excluding `record_id` itself (derived *from* the digest; including it would be circular)
+  and `archived_at` (a filing timestamp that must not affect whether two archive calls of the *same*
+  analysis, made on different days, are recognised as duplicates). "Same identity, different content" —
+  a scenario the brief asked to be defined — reduces to an 8-hex-character digest-prefix collision rather
+  than a state the design has to arbitrate, and the near-impossible case is still handled explicitly
+  (`DuplicateRecordConflictError`), not assumed away.
+
+  **One necessary exception to the one-way import boundary, named precisely rather than papered over.**
+  `fmis.archive` may only be imported by `pipeline/cli.py` — the CLI is the outermost edge and already
+  imports `fmis.workspace`/`fmis.daily` directly — and every *other* `fmis.pipeline` module, plus every
+  engine and `workspace`/`daily` themselves, is guarded against importing it, mirroring ADR-0007 §1's
+  rule for `fmis.pipeline` over the engines.
+
+  **No historical replay, no migration path, no scope creep.** Explicitly out of scope and absent from
+  every model and CLI flag: discretionary notes, trade entry/exit/stop/target/size, P&L, outcomes, tags,
+  AI summaries, scheduling, delivery transports, cloud sync, encryption, retention/deletion, and
+  opportunity ranking — each its own future milestone. A schema version outside the supported set
+  (envelope or payload) is rejected cleanly; no migration exists yet, by design rather than oversight.
+
+  **Quality.** 3,905 → **4,181 tests** (+276), identically under `-W error`. Coverage **100 %** line and
+  branch on every new `fmis.archive` module and on the modified `pipeline/cli.py`. **35 mutation probes,
+  34 detected, 1 proven-equivalent survivor, 0 no-ops**, byte-identical source restoration verified by
+  SHA-256 before and after every probe. Exports and runtime dependencies: 0 new runtime dependencies
+  (`coverage` was used only as an ephemeral `uv run --with` tool for measurement, never added to
+  `pyproject.toml`).
+
+  **The review found three P1s, all in `archive verify` itself, and all fixed.** Twenty-nine mutation
+  probes and a fresh adversarial pass against the milestone's own 20-item review checklist found: an
+  unsupported *payload* schema version (distinct from the envelope's own, already-checked version)
+  decoded and loaded silently; a `record_id` forged to a different, validly-shaped value — with
+  `content_digest`/payload left completely untouched — went undetected because nothing recomputed the id
+  from content; and a hand-edited manifest field (subject, decision-context state, daily counts) drifted
+  from the record it described while `verify_archive` still reported `ok=True`, because only
+  `content_digest` was ever cross-checked. All three closed, each with a regression test that isolates
+  it from the fix for the other two (proving neither the old nor the new record-id check is redundant),
+  and re-verified by a second, larger mutation pass against the fixed code (34/35 detected, 1
+  proven-equivalent, 0 no-ops). One P2 (an absolute-path edge case in the path-traversal defense, not
+  currently exploitable but incidental rather than explicit) and one P3 (a manifest-line duplicate-key
+  inconsistency) were also fixed; no P0 was found at any point.
 
 - **AN — Deterministic Daily Workflow v1**: the first capability that answers about **more than one
   symbol**. Design in [the design document](../design/DETERMINISTIC_DAILY_WORKFLOW_V1.md); independent

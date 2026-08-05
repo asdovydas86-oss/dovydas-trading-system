@@ -83,7 +83,7 @@ For the concrete, current directory-by-directory dependency rules (what may impo
 |---|---|
 | **Architecture** — target layering, module boundaries, roadmap | [`ARCHITECTURE_AND_ROADMAP_V1.md`](../ARCHITECTURE_AND_ROADMAP_V1.md), [`reports/0003`](../../reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) |
 | **Current directory rules** — what may import what | [`REPOSITORY_MAP.md`](../REPOSITORY_MAP.md) |
-| **ADRs** — one accepted decision per file, why it was made this way | [`adr/README.md`](../adr/README.md) — 26 to date |
+| **ADRs** — one accepted decision per file, why it was made this way | [`adr/README.md`](../adr/README.md) — 27 to date |
 | **Backlog** — what's NOW / NEXT / LATER / DONE | [`FMITS_PRODUCT_BACKLOG.md`](../../FMITS_PRODUCT_BACKLOG.md) |
 | **Changelog** — what the product can actually do, and since when | [`FMITS_PRODUCT_CHANGELOG.md`](../../FMITS_PRODUCT_CHANGELOG.md) |
 | **Current state** — commit, test count, exports, active milestone | [`CURRENT_STATE.md`](CURRENT_STATE.md) |

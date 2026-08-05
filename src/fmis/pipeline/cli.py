@@ -38,13 +38,23 @@ import argparse
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Sequence
 
+from fmis.archive import (
+    ArchiveError,
+    ArchiveStore,
+    RecordNotFoundError,
+    default_archive_root,
+    render_archive_verification,
+    render_manifest,
+    render_record_verification,
+)
 from fmis.market_structure import DEFAULT_LEFT_BARS, DEFAULT_RIGHT_BARS
 from fmis.pipeline.market_analysis import PipelineError
-from fmis.daily import DailyRunError, render_daily_run, run_daily
+from fmis.daily import DailyRun, DailyRunError, render_daily_run, run_daily
 from fmis.market_regime import RegimePolicy
-from fmis.workspace import render_workspace, workspace_for_symbol
+from fmis.workspace import Workspace, render_workspace, workspace_for_symbol
 from fmis.pipeline.regime import (
     REGIME_LIMITATIONS,
     multi_timeframe_regime_for_symbol,
@@ -306,8 +316,31 @@ REGIME_COMMAND = Command(
 )
 
 
+def _add_archive_root_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--archive-root",
+        default=None,
+        metavar="PATH",
+        help=f"archive root (default: {default_archive_root()})",
+    )
+
+
+def _add_archive_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--archive",
+        action="store_true",
+        help="also archive the result durably (Memory & Decision Archive)",
+    )
+    _add_archive_root_argument(parser)
+
+
+def _archive_root_from(args: argparse.Namespace) -> Path:
+    return Path(args.archive_root) if args.archive_root else default_archive_root()
+
+
 def _configure_swing(parser: argparse.ArgumentParser) -> None:
     _add_common_arguments(parser)
+    _add_archive_arguments(parser)
     for role in (TimeframeRole.CONTEXT, TimeframeRole.SETUP, TimeframeRole.EXECUTION):
         default = DEFAULT_TIMEFRAMES[role]
         parser.add_argument(
@@ -338,6 +371,25 @@ def _configure_swing(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _maybe_archive(args: argparse.Namespace, artifact: Workspace | DailyRun, *, label: str) -> int:
+    """Archive `artifact` if `--archive` was requested; report failure distinctly.
+
+    An archive failure is a **different fact** from an analysis failure: the
+    analysis already printed successfully above this call, so a non-zero exit
+    here must never read as "the analysis failed" (design doc §3.6).
+    """
+    if not args.archive:
+        return EXIT_OK
+    store = ArchiveStore(_archive_root_from(args))
+    try:
+        record = store.archive_workspace(artifact) if isinstance(artifact, Workspace) else store.archive_daily_run(artifact)
+    except ArchiveError as error:
+        print(f"fmits {label}: archive failed: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(f"archived: {record.record_id} -> {record.relative_path}")
+    return EXIT_OK
+
+
 def _run_swing(args: argparse.Namespace) -> int:
     _, workspace = workspace_for_symbol(
         args.symbol,
@@ -351,7 +403,7 @@ def _run_swing(args: argparse.Namespace) -> int:
         detection=_detection_from(args),
     )
     print(render_workspace(workspace))
-    return EXIT_OK
+    return _maybe_archive(args, workspace, label="swing")
 
 
 SWING_COMMAND = Command(
@@ -412,6 +464,7 @@ def _configure_daily(parser: argparse.ArgumentParser) -> None:
             "the rendered index reproducible."
         ),
     )
+    _add_archive_arguments(parser)
 
 
 def _run_daily_command(args: argparse.Namespace) -> int:
@@ -440,7 +493,7 @@ def _run_daily_command(args: argparse.Namespace) -> int:
         print(f"fmits daily: {error}", file=sys.stderr)
         return EXIT_FAILURE
     print(render_daily_run(run))
-    return EXIT_OK
+    return _maybe_archive(args, run, label="daily")
 
 
 DAILY_COMMAND = Command(
@@ -456,6 +509,71 @@ DAILY_COMMAND = Command(
     ),
     configure=_configure_daily,
     run=_run_daily_command,
+)
+
+
+def _configure_archive(parser: argparse.ArgumentParser) -> None:
+    # `--archive-root` is defined on every subcommand, not the shared parent:
+    # argparse requires a parent optional to precede the subcommand token
+    # (`fmits archive --archive-root X list`), which reads worse than the
+    # natural `fmits archive list --archive-root X` every sibling command
+    # already supports.
+    subcommands = parser.add_subparsers(dest="archive_command", required=True)
+
+    list_parser = subcommands.add_parser("list", help="list archived records, metadata only")
+    _add_archive_root_argument(list_parser)
+
+    show_parser = subcommands.add_parser(
+        "show", help="render one archived record, from storage only — no network access"
+    )
+    show_parser.add_argument("record_id", metavar="RECORD_ID")
+    _add_archive_root_argument(show_parser)
+
+    verify_parser = subcommands.add_parser(
+        "verify",
+        help="verify integrity; omit RECORD_ID to verify the whole archive",
+    )
+    verify_parser.add_argument("record_id", nargs="?", default=None, metavar="RECORD_ID")
+    _add_archive_root_argument(verify_parser)
+
+
+def _run_archive(args: argparse.Namespace) -> int:
+    store = ArchiveStore(_archive_root_from(args))
+    try:
+        if args.archive_command == "list":
+            print(render_manifest(store.list()))
+            return EXIT_OK
+        if args.archive_command == "show":
+            record = store.load(args.record_id)
+            print(render_workspace(record) if isinstance(record, Workspace) else render_daily_run(record))
+            return EXIT_OK
+        if args.archive_command == "verify":
+            if args.record_id is None:
+                result = store.verify_archive()
+                print(render_archive_verification(result))
+                return EXIT_OK if result.ok else EXIT_FAILURE
+            record_result = store.verify_record(args.record_id)
+            print(render_record_verification(record_result))
+            return EXIT_OK if record_result.ok else EXIT_FAILURE
+    except ArchiveError as error:
+        kind = "not found" if isinstance(error, RecordNotFoundError) else type(error).__name__
+        print(f"fmits archive: {kind}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    raise AssertionError(f"unreachable archive_command {args.archive_command!r}")
+
+
+ARCHIVE_COMMAND = Command(
+    name="archive",
+    help="list, show and verify durably archived Workspace and DailyRun records",
+    description=(
+        "The Memory & Decision Archive: list archived records without reading "
+        "full payloads, show one record by its stable ID with no network "
+        "access, and verify integrity — detecting corruption and unsupported "
+        "schema versions. Nothing here is recomputed and nothing is replayed "
+        "from raw inputs; a shown record is exactly what was archived."
+    ),
+    configure=_configure_archive,
+    run=_run_archive,
 )
 
 
@@ -492,6 +610,7 @@ COMMANDS: tuple[Command, ...] = (
     REGIME_COMMAND,
     SWING_COMMAND,
     DAILY_COMMAND,
+    ARCHIVE_COMMAND,
 )
 
 

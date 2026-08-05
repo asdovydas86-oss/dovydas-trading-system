@@ -435,9 +435,11 @@ def test_no_engine_imports_this_package() -> None:
 
     Only `fmis.pipeline.cli` — the terminal boundary — imports it, and
     `fmis.pipeline.__init__` does not import `cli`, so no cycle exists.
+    `fmis.archive` (Milestone AO) also imports it, for the same reason:
+    the archive consumes the finished `DailyRun`, it does not sit below it.
     """
     root = RUNNER_PATH.parent.parent
-    permitted = {root / "daily", root / "pipeline"}
+    permitted = {root / "daily", root / "pipeline", root / "archive"}
     for path in root.rglob("*.py"):
         if path.parent in permitted or "__pycache__" in path.parts:
             continue

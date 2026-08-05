@@ -302,9 +302,9 @@ def test_rendering_is_deterministic() -> None:
 # ============ 5. the command ================================================
 
 
-def test_the_registry_carries_five_commands() -> None:
+def test_the_registry_carries_six_commands() -> None:
     names = [command.name for command in cli_module.COMMANDS]
-    assert names == ["facts", "mtf", "regime", "swing", "daily"]
+    assert names == ["facts", "mtf", "regime", "swing", "daily", "archive"]
     assert len(set(names)) == len(names)
 
 

@@ -842,7 +842,7 @@ def test_new_limitation_texts_are_fact_only() -> None:
 def test_registry_names_are_unique() -> None:
     names = [c.name for c in cli_module.COMMANDS]
     assert len(names) == len(set(names))
-    assert set(names) == {"facts", "mtf", "regime", "swing", "daily"}
+    assert set(names) == {"facts", "mtf", "regime", "swing", "daily", "archive"}
 
 
 def test_every_registered_command_is_reachable_from_the_parser() -> None:

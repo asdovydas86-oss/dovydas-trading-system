@@ -93,7 +93,7 @@ One dict, one JSON file, these seven keys and no others:
 {
   "record_type": "workspace",
   "schema_version": 1,
-  "record_id": "workspace-BTCUSDT-20260805T091500Z-a1b2c3d4",
+  "record_id": "workspace-BTCUSDT-20260805T091500Z-a1b2c3d4e5f60718",
   "archived_at": "2026-08-05T09:20:03.512481+00:00",
   "analysis_as_of": "2026-08-05T09:15:00+00:00",
   "subject": ["BTCUSDT"],
@@ -127,7 +127,7 @@ in `payload` or in any of the five covered envelope fields — only a corruption
 ### 4. Record identity
 
 ```
-record_id = f"{type_slug}-{subject_slug}-{YYYYMMDDTHHMMSSZ}-{digest[:8]}"
+record_id = f"{type_slug}-{subject_slug}-{YYYYMMDDTHHMMSSZ}-{digest[:16]}"
 ```
 
 `type_slug` is `workspace` or `daily`. `subject_slug` is the symbol with every character outside
@@ -135,19 +135,32 @@ record_id = f"{type_slug}-{subject_slug}-{YYYYMMDDTHHMMSSZ}-{digest[:8]}"
 otherwise make the filename itself the bottleneck). The timestamp is `analysis_as_of` converted to UTC
 and formatted compactly — the one place this milestone converts a timestamp rather than merely validating
 it, done for **display in a filename**, never stored back as the canonical value (the envelope's own
-`analysis_as_of` field keeps the original offset). `digest[:8]` is the first 8 hex characters of the full
-content digest.
+`analysis_as_of` field keeps the original offset). `digest[:16]` is the first **16 hex characters (64
+bits)** of the full content digest — `DIGEST_PREFIX_LENGTH` in `identity.py`.
+
+**Corrected before release.** An 8-character (32-bit) prefix was AO's original draft. Rejected once the
+consequence was stated plainly: these IDs are meant to become stable long-term references for future
+product surfaces — journals, comparisons, outcome tracking, AI interpretation, dashboards — and 32 bits
+reaches meaningful birthday-collision probability (≈1% by roughly 10,000–30,000 archived records; >50 %
+by roughly 77,000) at volumes a personal archive accumulated over years could plausibly reach. 64 bits
+does not, at any volume this product could plausibly reach, and costs nothing beyond eight more
+characters in a filename nobody hand-types routinely. No archive using the 8-character format was ever
+pushed or released, so this is a corrected v1 draft, not a v1-to-v2 migration — one canonical format,
+not a compatibility path for records that were never published.
 
 This makes the ID **content-derived**: two archive calls that produce byte-identical envelopes produce
 the identical ID, and any change to the content — including one that keeps the same symbol and the same
 `analysis_as_of` — changes the ID. The scenario the design brief asks to be defined, *"same identity but
 different content"*, is therefore structurally near-impossible rather than merely disallowed: it can only
-arise from an 8-hex-character digest-prefix collision (1-in-2^32) between two envelopes that differ
-somewhere the prefix didn't cover. §6 below defines what happens in that case rather than assuming it
-cannot.
+arise from a 16-hex-character digest-prefix collision (1-in-2^64) between two envelopes that differ
+somewhere the prefix didn't cover — a probability low enough that no realistic archive volume approaches
+it, unlike the rejected 32-bit design. §6 below defines what happens in that case rather than assuming it
+cannot. The full `content_digest` (all 64 hex characters) is stored on every record regardless of prefix
+length and remains the actual integrity check; the id's prefix is only ever a display/lookup convenience
+carved out of it.
 
 `record_id` is validated on every use — not just at write time — against a strict pattern
-(`^(workspace|daily)-[A-Za-z0-9_]{1,24}-\d{8}T\d{6}Z-[0-9a-f]{8}$`) before it is ever joined onto a
+(`^(workspace|daily)-[A-Za-z0-9_]{1,24}-\d{8}T\d{6}Z-[0-9a-f]{16}$`) before it is ever joined onto a
 filesystem path, and every derived path is asserted to resolve inside the archive root after joining. A
 `record_id` typed by a human at the CLI is exactly as untrusted as one read from a corrupted manifest
 line, and both go through the identical check.

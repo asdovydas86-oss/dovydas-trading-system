@@ -7,10 +7,12 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AO — Memory & Decision Archive v1 (2026-08-05).
-**Latest commit at time of writing:** this milestone's own two commits (production + docs), local to
-`main` and **not yet pushed** — see [ADR-0027](../adr/ADR-0027-memory-and-decision-archive-persistence-schema.md)
-for the resolved D-01 decision this milestone implements.
+**Last updated for:** Milestone AO — Memory & Decision Archive v1 (2026-08-05), plus a same-day pre-push
+correctness correction strengthening record-ID collision resistance.
+**Latest commit at time of writing:** this milestone's four commits (production + docs, then the
+correction's production + docs), local to `main` and **not yet pushed** — see
+[ADR-0027](../adr/ADR-0027-memory-and-decision-archive-persistence-schema.md) for the resolved D-01
+decision this milestone implements.
 **Milestones AF through AN are pushed; AO is committed locally, pending explicit push authorization.**
 
 ---
@@ -55,9 +57,19 @@ for the resolved D-01 decision this milestone implements.
   deliberately excluding `record_id` itself (derived *from* the digest; including it would be circular)
   and `archived_at` (a filing timestamp that must not affect whether two archive calls of the *same*
   analysis, made on different days, are recognised as duplicates). "Same identity, different content" —
-  a scenario the brief asked to be defined — reduces to an 8-hex-character digest-prefix collision rather
-  than a state the design has to arbitrate, and the near-impossible case is still handled explicitly
+  a scenario the brief asked to be defined — reduces to a digest-prefix collision rather than a state the
+  design has to arbitrate, and the near-impossible case is still handled explicitly
   (`DuplicateRecordConflictError`), not assumed away.
+
+  **The digest prefix is 16 hex characters (64 bits), corrected from 8 (32 bits) before anything was
+  pushed.** These IDs are meant to become stable long-term references for future product surfaces —
+  journals, comparisons, outcome tracking, AI interpretation, dashboards — and 32 bits reaches meaningful
+  birthday-collision probability at record counts a personal archive could plausibly accumulate over
+  years; 64 bits does not, at any volume this product could plausibly reach. The full `content_digest`
+  (all 64 hex characters) was always stored separately and remains the actual integrity check — the
+  prefix is only ever a display/lookup convenience carved out of it. No compatibility reader for the
+  8-character shape was added: nothing using it was ever released, so one canonical v1 format is
+  preferable to carrying a path for records that were never published. See ADR-0027 §4.
 
   **One necessary exception to the one-way import boundary, named precisely rather than papered over.**
   `fmis.archive` may only be imported by `pipeline/cli.py` — the CLI is the outermost edge and already
@@ -71,12 +83,18 @@ for the resolved D-01 decision this milestone implements.
   opportunity ranking — each its own future milestone. A schema version outside the supported set
   (envelope or payload) is rejected cleanly; no migration exists yet, by design rather than oversight.
 
-  **Quality.** 3,905 → **4,181 tests** (+276), identically under `-W error`. Coverage **100 %** line and
-  branch on every new `fmis.archive` module and on the modified `pipeline/cli.py`. **35 mutation probes,
-  34 detected, 1 proven-equivalent survivor, 0 no-ops**, byte-identical source restoration verified by
-  SHA-256 before and after every probe. Exports and runtime dependencies: 0 new runtime dependencies
-  (`coverage` was used only as an ephemeral `uv run --with` tool for measurement, never added to
-  `pyproject.toml`).
+  **Quality.** 3,905 → **4,194 tests** (+289: +276 at initial release, +13 for the pre-push record-ID
+  correction below), identically under `-W error`. Coverage **100 %** line and branch on every new
+  `fmis.archive` module and on the modified `pipeline/cli.py`. **39 mutation probes across both passes,
+  38 detected, 1 proven-equivalent survivor, 0 no-ops** (35/34 at initial release, +4/4 for the record-ID
+  correction), byte-identical source restoration verified by SHA-256 before and after every probe.
+  Exports and runtime dependencies: 0 new runtime dependencies (`coverage` was used only as an ephemeral
+  `uv run --with` tool for measurement, never added to `pyproject.toml`).
+
+  **Pre-push correction: the record-ID digest prefix was widened from 8 to 16 hex characters (32 → 64
+  bits)** before anything from AO was pushed. See above and ADR-0027 §4 for the collision-probability
+  reasoning; no compatibility reader was added for the unpublished 8-character shape, since nothing using
+  it was ever released.
 
   **The review found three P1s, all in `archive verify` itself, and all fixed.** Twenty-nine mutation
   probes and a fresh adversarial pass against the milestone's own 20-item review checklist found: an

@@ -85,13 +85,13 @@ def test_render_manifest_shows_multiple_entries() -> None:
 
 
 def test_render_record_verification_ok() -> None:
-    result = RecordVerification(record_id="workspace-BTCUSDT-20260805T120000Z-aaaaaaaa", ok=True)
+    result = RecordVerification(record_id="workspace-BTCUSDT-20260805T120000Z-aaaaaaaaaaaaaaaa", ok=True)
     assert render_record_verification(result) == f"{result.record_id}: OK"
 
 
 def test_render_record_verification_failed() -> None:
     result = RecordVerification(
-        record_id="workspace-BTCUSDT-20260805T120000Z-aaaaaaaa",
+        record_id="workspace-BTCUSDT-20260805T120000Z-aaaaaaaaaaaaaaaa",
         ok=False,
         problems=("RecordNotFoundError: gone",),
     )

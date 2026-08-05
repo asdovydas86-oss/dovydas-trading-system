@@ -5,6 +5,17 @@ ADR-0027 §4. A record ID is content-derived — `{type_slug}-{subject_slug}-
 byte-identical content produce the identical ID, and the "same identity,
 different content" scenario reduces to a digest-prefix collision, handled
 explicitly by `fmis.archive.storage` rather than assumed unreachable.
+
+`digest_prefix` is **16 lowercase hex characters (64 bits)**. An 8-character
+(32-bit) prefix was the v1a draft and was rejected before release: a durable
+archive whose IDs are meant to become stable references for future work
+(journals, comparisons, outcome tracking, dashboards) needs a birthday bound
+that stays negligible at realistic long-term record counts, not merely
+"unlikely today" — 32 bits reaches meaningful collision probability in the
+tens-of-thousands of records; 64 bits does not at any volume this product
+could plausibly reach. The full SHA-256 `content_digest` is still stored on
+every record regardless — the prefix is only ever a *display and lookup*
+convenience carved out of it, never the integrity check itself.
 """
 
 from __future__ import annotations
@@ -17,6 +28,7 @@ from fmis.archive.errors import InvalidRecordIdError
 
 __all__ = [
     "RECORD_ID_PATTERN",
+    "DIGEST_PREFIX_LENGTH",
     "MAXIMUM_SUBJECT_SLUG_LENGTH",
     "slugify_subject",
     "content_digest",
@@ -29,12 +41,19 @@ __all__ = [
 #: Deliberately narrow: this is joined onto a filesystem path, so the pattern
 #: is the whole of the path-traversal defense at the identity layer — nothing
 #: matching it can contain "..", "/", or any other path-meaningful character.
+#: The digest component is exactly 16 lowercase hex characters (64 bits) —
+#: see the module docstring for why 8 (32 bits) was rejected before release.
 RECORD_ID_PATTERN = re.compile(
     r"^(?P<type_slug>workspace|daily)-"
     r"(?P<subject_slug>[A-Za-z0-9_]{1,24})-"
     r"(?P<timestamp>\d{8}T\d{6}Z)-"
-    r"(?P<digest_prefix>[0-9a-f]{8})$"
+    r"(?P<digest_prefix>[0-9a-f]{16})$"
 )
+
+#: The number of hex characters `build_record_id` carves out of `content_digest`
+#: for the id's own digest component. A named constant so every place that
+#: needs to know the length agrees with the pattern above by construction.
+DIGEST_PREFIX_LENGTH = 16
 
 MAXIMUM_SUBJECT_SLUG_LENGTH = 24
 
@@ -74,7 +93,7 @@ def build_record_id(
         raise InvalidRecordIdError(f"digest must be a sha256:<64-hex> string, got {digest!r}")
     subject_slug = slugify_subject(subject)
     compact = analysis_as_of.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    digest_prefix = digest[len("sha256:") :][:8]
+    digest_prefix = digest[len("sha256:") :][:DIGEST_PREFIX_LENGTH]
     record_id = f"{type_slug}-{subject_slug}-{compact}-{digest_prefix}"
     validate_record_id(record_id)
     return record_id

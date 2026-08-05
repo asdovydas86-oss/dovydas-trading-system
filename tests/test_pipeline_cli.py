@@ -41,9 +41,9 @@ def test_archive_list_parses() -> None:
 
 def test_archive_show_parses_the_record_id() -> None:
     parser = cli_module.build_parser()
-    args = parser.parse_args(["archive", "show", "workspace-BTCUSDT-20260101T000000Z-aaaaaaaa"])
+    args = parser.parse_args(["archive", "show", "workspace-BTCUSDT-20260101T000000Z-aaaaaaaaaaaaaaaa"])
     assert args.archive_command == "show"
-    assert args.record_id == "workspace-BTCUSDT-20260101T000000Z-aaaaaaaa"
+    assert args.record_id == "workspace-BTCUSDT-20260101T000000Z-aaaaaaaaaaaaaaaa"
 
 
 def test_archive_verify_record_id_is_optional() -> None:
@@ -185,7 +185,7 @@ def test_show_a_missing_record_fails_cleanly(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     code = cli_module.main(
-        ["archive", "show", "workspace-BTCUSDT-20260101T000000Z-aaaaaaaa", "--archive-root", str(tmp_path)]
+        ["archive", "show", "workspace-BTCUSDT-20260101T000000Z-aaaaaaaaaaaaaaaa", "--archive-root", str(tmp_path)]
     )
     assert code == 1
     assert "not found" in capsys.readouterr().err.lower()

@@ -247,7 +247,7 @@ def test_loading_a_missing_record_raises_not_found(store: ArchiveStore) -> None:
 
 @pytest.mark.parametrize(
     "bad_id",
-    ["../../etc/passwd", "not-a-record-id", "workspace-BTC/USDT-20260101T000000Z-aaaaaaaa"],
+    ["../../etc/passwd", "not-a-record-id", "workspace-BTC/USDT-20260101T000000Z-aaaaaaaaaaaaaaaa"],
 )
 def test_loading_an_invalid_record_id_is_rejected_before_touching_the_filesystem(
     store: ArchiveStore, bad_id: str

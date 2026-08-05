@@ -30,7 +30,7 @@ from fmis.archive.errors import (
     ManifestError,
     RecordNotFoundError,
 )
-from fmis.archive.identity import build_record_id, parse_record_id
+from fmis.archive.identity import DIGEST_PREFIX_LENGTH, build_record_id, parse_record_id
 from fmis.archive.json_safe import canonical_loads
 from fmis.archive.manifest import ManifestEntry, append_manifest_entry, read_manifest
 from fmis.daily.models import DailyRun
@@ -232,7 +232,8 @@ class ArchiveStore:
                 )
             raise DuplicateRecordConflictError(
                 f"record_id {record_id!r} already exists with a different content_digest "
-                f"({existing_digest} != {digest}) — an 8-hex-character digest-prefix collision"
+                f"({existing_digest} != {digest}) — a {DIGEST_PREFIX_LENGTH}-hex-character "
+                "digest-prefix collision"
             )
 
         envelope = ArchiveEnvelope(

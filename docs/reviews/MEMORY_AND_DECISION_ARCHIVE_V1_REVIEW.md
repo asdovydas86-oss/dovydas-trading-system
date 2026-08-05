@@ -183,3 +183,16 @@ kind of ordinary corruption (a stale format, a hand-edited manifest line, a tamp
 verify` is supposed to exist for. All three are closed, independently regression-tested, and re-verified
 by a second, larger mutation pass (34/35 detected, 1 proven-equivalent, 0 no-ops) against the fixed code.
 No P0 was found at any point. AO is accepted as verified-quality persistence for a personal-use system.
+
+## 9. Addendum — record-ID digest length (pre-push correction)
+
+This review's finding 4 (§2) called `identity.py`'s construction "sound" without separately stating
+whether the 8-character (32-bit) digest prefix in place at review time was itself an adequate long-term
+collision bound, as opposed to merely correctly implemented. A subsequent pre-push correctness pass
+(before anything from AO was pushed) judged 32 bits insufficient for IDs meant to become stable long-term
+references for future product surfaces (journals, comparisons, outcome tracking, dashboards) and widened
+the prefix to **16 hex characters (64 bits)** — see ADR-0027 §4 for the collision-probability reasoning
+and rejected alternative. The correction is additive: the record ID's structural properties this review
+verified (content-derived, path-traversal-safe by construction, recomputed and cross-checked at load time)
+are unchanged in kind, only the digest-prefix length is wider. No new finding is filed here; this note
+exists so a reader of this review is not left holding a stale example length.

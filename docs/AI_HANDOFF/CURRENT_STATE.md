@@ -8,12 +8,13 @@ should be updated at the end of every milestone. If it disagrees with the code, 
 update this file.
 
 **Last updated for:** Milestone AO — Memory & Decision Archive v1 (2026-08-05), plus a same-day pre-push
-correctness correction strengthening record-ID collision resistance.
+correctness correction strengthening record-ID collision resistance, and a same-day documentation-only
+follow-up reconciling stale AO/D-01 references.
 **Latest commit at time of writing:** this milestone's four commits (production + docs, then the
-correction's production + docs), local to `main` and **not yet pushed** — see
+correction's production + docs) plus the documentation-consistency fix commit, pushed to `main` — see
 [ADR-0027](../adr/ADR-0027-memory-and-decision-archive-persistence-schema.md) for the resolved D-01
 decision this milestone implements.
-**Milestones AF through AN are pushed; AO is committed locally, pending explicit push authorization.**
+**Milestones AF through AO are pushed; nothing is committed locally that is not also on the remote.**
 
 ---
 
@@ -1127,21 +1128,21 @@ The **deterministic structural chain is complete**, and so is the product surfac
 Every stage is pure, non-repainting, exactly prefix-stable, identity-carrying and single-implementation.
 After AN, one command analyses a whole watchlist and the results are a first-class object.
 
-**Recommended next: Milestone AO — Memory / decision archive.**
+**Milestone AO — Memory / decision archive — shipped.** See *Current milestone* above for what it
+delivered. [ADR-0027](../adr/ADR-0027-memory-and-decision-archive-persistence-schema.md) resolves
+**D-01 — the persistence schema**, the decision that blocked it: `Workspace` (AK P3-3), `MarketRegime`,
+`StructuralFactSheet` and `DailyRun` (AN P3-4) all carry `MappingProxyType` metadata and are therefore
+all unpicklable, and the decision belonged to every metadata-carrying model at once, not to whichever
+milestone reached it first.
 
-**Why it is next.** It is the board's NOW item, it is the only **Critical** priority remaining, and
-four of the project's nine success criteria depend on it. Until it exists, daily use accumulates
-nothing: the owner cannot ask *"what did I think about this in October, and was I right?"*
+**What AN made easier.** A run was already a complete, schema-versioned object holding real workspaces
+by reference, so *what* got archived was decided before AO started — only *how* was open.
+`DAILY_SCHEMA_VERSION` and `WORKSPACE_SCHEMA_VERSION` exist precisely so a stored artifact stays
+readable years later.
 
-**It is blocked, and the blocker must be settled first.** **OPEN DECISION D-01 — the persistence
-schema.** Three milestones have now raised the same question from different directions, and it is the
-same answer for all of them: `Workspace` (AK P3-3), `MarketRegime`, `StructuralFactSheet` and
-`DailyRun` (AN P3-4) all carry `MappingProxyType` metadata and are therefore all unpicklable. The
-decision belongs to every metadata-carrying model at once, not to whichever milestone reaches it first.
-
-**What AN made easier.** A run is now a complete, schema-versioned object holding real workspaces by
-reference, so *what* gets archived is already decided — only *how* is open. `DAILY_SCHEMA_VERSION` and
-`WORKSPACE_SCHEMA_VERSION` exist precisely so a stored artifact stays readable years later.
+**Next milestone: awaiting the owner's decision** (`FMITS_PRODUCT_BACKLOG.md` §5) — the board's
+exactly-one-NOW rule is temporarily unsatisfied, not relaxed, until the owner sequences the next item
+from §7.
 
 **What must not happen first.** Scheduling, notification delivery and opportunity ranking were all
 considered and deliberately excluded from AN. Scheduling still owns no architecture layer and needs
@@ -1170,8 +1171,10 @@ accepted before any macroeconomic, fundamental-release, revised, or vintage-data
 
 - Working tree clean. **Milestone AN is pushed** (`74036a4`, `3a3df3d`), corrected pre-push (`644324c`),
   and followed by three documentation-only commits (`305f33c`, `2fbf403`, `36f5a30`) and the
-  documentation-consistency audit (`b13c37e`, report 0008) — all on `origin/main`. Milestones AF
-  through AN are pushed; nothing is committed locally that is not also on the remote.
+  documentation-consistency audit (`b13c37e`, report 0008). **Milestone AO is pushed** (`b40663f`,
+  `aa78695`, `c84b2a1`, `770573f`), followed by a documentation-consistency fix commit reconciling
+  stale AO/D-01 references — all on `origin/main`. Milestones AF through AO are pushed; nothing is
+  committed locally that is not also on the remote.
 - TradingView MCP workflow is external to the Python package — **zero coupling to `src/`**.
 - `pyproject.toml` and `uv.lock` unchanged since Milestone AD; still **zero runtime dependencies**.
 

@@ -11,7 +11,7 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | Milestone AO's own working tree, uncommitted at time of writing (on top of `38705e9`) |
+| **Last verified against** | `c84b2a1` (Milestone AO + the pre-push record-ID correction, on top of `38705e9`) |
 | **Verified on** | 2026-08-05 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -70,18 +70,18 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AO commit** | uncommitted at time of writing (this milestone's own working tree, on top of `38705e9`) |
-| **HEAD** | `38705e9` plus AO's two uncommitted commits (production + docs) |
+| **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) · D this commit (product docs) |
+| **HEAD** | `38705e9` plus AO's four local commits (A, B, C, D) |
 | **`origin/main`** | still `38705e9` — **AO is not pushed; push requires separate, explicit authorization** |
-| **Working tree** | AO's own changes, about to be committed locally |
-| **Test count** | **4,181 passing**, identically under `-W error` (3,905 before AO) |
+| **Working tree** | clean once this commit lands |
+| **Test count** | **4,194 passing**, identically under `-W error` (3,905 before AO; +276 at initial release, +13 for the pre-push record-ID correction) |
 | **Public exports / collisions** | 255 / 0 (242 before AO — `fmis.archive` is new) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 (`coverage` used only as an ephemeral measurement tool, never added to `pyproject.toml`) |
-| **Latest completed milestone** | **AO — Memory & Decision Archive v1** (commit pending) |
+| **Latest completed milestone** | **AO — Memory & Decision Archive v1** (commit `b40663f`, corrected in `c84b2a1`) |
 | **Product Value Level** | **Level 2 — usable swing-analysis assistant: one page carrying facts, regime, evidence and conflicts** — now with durable memory (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **Not yet sequenced.** §6 (NEXT) is empty; see §7 for the epics awaiting sequencing now that D-01 no longer blocks any of them |
+| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule is temporarily unsatisfied, not relaxed; see §7 for the epics awaiting sequencing now that D-01 no longer blocks any of them |
 
 ### Current user-visible capability
 
@@ -129,14 +129,19 @@ close, and the inherited limitations — computed from live exchange data.
 
 ## 5. NOW
 
-Exactly one item, by rule — **currently empty.** `AO` shipped (§8) and D-01 is resolved
-([ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md)); no successor has been
-sequenced yet. Per the milestone brief that shipped `AO`, the next milestone is deliberately **not**
-started in the same session that closes this one — sequencing the next NOW item is the owner's decision,
-informed by §7's now-unblocked epics (EP-18's remaining scope — journal, searchable knowledge base — is
-the most direct continuation of `AO`, still gated by the separate, still-open **D-04** journal-scope
-decision; EP-02/EP-03 scanning and ranking are the other two carried-forward items AN's own completion
-note named as still open).
+**Exactly one item, by rule** ([`START_HERE_FOR_AI.md`](docs/AI_HANDOFF/START_HERE_FOR_AI.md) §5 states
+this rule without exception, and repository history has never before shown an empty NOW — the slot has
+always been refilled at the instant the prior item shipped). **That rule is not currently satisfied.**
+`AO` shipped (§8) and D-01 is resolved
+([ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md)), and no successor has
+been sequenced yet — a deliberate, temporary, explicitly-authorized exception, not a silent redefinition
+of the rule: the milestone brief that shipped `AO` explicitly forbade choosing the next milestone in the
+same task that closed it. This is therefore an **outstanding action for the owner**, not a stable resting
+state — **the next NOW item must be named before the next implementation task on this board begins.**
+§7 lists the now-unblocked epics that inform that choice (EP-18's remaining scope — journal, searchable
+knowledge base — is the most direct continuation of `AO`, still gated by the separate, still-open
+**D-04** journal-scope decision; EP-02/EP-03 scanning and ranking are the other two carried-forward items
+AN's own completion note named as still open).
 
 ## 6. NEXT
 
@@ -193,11 +198,11 @@ This section carries the four most recent product-relevant milestones.
 
 | Field | Value |
 |---|---|
-| **Commit** | **`b40663f178e612856d6420c966b8a71ca7966edc`** |
+| **Commit** | **`b40663f178e612856d6420c966b8a71ca7966edc`** (release); corrected in **`c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d`** (record-ID digest widened 8→16 hex) |
 | **ADR** | [ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md) — resolves D-01 |
 | **Design** | [MEMORY_AND_DECISION_ARCHIVE_V1.md](docs/design/MEMORY_AND_DECISION_ARCHIVE_V1.md) |
 | **Review** | [MEMORY_AND_DECISION_ARCHIVE_V1_REVIEW.md](docs/reviews/MEMORY_AND_DECISION_ARCHIVE_V1_REVIEW.md) — no P0, **3 P1 found and fixed**, 1 P2 found and fixed, 2 P3 |
-| **Tests** | 3,905 → **4,181** (+276). Mutation 34/35 detected, 1 proven-equivalent, zero no-ops |
+| **Tests** | 3,905 → **4,194** (+289 across release + correction). Mutation 38/39 detected across both passes, 1 proven-equivalent, zero no-ops |
 
 **Product value delivered.** Durable memory. Before `AO`, `Workspace` (AK) and `DailyRun` (AN) were both
 first-class, schema-versioned objects with no consumer — every analysis was discarded the moment the
@@ -216,11 +221,19 @@ writes, and a metadata-only manifest.
 archived, only the already-composed model. No migration path yet: an unsupported schema version is
 rejected cleanly rather than guessed at.
 
+**Pre-push correction, same day.** The record-ID digest prefix was widened from 8 to **16 hex characters
+(64 bits)** before anything from `AO` was pushed — 32 bits reaches meaningful birthday-collision
+probability at record counts a personal archive could plausibly accumulate over years, for IDs meant to
+become stable long-term references (see ADR-0027 §4). No compatibility reader was added for the
+unpublished 8-character shape; one canonical v1 format, not a migration.
+
 **Status note.** DONE on repository evidence: the suite is green under `-W error`, coverage is 100 %
-line and branch on every new `fmis.archive` module and on `pipeline/cli.py`, mutation is 34/35 with one
-proven-equivalent survivor and byte-identical source restoration, the review is complete with every
-P0–P2 fixed (three P1s found in `archive verify` itself and closed), and `fmits swing --archive` /
-`fmits archive show` were run against live Binance data with byte-identical rendered output and zero
+line and branch on every new `fmis.archive` module and on `pipeline/cli.py`, mutation is 38/39 across
+both the initial release and the pre-push record-ID correction with one proven-equivalent survivor and
+byte-identical source restoration, the review is complete with every P0–P2 fixed (three P1s found in
+`archive verify` itself and closed), and `fmits swing --archive` / `fmits archive show` were run against
+live Binance data — both before and after the record-ID correction — with byte-identical rendered
+output and zero
 network calls on show.
 
 ### `AN` — Deterministic Daily Workflow v1 · **DONE**

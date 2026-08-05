@@ -188,6 +188,14 @@ only from deterministic engine outputs). An archive failure is reported distinct
 failure — a symbol that analysed correctly but could not be written to disk is never described as a
 failed analysis.
 
+**Correction (same day, pre-push, annotated per rule 9 rather than rewritten above).** Commit
+`c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` widened the record-ID digest prefix from 8 to **16 hex
+characters (64 bits)** before anything from `AO` was pushed — 32 bits reaches meaningful
+birthday-collision probability at record counts a personal archive could plausibly accumulate over
+years, for IDs meant to become stable long-term references. See ADR-0027 §4. Combined validated totals
+after the correction: **4,194 tests**, **39 mutation probes (38 detected, 1 proven-equivalent, 0
+no-ops)**. No compatibility reader was added for the unpublished 8-character shape.
+
 **Related.** ADR: [ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md)
 (resolves D-01) ·
 Design: [MEMORY_AND_DECISION_ARCHIVE_V1](docs/design/MEMORY_AND_DECISION_ARCHIVE_V1.md) ·
@@ -655,4 +663,5 @@ and mark the entry Foundational.
 
 ---
 
-*Living document · last verified against Milestone `AO`'s own working tree on 2026-08-05*
+*Living document · last verified against `c84b2a1` (Milestone `AO` + the pre-push record-ID correction)
+on 2026-08-05*

@@ -81,7 +81,7 @@ before?"* An item that cannot answer it does not belong here.
 | **Latest completed milestone** | **AO — Memory & Decision Archive v1** (commit `b40663f`, corrected in `c84b2a1`) |
 | **Product Value Level** | **Level 2 — usable swing-analysis assistant: one page carrying facts, regime, evidence and conflicts** — now with durable memory (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule is temporarily unsatisfied, not relaxed; see §7 for the epics awaiting sequencing now that D-01 no longer blocks any of them |
+| **Immediate next milestone** | **`AP` — Trading Domain Architecture v1** (§5), named by the owner on 2026-08-06. Architecture only: no code, no tests, no product-surface change; the four counts above are unchanged by it |
 
 ### Current user-visible capability
 
@@ -129,26 +129,36 @@ close, and the inherited limitations — computed from live exchange data.
 
 ## 5. NOW
 
-**Exactly one item, by rule** ([`START_HERE_FOR_AI.md`](docs/AI_HANDOFF/START_HERE_FOR_AI.md) §5 states
-this rule without exception, and repository history has never before shown an empty NOW — the slot has
-always been refilled at the instant the prior item shipped). **That rule is not currently satisfied.**
-`AO` shipped (§8) and D-01 is resolved
-([ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md)), and no successor has
-been sequenced yet — a deliberate, temporary, explicitly-authorized exception, not a silent redefinition
-of the rule: the milestone brief that shipped `AO` explicitly forbade choosing the next milestone in the
-same task that closed it. This is therefore an **outstanding action for the owner**, not a stable resting
-state — **the next NOW item must be named before the next implementation task on this board begins.**
-§7 lists the now-unblocked epics that inform that choice (EP-18's remaining scope — journal, searchable
-knowledge base — is the most direct continuation of `AO`, still gated by the separate, still-open
-**D-04** journal-scope decision; EP-02/EP-03 scanning and ranking are the other two carried-forward items
-AN's own completion note named as still open).
+**Exactly one item, by rule.** The empty-NOW exception recorded here after `AO` shipped is closed: the
+owner named the successor on **2026-08-06**.
+
+### `AP` — Trading Domain Architecture v1 · **NOW** *(architecture only)*
+
+| Field | Value |
+|---|---|
+| **Scope** | Design the complete trading domain — Opportunity Proposal and its lifecycle, Trade Plan, Order, Trade, Position, Portfolio, Portfolio Snapshot, the Portfolio Intelligence boundary, Journal, Decision Episode, AI Context Package, AI Review, AI Learning Layer, Personal AI Memory, tax capture contract, Export, storage and Archive integration. **No Python, no SQL, no ORM, no API, no UI, no storage-engine choice** |
+| **Deliverable** | [`docs/design/TRADING_DOMAIN_ARCHITECTURE_V1.md`](docs/design/TRADING_DOMAIN_ARCHITECTURE_V1.md) — **v1.2**: revised after a hostile architecture review, then a vision-alignment pass. §34 dispositions every finding and states what was deliberately not added. **Pending owner review and commit** |
+| **Product value** | None directly, and it says so — this is an architecture milestone whose output is a decision (backlog rule 8). It removes the blocker on every trading-history capability: `AO` made analyses durable, and nothing yet records what the owner *proposed, decided or did* |
+| **Blocker it removes** | EP-02 (swing trading product), EP-04 (portfolio and risk) and EP-18 (journal, knowledge base) all stall on domain decisions no milestone had made. `AP` makes them and names the six ADRs required before any code |
+| **Decisions raised** | **AP-D1** money/quantity types · **AP-D2** capture contract + migration guarantee (**blocking**) · **AP-D3** ledger event taxonomy and the *derived* balanced-effect contract · **AP-D4** the decision-chain boundary and the proposal's append-only lifecycle stream · **AP-D5** provenance vocabulary ownership · **AP-D6** counterfactual evaluation policy (needed before step 5, **not** blocking step 1) |
+| **Decisions resolved in substance** | **D-02** (money types, via AP-D1) · **D-04** (journal scope) · direction set for **D-09** (export) · **D-10** (tax scope) superseded — see §10 |
+| **Not DONE yet** | Nothing is committed. Rule 3 requires a commit SHA or an explicit owner decision before a status moves; this row moves to §8 when the document is reviewed and committed |
+| **Source** | Owner brief 2026-08-06 · `FMITS_WORKING_PROTOCOL_2026-08-06` (crypto swing trading first; record every real trade from the first one; Swedish tax readiness; AI learns from the history) |
 
 ## 6. NEXT
 
 The forced sequence. Each item is blocked on the one above it.
 
-*`AO` shipped and D-01 is resolved. §6 is empty until the owner sequences the next milestone — see §7
-for the epics newly unblocked and awaiting sequencing.*
+| # | Item | Blocked by | Note |
+|---|---|---|---|
+| 1 | **ADRs for AP-D1 and AP-D2** | `AP` accepted | Days, not months. AP-D2 blocks everything: ADR-0027 §8's exact-match-no-migration policy was proportionate for regenerable analyses and is unsafe for records that cannot be recomputed |
+| 2 | **The vertical slice** — deterministic Opportunity Proposal · its append-only lifecycle (owner decision, expiry, execution) · plan from acceptance · manual fill capture under the full tax capture contract · position fold · archived decision chain · full-dump export | 1 | *"FMITS proposed three setups this morning; I took one, and every part of that decision is recorded — including the two I passed on."* [Design §32 step 1](docs/design/TRADING_DOMAIN_ARCHITECTURE_V1.md) |
+| 3 | **Journal** — Idea · Note · Review, tags with provenance, typed links | 2 | *"Why did I enter, and what was I thinking?"* |
+| 4 | **Portfolio config events · snapshots · metric series** | 2 | *"What am I holding, what is it worth, how has it grown?"* |
+
+*Step 2 is deliberately one milestone, not five: it is the smallest thing that closes the loop the
+product exists for. Steps beyond 4 are sequenced in the design document §30 and are not promoted to
+this board until the ADRs above are accepted.*
 
 ---
 
@@ -555,18 +565,30 @@ Carried, not solved, except D-01 — closed this milestone.
 > atomic single-record files plus a metadata-only manifest. Kept in this table, struck through rather
 > than deleted, so the decision's history and its blocked items remain traceable.
 
+> **D-02, D-04, D-09 and D-10 were addressed in substance on 2026-08-06** by Milestone `AP`'s design
+> ([`TRADING_DOMAIN_ARCHITECTURE_V1.md`](docs/design/TRADING_DOMAIN_ARCHITECTURE_V1.md) §22.2). A design
+> document is **not** a decision: each row below stays open until an ADR is accepted, or — for D-10 —
+> until the owner confirms the scope change the 2026-08-06 brief states. Rows are annotated, never
+> deleted.
+
 | ID | Decision | Blocks | Source |
 |---|---|---|---|
 | ~~**D-01**~~ | ~~Persistence and serialization schema~~ — **resolved, see above** | ~~EP-18, `AO`~~ | [ADR-0027](docs/adr/ADR-0027-memory-and-decision-archive-persistence-schema.md) |
-| **D-02** | Money / portfolio numeric types (`float` vs `Decimal`) | EP-04 | Review R11 · `reports/0005` §7.2 |
-| **D-03** | Availability-time model for released/revised data | EP-07, EP-08 | **ADR-0003 (formal gate)** |
-| **D-04** | Journal scope as a formal product capability | EP-18 | `reports/0004` §15.3 |
+| **D-02** | Money / portfolio numeric types (`float` vs `Decimal`) — **answered in substance by AP-D1**; needs an ADR to bind | EP-04, `AP` step 1 | Review R11 · `reports/0005` §7.2 · `AP` design §5.3 |
+| **D-03** | Availability-time model for released/revised data — **untouched by `AP`**; §4.3 of that design is a narrower, self-generated instance and does **not** unblock macro | EP-07, EP-08 | **ADR-0003 (formal gate)** |
+| **D-04** | Journal scope as a formal product capability — **answered in substance** by `AP` design §16 (three kinds — Idea, Note, Review — with open subtypes, a closed *tag* vocabulary, and typed links); the owner's 2026-08-06 brief is the scope decision this row was waiting for | EP-18 | `reports/0004` §15.3 · `AP` design §16 |
+| **AP-D1** | Money, quantity and currency types; the exact boundary at which `float` stops; per-asset dust thresholds | Every `AP` implementation step | `AP` design §5.3, §31.1 |
+| **AP-D2** | **Capture contract and migration guarantee.** A small, versioned, additively-extensible capture contract plus forward-only readers, a golden-file corpus per version, and a full-dump export. ADR-0027 §8's exact-match-no-migration rule was proportionate for regenerable analyses; a ledger cannot be recomputed | **Blocking** — must precede the first written trade | `AP` design §4 Finding 1, §5.7, §31.1 |
+| **AP-D3** | Ledger event taxonomy and the **derived** balanced-effect contract — balance effects are a pure function per event kind, never a stored second copy | Positions, portfolio, tax | `AP` design §11.4, §11.7 |
+| **AP-D4** | The decision-chain boundary — Opportunity Proposal / Trade Plan / Order / Trade / Position as five objects with optional links, never collapsed | Proposal, plan, episode, learning | `AP` design §7, §8.3–§8.4, §31.1 |
+| **AP-D5** | Provenance vocabulary ownership — a neutral `ValueOrigin` beside the kernel with a one-way mapping to `fmis.workspace.Tier`, so no trading concept is pushed into an L7 presentation type and no vocabulary is duplicated | Every record type | `AP` design §5.2, §31.1 |
+| **AP-D6** | Counterfactual evaluation policy — fill assumption, horizon cap, ambiguous-bar resolution and the LONG/SHORT symmetry invariant, so an unexecuted proposal can be scored without pretending a fill was guaranteed | `AP` step 5 — **not blocking step 1**, which captures the assumption version as an opaque additive field | `AP` design §8.5, §31.1 |
 | **D-05** | Scheduling ownership — belongs to no architecture layer | EP-03 — *not* AN, which shipped without it | `reports/0004` §13.5 |
 | **D-06** | Watchlist / universe model | EP-03 — `AO` archives whatever universe the shell supplies, taking no position on this decision | `reports/0004` §13.5 |
 | **D-07** | CI and type-checking timing | EP-20 | `reports/0001` §10.2 |
 | **D-08** | Telegram as a delivery transport | EP-19 | `reports/0004` §15.2 |
-| **D-09** | Excel / CSV export ecosystem | EP-19 | `reports/0004` §15.2 — no longer blocked by D-01 |
-| **D-10** | Tax Center scope | EP-19 | `reports/0004` §15.2 — recommended out of scope |
+| **D-09** | Excel / CSV export ecosystem — **direction set** by `AP` design §23: export is a versioned leaf projection, never a round trip; statement *import* is an L1-style adapter, not "Excel as source of truth". A full-dump export ships in `AP` step 1, not step 10 | EP-19, `AP` step 10 | `reports/0004` §15.2 — no longer blocked by D-01 · `AP` design §23 |
+| **D-10** | Tax Center scope — **owner-confirmed 2026-08-06: Swedish tax readiness is in project scope.** This supersedes `reports/0004` §15.2's "out of scope unless an obligation requires it"; `FMITS_WORKING_PROTOCOL_2026-08-06` states the obligation. **Answered in substance, not yet bound by an ADR.** `AP` design §22.1 separates the two halves: the tax *engine* is step 9, but the tax **capture contract** is in step 1 because FX rates and reward acquisition values are unrecoverable if not captured at the moment of the transaction | EP-19, `AP` step 9 (engine); capture in step 1 | `reports/0004` §15.2 (superseded) · owner decision 2026-08-06 · `AP` design §22 |
 | **D-11** | Voice interface | EP-19 | `reports/0004` §15.2 |
 | **D-12** | AI model routing and budget | EP-20 | `reports/0004` §15.3 |
 | **D-13** | Commercial / multi-user direction | — | `reports/0004` §3.2, §15.2 |

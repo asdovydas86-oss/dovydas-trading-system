@@ -7,18 +7,35 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AO — Memory & Decision Archive v1 (2026-08-05), plus a same-day pre-push
-correctness correction strengthening record-ID collision resistance, and a same-day documentation-only
-follow-up reconciling stale AO/D-01 references.
-**Latest commit at time of writing:** this milestone's four commits (production + docs, then the
-correction's production + docs) plus the documentation-consistency fix commit, pushed to `main` — see
-[ADR-0027](../adr/ADR-0027-memory-and-decision-archive-persistence-schema.md) for the resolved D-01
-decision this milestone implements.
-**Milestones AF through AO are pushed; nothing is committed locally that is not also on the remote.**
+**Last updated for:** Milestone AP — Trading Domain Architecture v1 (2026-08-06), an
+**architecture-only** milestone that changed three Markdown files and no code. The preceding product
+milestone was AO — Memory & Decision Archive v1 (2026-08-05), plus a same-day pre-push correctness
+correction strengthening record-ID collision resistance and a same-day documentation-only follow-up
+reconciling stale AO/D-01 references.
+**Latest commit at time of writing:** `0ea0414` — `docs(architecture): add Trading Domain Architecture v1`.
+**Milestones AF through AO are pushed. `AP` (`0ea0414`) is committed locally and has NOT been pushed** —
+pushing requires the owner's separate, explicit authorization.
 
 ---
 
 ## Current milestone
+
+- **AP — Trading Domain Architecture v1** (commit `0ea0414`) — **complete, and architecture only.** It
+  designs everything FMITS must know about the owner's own decisions and trading, as distinct from what
+  it already knows about the market: the five-object decision chain (Opportunity Proposal → Trade Plan →
+  Order → Trade → Position) with the proposal's lifecycle as an append-only event stream, an append-only
+  ledger whose balance effects are *derived* rather than stored, Decision Episode as the unit of
+  learning, one AI retrieval contract, a three-kind journal, the Portfolio Intelligence boundary,
+  Personal AI Memory, the Swedish tax **capture** contract, and one durable store with measured
+  thresholds for anything more. Design in
+  [the design document](../design/TRADING_DOMAIN_ARCHITECTURE_V1.md).
+
+  **No code, no tests, no ADRs, no product-surface change.** Every measured figure below is unchanged.
+  `AP` *names* six decisions (AP-D1…AP-D6) and **binds none of them** — AP-D2, the capture contract and
+  migration guarantee, must be accepted before the first irreplaceable trading record is written. A
+  design document is not an accepted decision.
+
+**The most recent milestone that changed what the owner can do is AO, described next.**
 
 - **AO — Memory & Decision Archive v1**: closes the loop. Before this milestone, every analysis FMITS
   produced was discarded the moment the terminal closed. Design in
@@ -1140,9 +1157,13 @@ by reference, so *what* got archived was decided before AO started — only *how
 `DAILY_SCHEMA_VERSION` and `WORKSPACE_SCHEMA_VERSION` exist precisely so a stored artifact stays
 readable years later.
 
+**Milestone AP — Trading Domain Architecture v1 — shipped** (`0ea0414`), architecture only. See
+*Current milestone* above. It names six decisions (AP-D1…AP-D6) and binds none; **AP-D2 — the capture
+contract and migration guarantee — must be accepted before the first irreplaceable trading record is
+written.** The sequenced work it defined is `FMITS_PRODUCT_BACKLOG.md` §6.
+
 **Next milestone: awaiting the owner's decision** (`FMITS_PRODUCT_BACKLOG.md` §5) — the board's
-exactly-one-NOW rule is temporarily unsatisfied, not relaxed, until the owner sequences the next item
-from §7.
+exactly-one-NOW rule is temporarily unsatisfied, not relaxed, until the owner names the next item.
 
 **What must not happen first.** Scheduling, notification delivery and opportunity ranking were all
 considered and deliberately excluded from AN. Scheduling still owns no architecture layer and needs
@@ -1173,8 +1194,9 @@ accepted before any macroeconomic, fundamental-release, revised, or vintage-data
   and followed by three documentation-only commits (`305f33c`, `2fbf403`, `36f5a30`) and the
   documentation-consistency audit (`b13c37e`, report 0008). **Milestone AO is pushed** (`b40663f`,
   `aa78695`, `c84b2a1`, `770573f`), followed by a documentation-consistency fix commit reconciling
-  stale AO/D-01 references — all on `origin/main`. Milestones AF through AO are pushed; nothing is
-  committed locally that is not also on the remote.
+  stale AO/D-01 references — all on `origin/main`. Milestones AF through AO are pushed. **Milestone AP
+  (`0ea0414`, architecture only) is committed locally and is NOT on the remote**; `main` is one commit
+  ahead of `origin/main` until the owner authorizes a push.
 - TradingView MCP workflow is external to the Python package — **zero coupling to `src/`**.
 - `pyproject.toml` and `uv.lock` unchanged since Milestone AD; still **zero runtime dependencies**.
 

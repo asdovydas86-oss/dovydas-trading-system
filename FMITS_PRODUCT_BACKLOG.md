@@ -11,8 +11,8 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `c84b2a1` (Milestone AO + the pre-push record-ID correction, on top of `38705e9`) |
-| **Verified on** | 2026-08-05 |
+| **Last verified against** | `0ea0414` (Milestone AP — architecture only). The measured code figures in §4 are unchanged since `c84b2a1` (Milestone AO), because AP changed no code |
+| **Verified on** | 2026-08-06 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -71,17 +71,18 @@ before?"* An item that cannot answer it does not belong here.
 | Fact | Value |
 |---|---|
 | **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) · D this commit (product docs) |
-| **HEAD** | `38705e9` plus AO's four local commits (A, B, C, D) |
-| **`origin/main`** | still `38705e9` — **AO is not pushed; push requires separate, explicit authorization** |
+| **Milestone AP commit** | `0ea041477dbe9584618495dc334e9685e3e6eb0e` (architecture only — no code, no tests, no product-surface change) |
+| **HEAD** | `0ea0414` (AP) on top of `0c09824` |
+| **`origin/main`** | `0c09824` — **AP is committed locally and not pushed; push requires separate, explicit authorization** |
 | **Working tree** | clean once this commit lands |
 | **Test count** | **4,194 passing**, identically under `-W error` (3,905 before AO; +276 at initial release, +13 for the pre-push record-ID correction) |
 | **Public exports / collisions** | 255 / 0 (242 before AO — `fmis.archive` is new) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 (`coverage` used only as an ephemeral measurement tool, never added to `pyproject.toml`) |
-| **Latest completed milestone** | **AO — Memory & Decision Archive v1** (commit `b40663f`, corrected in `c84b2a1`) |
+| **Latest completed milestone** | **AP — Trading Domain Architecture v1** (commit `0ea0414`) — architecture only. The latest milestone that changed **what the owner can do** remains **AO — Memory & Decision Archive v1** (commit `b40663f`, corrected in `c84b2a1`) |
 | **Product Value Level** | **Level 2 — usable swing-analysis assistant: one page carrying facts, regime, evidence and conflicts** — now with durable memory (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **`AP` — Trading Domain Architecture v1** (§5), named by the owner on 2026-08-06. Architecture only: no code, no tests, no product-surface change; the four counts above are unchanged by it |
+| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — `AP` shipped and the exactly-one-NOW rule is temporarily unsatisfied, not relaxed. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
 
 ### Current user-visible capability
 
@@ -129,29 +130,24 @@ close, and the inherited limitations — computed from live exchange data.
 
 ## 5. NOW
 
-**Exactly one item, by rule.** The empty-NOW exception recorded here after `AO` shipped is closed: the
-owner named the successor on **2026-08-06**.
+**Exactly one item, by rule** ([`START_HERE_FOR_AI.md`](docs/AI_HANDOFF/START_HERE_FOR_AI.md) §5 states
+this rule without exception). **That rule is not currently satisfied.** `AP` shipped on **2026-08-06**
+(§8, commit `0ea0414`) and no successor has been sequenced — the same deliberate, temporary,
+explicitly-authorized exception the board recorded after `AO`, not a silent redefinition of the rule:
+the milestone brief that closed `AP` explicitly forbade choosing the next milestone in the same task.
 
-### `AP` — Trading Domain Architecture v1 · **NOW** *(architecture only)*
-
-| Field | Value |
-|---|---|
-| **Scope** | Design the complete trading domain — Opportunity Proposal and its lifecycle, Trade Plan, Order, Trade, Position, Portfolio, Portfolio Snapshot, the Portfolio Intelligence boundary, Journal, Decision Episode, AI Context Package, AI Review, AI Learning Layer, Personal AI Memory, tax capture contract, Export, storage and Archive integration. **No Python, no SQL, no ORM, no API, no UI, no storage-engine choice** |
-| **Deliverable** | [`docs/design/TRADING_DOMAIN_ARCHITECTURE_V1.md`](docs/design/TRADING_DOMAIN_ARCHITECTURE_V1.md) — **v1.2**: revised after a hostile architecture review, then a vision-alignment pass. §34 dispositions every finding and states what was deliberately not added. **Pending owner review and commit** |
-| **Product value** | None directly, and it says so — this is an architecture milestone whose output is a decision (backlog rule 8). It removes the blocker on every trading-history capability: `AO` made analyses durable, and nothing yet records what the owner *proposed, decided or did* |
-| **Blocker it removes** | EP-02 (swing trading product), EP-04 (portfolio and risk) and EP-18 (journal, knowledge base) all stall on domain decisions no milestone had made. `AP` makes them and names the six ADRs required before any code |
-| **Decisions raised** | **AP-D1** money/quantity types · **AP-D2** capture contract + migration guarantee (**blocking**) · **AP-D3** ledger event taxonomy and the *derived* balanced-effect contract · **AP-D4** the decision-chain boundary and the proposal's append-only lifecycle stream · **AP-D5** provenance vocabulary ownership · **AP-D6** counterfactual evaluation policy (needed before step 5, **not** blocking step 1) |
-| **Decisions resolved in substance** | **D-02** (money types, via AP-D1) · **D-04** (journal scope) · direction set for **D-09** (export) · **D-10** (tax scope) superseded — see §10 |
-| **Not DONE yet** | Nothing is committed. Rule 3 requires a commit SHA or an explicit owner decision before a status moves; this row moves to §8 when the document is reviewed and committed |
-| **Source** | Owner brief 2026-08-06 · `FMITS_WORKING_PROTOCOL_2026-08-06` (crypto swing trading first; record every real trade from the first one; Swedish tax readiness; AI learns from the history) |
+This is therefore an **outstanding action for the owner**, not a stable resting state — **the next NOW
+item must be named before the next implementation task on this board begins.** §6 holds the sequenced
+work `AP` itself defined; §7 holds the epics still awaiting sequencing.
 
 ## 6. NEXT
 
-The forced sequence. Each item is blocked on the one above it.
+The forced sequence. Each item is blocked on the one above it. **Sequenced, not started** — none of
+these is a NOW item until the owner names one.
 
 | # | Item | Blocked by | Note |
 |---|---|---|---|
-| 1 | **ADRs for AP-D1 and AP-D2** | `AP` accepted | Days, not months. AP-D2 blocks everything: ADR-0027 §8's exact-match-no-migration policy was proportionate for regenerable analyses and is unsafe for records that cannot be recomputed |
+| 1 | **ADRs for AP-D1 and AP-D2** | — *(`AP` is DONE; this is unblocked)* | Days, not months. AP-D2 blocks everything: ADR-0027 §8's exact-match-no-migration policy was proportionate for regenerable analyses and is unsafe for records that cannot be recomputed |
 | 2 | **The vertical slice** — deterministic Opportunity Proposal · its append-only lifecycle (owner decision, expiry, execution) · plan from acceptance · manual fill capture under the full tax capture contract · position fold · archived decision chain · full-dump export | 1 | *"FMITS proposed three setups this morning; I took one, and every part of that decision is recorded — including the two I passed on."* [Design §32 step 1](docs/design/TRADING_DOMAIN_ARCHITECTURE_V1.md) |
 | 3 | **Journal** — Idea · Note · Review, tags with provenance, typed links | 2 | *"Why did I enter, and what was I thinking?"* |
 | 4 | **Portfolio config events · snapshots · metric series** | 2 | *"What am I holding, what is it worth, how has it grown?"* |
@@ -200,9 +196,48 @@ designed. It requires its own vision decision (**D-14**, **D-15**) before it can
 
 Repository-verified only. Every SHA below was confirmed to exist with `git cat-file -e`.
 
-The **complete** 30-milestone history lives in
+The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
-This section carries the four most recent product-relevant milestones.
+This section carries the five most recent milestones.
+
+### `AP` — Trading Domain Architecture v1 · **DONE** *(design only)*
+
+| Field | Value |
+|---|---|
+| **Commit** | **`0ea041477dbe9584618495dc334e9685e3e6eb0e`** — three Markdown files, no production code, no tests |
+| **ADR** | **none yet, by design.** `AP` *names* six decisions (AP-D1…AP-D6, §10) and binds none of them. A design document is not an accepted decision |
+| **Design** | [TRADING_DOMAIN_ARCHITECTURE_V1.md](docs/design/TRADING_DOMAIN_ARCHITECTURE_V1.md) — v1.2, 2,151 lines |
+| **Review** | Two independent passes, both recorded in the design's own §34: a hostile architecture review (Critical A1–A8, Strong B1–B12 — two rejected with reasons) and a vision-alignment pass. A final release gate found **2 P1 contradictions and 2 P2 over-claims**, all fixed before commit |
+| **Tests** | **4,194 — unchanged.** No code changed |
+
+**Product value delivered.** None directly, and it says so: this is an architecture milestone whose
+output is a decision, not a capability (backlog rule 8). `AO` made analyses durable; nothing yet
+records what the owner *proposed, decided or did*, and no milestone had made the domain decisions that
+question requires.
+
+**Blocker it removes.** EP-02 (swing trading product), EP-04 (portfolio and risk) and EP-18 (journal,
+knowledge base) all stalled on the same undecided domain model. `AP` designs it: the five-object
+decision chain (Opportunity Proposal → Trade Plan → Order → Trade → Position) with the proposal's
+lifecycle as an append-only event stream, an append-only ledger whose balance effects are derived
+rather than stored, Decision Episode as the unit of learning, one AI retrieval contract, a three-kind
+journal, the Portfolio Intelligence boundary, Personal AI Memory, the Swedish tax capture contract,
+and one durable store with measured thresholds for anything more.
+
+**Decisions raised, none bound.** **AP-D1** money/quantity types · **AP-D2** capture contract and
+migration guarantee (**blocking — must precede the first irreplaceable record**) · **AP-D3** ledger
+event taxonomy and the derived balanced-effect contract · **AP-D4** the decision-chain boundary and
+the proposal lifecycle stream · **AP-D5** provenance vocabulary ownership · **AP-D6** counterfactual
+evaluation policy (needed before step 5, not before step 1). All six are open in §10.
+
+**Decisions answered in substance.** **D-02** (money types, via AP-D1) · **D-04** (journal scope) ·
+direction set for **D-09** (export) · **D-10** — the owner confirmed on 2026-08-06 that Swedish tax
+readiness is in scope, superseding `reports/0004` §15.2's recommendation. **None is bound by an ADR.**
+
+**Status note.** DONE on repository evidence — the design document is committed at `0ea0414` — and on
+the owner's explicit decision of 2026-08-06 that the milestone is complete. **Not recorded in
+[`FMITS_PRODUCT_CHANGELOG.md`](FMITS_PRODUCT_CHANGELOG.md)**: that document records user-visible
+capability only, and `AP` delivered none. The Product Value Level and every measured code figure in §4
+are unchanged.
 
 ### `AO` — Memory & Decision Archive v1 · **DONE**
 

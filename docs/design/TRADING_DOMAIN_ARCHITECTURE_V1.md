@@ -1,8 +1,9 @@
 # Trading Domain Architecture v1 — Design
 
 **Milestone:** AP
-**Status:** Proposed — **architecture only.** Nothing here is authorization to implement, and nothing
-here is an accepted decision. §31 names the six ADRs required before any code is written.
+**Status:** **Milestone AP is complete** (commit `0ea0414`, 2026-08-06). The *architecture* remains
+**proposed** — nothing here is authorization to implement, and nothing here is an accepted decision.
+§31 names the six ADRs required before any code is written; none has been accepted.
 **Revision:** v1.2 (2026-08-06) — v1.1 revised after a hostile architecture review; v1.2 after a
 vision-alignment pass covering proposal lifecycle, portfolio intelligence and personal memory. §34
 records the disposition of every finding and every deliberate omission.

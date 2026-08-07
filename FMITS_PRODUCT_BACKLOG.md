@@ -70,23 +70,26 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) · D this commit (product docs) |
+| **Milestone AR commit** | `1480766e57526d48266a4aa5ff48b3a945614656` (production code + tests + ADR-0028 + design + review) |
+| **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) |
 | **Milestone AP commit** | `0ea041477dbe9584618495dc334e9685e3e6eb0e` (architecture only — no code, no tests, no product-surface change) |
-| **HEAD** | `0ea0414` (AP) on top of `0c09824` |
-| **`origin/main`** | `0c09824` — **AP is committed locally and not pushed; push requires separate, explicit authorization** |
+| **HEAD** | `1480766` (AR) on top of `75a4f40` |
+| **`origin/main`** | `0c09824` — **AR is committed locally and not pushed; push requires separate, explicit authorization** |
 | **Working tree** | clean once this commit lands |
-| **Test count** | **4,194 passing**, identically under `-W error` (3,905 before AO; +276 at initial release, +13 for the pre-push record-ID correction) |
-| **Public exports / collisions** | 255 / 0 (242 before AO — `fmis.archive` is new) |
+| **Test count** | **4,319 passing**, identically under `-W error` (4,194 before AR; +125) |
+| **Public exports / collisions** | 293 / 0 (255 before AR — `fmis.swing_setup` is new) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 (`coverage` used only as an ephemeral measurement tool, never added to `pyproject.toml`) |
-| **Latest completed milestone** | **AP — Trading Domain Architecture v1** (commit `0ea0414`) — architecture only. The latest milestone that changed **what the owner can do** remains **AO — Memory & Decision Archive v1** (commit `b40663f`, corrected in `c84b2a1`) |
-| **Product Value Level** | **Level 2 — usable swing-analysis assistant: one page carrying facts, regime, evidence and conflicts** — now with durable memory (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
+| **Latest completed milestone** | **AR — Swing Setup Engine v1** (commit `1480766`) — the seventh user-visible product capability, and the first to make a directional claim, confined to `fmis.swing_setup` by ADR-0028 |
+| **Product Value Level** | **Level 2 — usable swing-analysis assistant** — now including a deterministic swing-setup assessment with direction, confirmation, stop, target and R/R when justified (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — `AP` shipped and the exactly-one-NOW rule is temporarily unsatisfied, not relaxed. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
+| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule is temporarily unsatisfied, not relaxed, per the same recorded exception AP and AO both used. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
 
 ### Current user-visible capability
 
 ```
+fmits setup  BTCUSDT                       # a deterministic swing-trade setup assessment
+fmits setup  BTCUSDT ETHUSDT SOLUSDT       # one per symbol, in the order requested
 fmits daily  BTCUSDT ETHUSDT SOLUSDT       # the morning routine, one row per symbol
 fmits swing  BTCUSDT                       # the whole page, end to end
 fmits regime BTCUSDT --multi               # the environment, per role, with evidence
@@ -166,7 +169,7 @@ Detail lives in `reports/0004` (capabilities) and `reports/0005` (phasing) — n
 | ID | Epic | Delivers | Status | Priority | Gated by |
 |---|---|---|---|---|---|
 | **EP-01** | Technical Analysis & Market Structure | Support/resistance scoring, pattern detection, composite features, remaining indicators (RSI MA, MACD slope, ADX, Bollinger, VWAP), divergences | Partly DONE | High | — |
-| **EP-02** | Swing Trading Product | Scanning, ranking, trade plan, confirmation/invalidation, stop and target logic, post-trade review | LATER | High | AJ |
+| **EP-02** | Swing Trading Product | Scanning, ranking, trade plan, confirmation/invalidation, stop and target logic, post-trade review | Partly DONE — trade plan/confirmation/invalidation/stop/target delivered by `AR`; scanning, ranking and post-trade review remain LATER | High | AJ |
 | **EP-03** | Daily Market Intelligence | Global Market Pulse, Daily Brief, opportunity scanner, alerts, scheduling | LATER | High | AK |
 | **EP-04** | Portfolio & Risk | Positions, exposure, correlation clustering, total open risk, position sizing, Buying Power | LATER | **Critical** | **D-02 money types** |
 | **EP-05** | Multi-Asset Data Platform | Calendars and sessions, second adapter family, equities/ETFs/indices/commodities | LATER | High | Calendar layer |
@@ -199,6 +202,39 @@ Repository-verified only. Every SHA below was confirmed to exist with `git cat-f
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the five most recent milestones.
+
+### `AR` — Swing Setup Engine v1 · **DONE**
+
+| Field | Value |
+|---|---|
+| **Commit** | **`1480766e57526d48266a4aa5ff48b3a945614656`** |
+| **ADR** | [ADR-0028](docs/adr/ADR-0028-directional-interpretation-boundary.md) — the one narrow directional-interpretation boundary this milestone required |
+| **Design** | [SWING_SETUP_ENGINE_V1.md](docs/design/SWING_SETUP_ENGINE_V1.md) |
+| **Review** | [SWING_SETUP_ENGINE_V1_REVIEW.md](docs/reviews/SWING_SETUP_ENGINE_V1_REVIEW.md) — **three P1s found and fixed**, one P3 found and fixed, no P0 |
+| **Tests** | 4,194 → **4,319** (+125). 100 % line and branch coverage on every new/modified file. 27 mutation probes across two passes plus an independent 3-mutation spot-check, 27 detected, 0 survivors |
+
+**Product value delivered.** The owner's stated highest priority: `fmits setup SYMBOL [SYMBOL...]`
+prints a deterministic swing-trade setup assessment — `WAIT`/`CANDIDATE`/`CONFIRMED`, direction when a
+candidate exists, the independent evidence behind it, confirmation, invalidation, stop, target(s),
+risk/reward when computable, every applicable limitation. `WAIT` is a successful result, not a failure.
+Recorded in [`FMITS_PRODUCT_CHANGELOG.md`](FMITS_PRODUCT_CHANGELOG.md) as the seventh user-visible
+capability.
+
+**Resolves the gate this board's own `ADR_IMPLEMENTATION_GATE` assessment (2026-08-07) identified**:
+that the owner's first priority required no accepted `AP-D1…AP-D6` decision, and the one real blocker —
+where directional vocabulary may live — needed exactly one narrow ADR, written with the milestone
+that crosses the boundary, per this repository's own unbroken 27-ADR precedent.
+
+**Directional policy in one paragraph.** A candidate needs ≥2 of 3 independent evidence families
+agreeing with zero opposing (never one indicator); a trending CONTEXT-role regime gates candidate
+formation without itself voting a direction; Decision Context `INSUFFICIENT` forecloses a candidate
+unconditionally; EXECUTION only confirms — via a recent, side-matching structure break — and never
+votes. No fabricated price anywhere; probability always `NOT_CALIBRATED`; no position sizing.
+
+**Independent review found three real P1s before release, all fixed.** A same-bar dual break always
+resolved toward the LOWER side (a genuine directional asymmetry); no recency bound existed on a
+confirming break; a one-CLI-flag CONTEXT/SETUP interval collision defeated the ≥2-independent-families
+guarantee. Each closed with its own named regression test and reconfirmed by mutation testing.
 
 ### `AP` — Trading Domain Architecture v1 · **DONE** *(design only)*
 

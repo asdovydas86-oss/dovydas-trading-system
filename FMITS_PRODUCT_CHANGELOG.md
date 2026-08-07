@@ -7,8 +7,8 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `74036a4b81967618a809e420b85d320ab566d6b5` (Milestone AN) |
-| **Verified on** | 2026-08-04 |
+| **Last verified against** | `1480766e57526d48266a4aa5ff48b3a945614656` (Milestone AR) |
+| **Verified on** | 2026-08-07 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -67,9 +67,11 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `b40663f` (`AO`) — what the owner can do today.**
+**As of `1480766` (`AR`) — what the owner can do today.**
 
 ```
+fmits setup  BTCUSDT                            # a deterministic swing-trade setup assessment
+fmits setup  BTCUSDT ETHUSDT SOLUSDT            # one per symbol, in the order requested
 fmits daily  BTCUSDT ETHUSDT SOLUSDT            # the morning routine, one row per symbol
 fmits swing  BTCUSDT                            # the whole page, end to end
 fmits regime BTCUSDT --multi                    # the environment, per role, with evidence
@@ -85,6 +87,11 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 
 **Delivered:**
 
+- a **deterministic swing-trade setup assessment**: `WAIT` / `CANDIDATE` / `CONFIRMED`, with a
+  direction only when a candidate exists, the independent evidence families behind it, confirmation,
+  invalidation, stop, target(s) and risk/reward when computable, and every limitation that applies.
+  Direction never comes from one indicator — at least two of three independent families must agree
+  with zero opposing — and `WAIT` is a first-class, successful result, not a failure;
 - a **repeatable multi-symbol routine**: one command runs the same analysis over a requested universe
   under one set of settings, and prints one row per symbol in the order requested — with the symbols
   that **failed, and why**, kept on the page. **Not a ranking**: no score, no order by any property of
@@ -120,7 +127,8 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 | Not available | Where it is on the backlog |
 |---|---|
 | AI interpretation of any kind — the numbers are computed, not read | EP — after regime |
-| Trade signal, direction, ranking, score or recommendation | Strategy layer, `EP-13` |
+| ~~Trade signal, direction~~ | **Direction delivered by `AR`, scoped narrowly** — `fmits setup` states a `WAIT`/`CANDIDATE`/`CONFIRMED` direction under an explicit, testable policy; still no ranking, score, or recommendation |
+| Opportunity ranking or score across symbols | `EP-02`/`EP-03` — deliberately absent from `fmits setup`'s multi-symbol mode: sequential, input order preserved, no sort |
 | Cross-timeframe **synthesis** — the views are reported, never reconciled | `AI` Market Regime Engine |
 | ~~Market regime classification~~ | **Delivered by `AI`** — see below |
 | Support/resistance naming — levels are reported as *nearest above / below* | `EP-01` |
@@ -135,8 +143,10 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 | Any asset class other than crypto | `EP-05` |
 | Backtesting, paper trading, shadow mode, execution | `EP-14` … `EP-17` |
 
-**Safety position.** The system executes nothing, holds no credentials that could move funds, and
-makes no directional claim. Every rung of the automation ladder remains unstarted.
+**Safety position.** The system executes nothing and holds no credentials that could move funds.
+`AR` is the first and only capability that makes a directional claim (`fmits setup`), confined to one
+package by construction (ADR-0028) and never a position size, leverage or money amount. Every rung of
+the automation ladder remains unstarted.
 
 ---
 
@@ -145,6 +155,73 @@ makes no directional claim. Every rung of the automation ladder remains unstarte
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-07 · `AR` — Swing Setup Engine v1
+
+**Status:** Released · **seventh user-visible product capability**
+**Commit:** `1480766e57526d48266a4aa5ff48b3a945614656`
+Validated before versioning: 4,319 tests green including `-W error`, 100 % line and branch coverage on
+every new `fmis.swing_setup` module and on `pipeline/cli.py`, 27 mutation probes across two passes plus
+an independent reviewer's own 3-mutation spot-check — 27 detected, 0 survivors, byte-identical source
+restoration verified by SHA-256 — and an independent adversarial review that found and fixed three P1s
+before release (see below). Live-verified against BTCUSDT/ETHUSDT/SOLUSDT and eight further symbols on
+real Binance data, including a naturally-occurring `CANDIDATE`/`SHORT` result with valid stop/target
+geometry (DOTUSDT) — not manufactured; the policy was not loosened to produce it.
+
+**What the owner can now do that was impossible before.** Ask for a deterministic swing-trade setup
+assessment on a real instrument and receive either a justified setup or a justified `WAIT` — the
+working protocol's own stated *"first practical stage."* `fmits setup BTCUSDT` (or several symbols in
+one call) prints state (`WAIT`/`CANDIDATE`/`CONFIRMED`), direction when a candidate exists, the
+independent evidence behind it, confirmation, invalidation, stop, target(s), risk/reward when
+computable, and every limitation that applies.
+
+**The one narrow architecture decision this required, made and enforced, not merely documented.**
+Every existing engine in this repository is contractually non-directional; something had to be the
+first place `LONG`/`SHORT` is allowed to exist. [ADR-0028](docs/adr/ADR-0028-directional-interpretation-boundary.md)
+names `fmis.swing_setup` as that one place, at the same top-level tier as `fmis.workspace`, and a new
+repository-wide guard test (`tests/test_directional_vocabulary_boundary.py`) plus seven widened
+import-boundary tests enforce it structurally — a future change that leaked `LONG` into
+`fmis.market_structure` or any other engine fails a test, not a review.
+
+**Never from one indicator, and it is unrepresentable, not merely discouraged.** A directional
+candidate requires at least two of three independent evidence families — CONTEXT-role structural
+trend, SETUP-role structural trend, SETUP-role evidence alignment — to agree, with **zero** opposing.
+Regime gates whether a candidate may exist at all (a trending CONTEXT-role environment) without ever
+itself voting a direction, staying inside ADR-0025's refusal to represent one. Decision Context
+`INSUFFICIENT` forecloses a candidate unconditionally, before the tally is even reached.
+
+**EXECUTION confirms; it never votes.** `CANDIDATE → CONFIRMED` requires a recent (within
+`CONFIRMATION_LOOKBACK_BARS`, 10 bars — a stated policy, not an assumption), side-matching structure
+break on the execution timeframe, and the execution trend not opposing. Either failing leaves the
+result at `CANDIDATE` — context and setup supportive, execution unconfirmed, never silently promoted.
+
+**No fabricated price, ever.** Stop and target are real `PriceLevel` objects the structural chain
+already detected, reused **by reference**, or explicitly absent — never invented, never equal to the
+reference price (geometry is unrepresentable otherwise, enforced by the model's own validation, not
+just the policy). Risk/reward is computed in code from that geometry, never asked of AI. Probability is
+always `NOT_CALIBRATED` — this repository has no backtester yet, and the product brief named a fake
+number as a specific, named integrity failure to avoid.
+
+**The independent review found three real P1s, all fixed and regression-tested.** A same-bar dual
+break (`fmis.structure_break` can emit an upper and a lower break on one bar) always resolved toward
+the LOWER side because "latest break" was one positional value — a genuine, provable directional
+asymmetry, fixed by carrying the full break history and searching it by side. No recency bound existed
+on a confirming break at all, so a break from months earlier could confirm a candidate that had only
+just formed — fixed by `CONFIRMATION_LOOKBACK_BARS`. And nothing validated that CONTEXT and SETUP were
+fetched at distinct intervals, so one CLI flag combination (`--context 1d --setup 1d`) collapsed the
+two-independent-families guarantee to one fact counted twice — fixed by rejecting the collision in
+`build_setup_inputs`. Full record: [the review](docs/reviews/SWING_SETUP_ENGINE_V1_REVIEW.md).
+
+**No position sizing, no opportunity ranking, no scope creep.** `fmits setup` on several symbols is
+sequential, preserves input order, isolates a failed symbol without losing the others, and sorts
+nothing — the same discipline `AN`'s daily index applies, restated for direction rather than
+readiness. The existing 2 % portfolio-risk maximum is untouched and unapplied here.
+
+**Related.** ADR: [ADR-0028](docs/adr/ADR-0028-directional-interpretation-boundary.md) · Design:
+[SWING_SETUP_ENGINE_V1.md](docs/design/SWING_SETUP_ENGINE_V1.md) · Review:
+[SWING_SETUP_ENGINE_V1_REVIEW.md](docs/reviews/SWING_SETUP_ENGINE_V1_REVIEW.md)
 
 ---
 

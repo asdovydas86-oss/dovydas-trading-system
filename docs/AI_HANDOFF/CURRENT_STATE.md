@@ -7,22 +7,104 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AP — Trading Domain Architecture v1 (2026-08-06), an
-**architecture-only** milestone that changed three Markdown files and no code. The preceding product
-milestone was AO — Memory & Decision Archive v1 (2026-08-05), plus a same-day pre-push correctness
-correction strengthening record-ID collision resistance and a same-day documentation-only follow-up
-reconciling stale AO/D-01 references.
-**Latest commit at time of writing:** `0ea0414` — `docs(architecture): add Trading Domain Architecture v1`.
-**Milestones AF through AO are pushed. `AP` (`0ea0414`) is committed locally and has NOT been pushed** —
-pushing requires the owner's separate, explicit authorization.
+**Last updated for:** Milestone AR — Swing Setup Engine v1 (2026-08-07), the seventh user-visible
+product capability and the first milestone permitted to make a directional (`LONG`/`SHORT`) claim,
+confined to one new package by ADR-0028. The preceding milestone was AP — Trading Domain Architecture
+v1 (2026-08-06), architecture-only. AR required none of AP's AP-D1…AP-D6 decisions — see
+`docs/design/ADR_IMPLEMENTATION_GATE.md`'s assessment, which named AR's slice as the owner's
+unblocked, unscheduled first priority.
+**Latest commit at time of writing:** `1480766` — `feat(setup): Swing Setup Engine v1 — deterministic swing-trade setup assessment`.
+**Milestones AF through AO are pushed. `AP` (`0ea0414`) and `AR` (`1480766`) are committed locally and
+have NOT been pushed** — pushing requires the owner's separate, explicit authorization.
 
 ---
 
 ## Current milestone
 
-- **AP — Trading Domain Architecture v1** (commit `0ea0414`) — **complete, and architecture only.** It
-  designs everything FMITS must know about the owner's own decisions and trading, as distinct from what
-  it already knows about the market: the five-object decision chain (Opportunity Proposal → Trade Plan →
+- **AR — Swing Setup Engine v1** (commit `1480766`) — the owner's stated first priority: a deterministic
+  swing-trade setup assessment. Design in [the design document](../design/SWING_SETUP_ENGINE_V1.md);
+  contracts in [ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md); independent review in
+  [the review record](../reviews/SWING_SETUP_ENGINE_V1_REVIEW.md).
+
+  **The problem it solved.** Every deterministic engine in this repository is contractually
+  non-directional — market structure, structural trend, market regime, evidence grouping, decision
+  context all refuse to represent `LONG`/`SHORT` by design and by test. Nothing had ever said where
+  direction is *allowed* to exist, and the owner's own working protocol names a swing-idea generator
+  with R/R, stop, target and arguments as *"the first practical stage."* The
+  `ADR_IMPLEMENTATION_GATE` assessment (2026-08-07) found this slice required **none** of AP's six
+  named decisions — it stores no money, writes no record, creates no identity — and named the one real
+  gap: a narrow ADR for where directional vocabulary may live.
+
+  **What shipped:** `fmis.swing_setup` — a new top-level application/domain package at the same tier as
+  `fmis.workspace` — with a frozen, schema-versioned `SetupAssessment`, a three-independent-family
+  directional policy, a plain-text renderer, and `fmits setup SYMBOL [SYMBOL...]`.
+
+  **Never from one indicator, and it is unrepresentable, not merely discouraged.** A directional
+  candidate needs at least two of three independent evidence families — CONTEXT-role structural trend,
+  SETUP-role structural trend, SETUP-role evidence dominant alignment — to agree, with **zero**
+  opposing. `fmis.market_regime`'s CONTEXT-role structure dimension gates whether a candidate may exist
+  at all (must be `TRENDING`) without ever voting a direction itself, staying inside ADR-0025's own
+  refusal. `fmis.decision_context.ContextState.INSUFFICIENT` forecloses a candidate unconditionally,
+  checked before the family tally is even reached.
+
+  **`WAIT`, `CANDIDATE`, `CONFIRMED` — direction and readiness are two different dimensions.** No
+  `BUY`/`SELL` state exists. `EXECUTION` never votes on direction; `CANDIDATE → CONFIRMED` requires a
+  **recent** (within `CONFIRMATION_LOOKBACK_BARS`, 10 bars — a stated policy), side-matching
+  `StructureBreak` on the execution timeframe and a non-opposing execution trend. Either failing leaves
+  the result at `CANDIDATE` — context and setup supportive, execution unconfirmed, never silently
+  promoted, exactly the disagreement case the task brief named.
+
+  **No fabricated price, ever.** Stop and target are real, already-detected `PriceLevel` objects reused
+  **by reference**, or explicitly absent; `_nearest`'s strict inequality against the reference close
+  makes a zero-risk selection structurally unrepresentable. Risk/reward is computed in code, never asked
+  of AI. Probability is always `NOT_CALIBRATED` — no backtester exists yet, and a fake number was named
+  in the brief as a specific product-integrity failure to avoid. No position sizing anywhere; the
+  existing 2% portfolio-risk maximum is untouched.
+
+  **The directional-vocabulary boundary is enforced, not merely documented.** ADR-0028 names
+  `fmis.swing_setup` (plus `pipeline/cli.py`, the outermost edge) as the only permitted location for
+  `LONG`/`SHORT`/`BUY`/`SELL`/`BULLISH`/`BEARISH`. A new repository-wide AST-based guard test
+  (`tests/test_directional_vocabulary_boundary.py`) scans every other package's real identifiers and
+  string-literal values — not its prose, which already discusses the ban — and seven existing
+  "nothing below imports this package" tests were individually widened to name `fmis.swing_setup`, each
+  with its own justification recorded in the test's own docstring, following this repository's
+  unbroken precedent for every prior widening.
+
+  **The independent review found three real P1s before release, all fixed and regression-tested.**
+  (1) `fmis.structure_break` can emit an upper and a lower break on one bar, and the level-crossing
+  engine's own positional order always resolves such a tie toward the **lower** side — so a same-bar
+  `LONG` confirmation silently failed while the mirrored `SHORT` case succeeded, a genuine directional
+  asymmetry. Fixed by carrying the full ordered break history (`SetupInputs.execution_breaks`) and
+  searching it by side rather than trusting a single precomputed "latest". (2) Nothing bounded how old a
+  confirming break could be — a break from months earlier could confirm a candidate that had only just
+  formed. Fixed by `CONFIRMATION_LOOKBACK_BARS`. (3) Nothing validated that the CONTEXT and SETUP roles
+  were fetched at distinct intervals — `fmits setup BTCUSDT --context 1d --setup 1d` silently doubled
+  one fact into two "independent" votes, defeating the whole guarantee with one CLI flag. Fixed by
+  rejecting the collision in `build_setup_inputs`. A cosmetic P3 — the risk/reward block's reference
+  price was labelled `entry`, reading as more actionable than the design's own "no exact entry is
+  fabricated" claim — was also fixed (relabelled `reference ... (not an order price)`).
+
+  **Quality.** 4,194 → **4,319 tests** (+125), identically under `-W error`. Coverage **100 %** line and
+  branch on every new `fmis.swing_setup` module and on `pipeline/cli.py`. **27 mutation probes across
+  two passes plus an independent reviewer's own 3-mutation spot-check, 27 detected, 0 survivors**,
+  byte-identical source restoration verified by SHA-256 before and after every probe. Exports 293 / 0
+  collisions (255 before AR), import cycles 0, runtime dependencies 0.
+
+  **Live-verified against real Binance data.** BTCUSDT/ETHUSDT/SOLUSDT (the required demonstration) all
+  returned `WAIT` — a true, honest result, not manufactured or loosened to force a trade. A further,
+  unscoped sample of eight liquid symbols produced a naturally-occurring `CANDIDATE`/`SHORT` result on
+  DOTUSDT with valid stop/target geometry (risk 0.007, reward 0.003, R:R 0.43), and surfaced a
+  **pre-existing, unrelated defect** in `fmis.pipeline.regime` (`RegimeInputError` on ADAUSDT,
+  independently reproduced against the clean pre-AR tree) — named here rather than silently absorbed
+  into this milestone's scope, since it predates AR and belongs to a different package's own backlog.
+  Pure `fmis.swing_setup` compute measured at **0.4 ms per symbol, 0.03 % of wall time** — entirely
+  network-bound, consistent with every other composition root in this repository.
+
+**The most recent milestone before this that changed what the owner can do was AO, described next.**
+
+- **AP — Trading Domain Architecture v1** (commit `0ea0414`) — **architecture only.** Designs
+  everything FMITS must know about the owner's own decisions and trading, as distinct from what it
+  already knows about the market: the five-object decision chain (Opportunity Proposal → Trade Plan →
   Order → Trade → Position) with the proposal's lifecycle as an append-only event stream, an append-only
   ledger whose balance effects are *derived* rather than stored, Decision Episode as the unit of
   learning, one AI retrieval contract, a three-kind journal, the Portfolio Intelligence boundary,
@@ -30,12 +112,10 @@ pushing requires the owner's separate, explicit authorization.
   thresholds for anything more. Design in
   [the design document](../design/TRADING_DOMAIN_ARCHITECTURE_V1.md).
 
-  **No code, no tests, no ADRs, no product-surface change.** Every measured figure below is unchanged.
-  `AP` *names* six decisions (AP-D1…AP-D6) and **binds none of them** — AP-D2, the capture contract and
-  migration guarantee, must be accepted before the first irreplaceable trading record is written. A
-  design document is not an accepted decision.
-
-**The most recent milestone that changed what the owner can do is AO, described next.**
+  **No code, no tests, no ADRs, no product-surface change.** `AP` *names* six decisions (AP-D1…AP-D6)
+  and **binds none of them** — AP-D2, the capture contract and migration guarantee, must be accepted
+  before the first irreplaceable trading record is written. A design document is not an accepted
+  decision. **AR required none of them**, per the `ADR_IMPLEMENTATION_GATE` assessment above.
 
 - **AO — Memory & Decision Archive v1**: closes the loop. Before this milestone, every analysis FMITS
   produced was discarded the moment the terminal closed. Design in

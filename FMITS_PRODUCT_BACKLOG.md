@@ -70,15 +70,15 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AU status** | **Implemented and tested, not yet committed** — production code + tests + design + review (§8); see [report 0010](reports/0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md) |
+| **Milestone AU status** | **Committed locally, not pushed** — `fd8a781` (production code + tests + design + review, §8); see [report 0010](reports/0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md). The report itself was written and frozen pre-commit, per this repository's own point-in-time report convention (see report 0009/`AT`, which is never revised after its own later commit either) |
 | **Milestone AT commits** | code `a271f33` (production code + tests) · docs `81a6202` (backlog/changelog/current-state reconciliation) — **committed and pushed** |
 | **Milestone AS commit** | `aca2628` (production fix + tests + RCA + independent review — defect fix, not a new capability) |
 | **Milestone AR commit** | `1480766e57526d48266a4aa5ff48b3a945614656` (production code + tests + ADR-0028 + design + review) |
 | **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) |
 | **Milestone AP commit** | `0ea041477dbe9584618495dc334e9685e3e6eb0e` (architecture only — no code, no tests, no product-surface change) |
-| **HEAD** | `81a6202` (AT code + docs) — **Milestone AU's code and tests sit uncommitted on top of it** |
-| **`origin/main`** | `81a6202` — **identical to `HEAD`; AT is fully pushed. AU is uncommitted; committing and pushing both require separate, explicit authorization** |
-| **Working tree** | not clean — Milestone AU's implementation is present, tested and reviewed but uncommitted (§8, report 0010) |
+| **HEAD** | `fd8a781` (AU code + tests + docs, committed locally on top of `81a6202`) |
+| **`origin/main`** | `81a6202` — **one commit behind local `HEAD`; `fd8a781` (AU) is committed locally, not pushed, per this milestone's own explicit instruction. Pushing requires separate, explicit authorization** |
+| **Working tree** | clean relative to `HEAD` (`fd8a781`) — the five untracked docs unrelated to this milestone (`ADR_IMPLEMENTATION_GATE.md` and siblings) predate it and are unchanged |
 | **Test count** | **4,426 passing**, identically under the full suite (4,423 before AU; +3 net — 45 new tests in `test_swing_setup_scan_report.py`, 4 CLI tests renamed/added, no regressions) |
 | **Public exports / collisions** | +2 new names on `fmis.swing_setup` (`render_scan_report`, `result_status`; the latter promoted from a private `scan._status` of the same name/body), 0 collisions |
 | **Import cycles** | 0 |
@@ -209,23 +209,21 @@ designed. It requires its own vision decision (**D-14**, **D-15**) before it can
 
 ## 8. DONE
 
-Repository-verified only. Every SHA below was confirmed to exist with `git cat-file -e`, **except
-`AU`, which is implemented, tested and reviewed but not yet committed** — recorded here on the
-evidence of the working tree and the full test run (report 0010), not on a SHA, per §11 rule 3's
-requirement that a status change be traceable; the traceable evidence for `AU` is the report and the
-reproducible test/mutation numbers it cites, and the row will gain a commit SHA once the owner
-authorizes committing. `AT`, previously recorded here uncommitted, is now confirmed committed and
-pushed (`a271f33` code, `81a6202` docs — both verified present on `origin/main`).
+Repository-verified only. Every SHA below was confirmed to exist with `git cat-file -e`. `AU` is
+committed locally at `fd8a781`, not yet pushed — per `CLAUDE.md`'s git safety rule, pushing requires
+separate, explicit authorization, and this milestone's own instruction was "commit locally only, do
+not push". `AT`, previously recorded here uncommitted, is now confirmed committed and pushed
+(`a271f33` code, `81a6202` docs — both verified present on `origin/main`).
 
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the five most recent milestones.
 
-### `AU` — Market Scanner Intelligence Report v1 · **DONE** *(implemented, uncommitted)*
+### `AU` — Market Scanner Intelligence Report v1 · **DONE** *(committed locally, not pushed)*
 
 | Field | Value |
 |---|---|
-| **Commit** | **none yet** — implemented and tested on top of `81a6202`; commit requires the owner's explicit authorization (`CLAUDE.md`) |
+| **Commit** | `fd8a781` — committed locally on top of `81a6202`; push requires separate, explicit authorization (`CLAUDE.md`) |
 | **ADR** | **none** — reuses ADR-0028 exactly as written; the report renderer lives inside `fmis.swing_setup`, the location that ADR already permits directional vocabulary |
 | **Design** | [MARKET_SCANNER_INTELLIGENCE_REPORT_V1.md](docs/design/MARKET_SCANNER_INTELLIGENCE_REPORT_V1.md) |
 | **Review** | [MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md](docs/reviews/MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md) — one P0 and two P1s found live and fixed (a market-overview label that could contradict a WAIT reason for the same symbol; CANDIDATE rows silently dropping an already-computed RR/target), confirmed against a second live scan; one P2 disclosed, not fixed, for a stated reason |

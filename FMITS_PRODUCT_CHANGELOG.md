@@ -7,7 +7,7 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `81a6202` (Milestone AT — Market Scanner v1, code + docs, **released**), plus Milestone AU — Market Scanner Intelligence Report v1, implemented and tested, **pending commit** (rule 4) |
+| **Last verified against** | `fd8a781` (Milestone AU — Market Scanner Intelligence Report v1, code + tests + docs, **committed locally, not pushed**), on top of `81a6202` (Milestone AT, released) |
 | **Verified on** | 2026-08-07 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -67,8 +67,8 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `81a6202` (`AT`, released), plus `AU` — Market Scanner Intelligence Report v1 (implemented,
-pending commit) — what the owner can do today.**
+**As of `fd8a781` (`AU` — Market Scanner Intelligence Report v1, committed locally, not pushed), on top
+of `81a6202` (`AT`, released) — what the owner can do today.**
 
 ```
 fmits setup  BTCUSDT                            # a deterministic swing-trade setup assessment
@@ -170,9 +170,10 @@ An entry whose milestone is implemented and validated but not yet versioned is m
 
 ### 2026-08-07 · `AU` — Market Scanner Intelligence Report v1
 
-**Status:** **Implemented — pending commit**, per rule 4 — carries no SHA. A material reliability/
-usability improvement to the eighth capability (`AT`'s scanner) — the same command, a report the owner
-can act on instead of a table they had to scan by eye.
+**Status:** Released · **committed locally, not pushed**. A material reliability/usability improvement
+to the eighth capability (`AT`'s scanner) — the same command, a report the owner can act on instead of
+a table they had to scan by eye.
+**Commit:** `fd8a781`
 
 **What shipped.** `fmits scan` now prints a readable market intelligence report by default: a scan
 summary (counts), a market overview (which symbols are showing directional character, from data the
@@ -205,8 +206,9 @@ byte-identical source restoration verified. Full record:
 [review](docs/reviews/MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md) ·
 [report 0010](reports/0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md).
 
-**Not committed.** Per `CLAUDE.md`'s git safety rule, nothing is committed without the owner's explicit
-authorization; none was requested or given for this task.
+**Committed locally, not pushed.** Per `CLAUDE.md`'s git safety rule and this milestone's own explicit
+instruction ("commit locally only, do not push"), `fd8a781` exists on local `main` only; `origin/main`
+remains at `81a6202` until the owner authorizes a push.
 
 ---
 

@@ -22,6 +22,7 @@ from fmis.swing_setup.compose import (
     run_setup_for_symbols,
     setup_assessment_for_sheet,
     setup_for_symbol,
+    setup_inputs_and_assessment_for_sheet,
 )
 from fmis.swing_setup.models import (
     CONFIRMATION_SIDE,
@@ -50,11 +51,31 @@ from fmis.swing_setup.policy import (
 from fmis.swing_setup.render import render_setup
 from fmis.swing_setup.scan import SCAN_UNIVERSE, render_scan, result_status, run_market_scan
 from fmis.swing_setup.scan_report import render_scan_report
+from fmis.swing_setup.backtest_harness import (
+    BACKTEST_LIMITATIONS,
+    DEFAULT_BACKTEST_DAYS,
+    DEFAULT_BACKTEST_LIMIT,
+    DEFAULT_BACKTEST_SYMBOLS,
+    DEFAULT_EVALUATION_WINDOW_BARS,
+    run_backtest,
+)
+from fmis.swing_setup.backtest_metrics import BacktestMetrics, compute_metrics
+from fmis.swing_setup.backtest_models import (
+    BACKTEST_SCHEMA_VERSION,
+    BacktestError,
+    BacktestRun,
+    DataBoundary,
+    HistoricalObservation,
+    OutcomeStatus,
+    SetupOutcome,
+)
+from fmis.swing_setup.backtest_render import render_backtest_report
 
 __all__ = [
     # entry points
     "setup_for_symbol",
     "setup_assessment_for_sheet",
+    "setup_inputs_and_assessment_for_sheet",
     "run_setup_for_symbols",
     "SetupRunResult",
     "evaluate_setup",
@@ -65,6 +86,23 @@ __all__ = [
     "render_scan",
     "render_scan_report",
     "result_status",
+    # historical backtest harness
+    "run_backtest",
+    "compute_metrics",
+    "render_backtest_report",
+    "BacktestRun",
+    "BacktestMetrics",
+    "HistoricalObservation",
+    "SetupOutcome",
+    "OutcomeStatus",
+    "DataBoundary",
+    "BacktestError",
+    "BACKTEST_SCHEMA_VERSION",
+    "BACKTEST_LIMITATIONS",
+    "DEFAULT_BACKTEST_SYMBOLS",
+    "DEFAULT_BACKTEST_DAYS",
+    "DEFAULT_BACKTEST_LIMIT",
+    "DEFAULT_EVALUATION_WINDOW_BARS",
     # the artifact
     "SetupAssessment",
     "SetupState",

@@ -234,8 +234,12 @@ def test_verify_detects_corruption(
 
 
 def test_the_registry_still_has_every_original_command() -> None:
+    # Widened for Milestone AV to admit "backtest": a ninth command, additive
+    # to the registry rather than a replacement for any existing one.
     names = {command.name for command in cli_module.COMMANDS}
-    assert {"facts", "mtf", "regime", "swing", "setup", "scan", "daily", "archive"} == names
+    assert {
+        "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily", "archive",
+    } == names
 
 
 def test_swing_still_works_exactly_as_before_when_archive_is_omitted(

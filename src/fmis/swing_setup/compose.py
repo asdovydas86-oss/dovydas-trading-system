@@ -73,6 +73,7 @@ __all__ = [
     "context_input_from_sheet",
     "build_setup_inputs",
     "setup_assessment_for_sheet",
+    "setup_inputs_and_assessment_for_sheet",
     "setup_for_symbol",
     "SetupRunResult",
     "run_setup_for_symbols",
@@ -291,15 +292,21 @@ def build_setup_inputs(
     )
 
 
-def setup_assessment_for_sheet(
+def setup_inputs_and_assessment_for_sheet(
     sheet: MultiTimeframeFactSheet,
     *,
     policy: RegimePolicy | None = None,
     context_policy: ContextPolicy | None = None,
-) -> SetupAssessment:
-    """Compose one setup assessment from an already-built multi-timeframe sheet.
+) -> tuple[SetupInputs, SetupAssessment]:
+    """Compose the policy's own input alongside its assessment. Pure.
 
-    Pure — no network and no clock. Every input was fetched by the caller.
+    Identical composition to `setup_assessment_for_sheet`, which is now a thin
+    wrapper over this function — no behaviour changes for any existing caller.
+    Exists for a reader (or a future measurement layer, e.g. a historical
+    backtest) that needs the structured facts an assessment was reasoned from
+    — regime state, evidence leans, decision-context state — without either
+    recomputing them or parsing them back out of `SetupAssessment`'s rendered
+    text fields.
     """
     if not isinstance(sheet, MultiTimeframeFactSheet):
         raise TypeError(
@@ -314,7 +321,23 @@ def setup_assessment_for_sheet(
         context_policy,
     )
     inputs = build_setup_inputs(sheet, regimes, evidence, context)
-    return evaluate_setup(inputs)
+    return inputs, evaluate_setup(inputs)
+
+
+def setup_assessment_for_sheet(
+    sheet: MultiTimeframeFactSheet,
+    *,
+    policy: RegimePolicy | None = None,
+    context_policy: ContextPolicy | None = None,
+) -> SetupAssessment:
+    """Compose one setup assessment from an already-built multi-timeframe sheet.
+
+    Pure — no network and no clock. Every input was fetched by the caller.
+    """
+    _, assessment = setup_inputs_and_assessment_for_sheet(
+        sheet, policy=policy, context_policy=context_policy
+    )
+    return assessment
 
 
 def setup_for_symbol(

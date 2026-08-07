@@ -37,7 +37,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -55,10 +55,17 @@ from fmis.pipeline.market_analysis import PipelineError
 from fmis.daily import DailyRun, DailyRunError, render_daily_run, run_daily
 from fmis.market_regime import RegimePolicy
 from fmis.swing_setup import (
+    BacktestError,
+    DEFAULT_BACKTEST_DAYS,
+    DEFAULT_BACKTEST_SYMBOLS,
+    DEFAULT_EVALUATION_WINDOW_BARS,
     SetupRunResult,
+    compute_metrics,
+    render_backtest_report,
     render_scan,
     render_scan_report,
     render_setup,
+    run_backtest,
     run_market_scan,
     run_setup_for_symbols,
 )
@@ -584,6 +591,102 @@ SCAN_COMMAND = Command(
 )
 
 
+def _configure_backtest(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "symbols",
+        nargs="*",
+        default=list(DEFAULT_BACKTEST_SYMBOLS),
+        metavar="SYMBOL",
+        help=(
+            f"symbols to backtest (default: the {len(DEFAULT_BACKTEST_SYMBOLS)}-symbol "
+            "v1 set)"
+        ),
+    )
+    parser.add_argument(
+        "--start", default=None, metavar="ISO8601",
+        help=(
+            "start of the historical window (default: --end minus "
+            f"{DEFAULT_BACKTEST_DAYS} days)"
+        ),
+    )
+    parser.add_argument(
+        "--end", default=None, metavar="ISO8601",
+        help="end of the historical window (default: now)",
+    )
+    parser.add_argument(
+        "--window", type=int, default=DEFAULT_EVALUATION_WINDOW_BARS, metavar="BARS",
+        help=(
+            "execution-role bars to evaluate a confirmed setup's outcome over "
+            f"(default: {DEFAULT_EVALUATION_WINDOW_BARS}); a measurement policy, "
+            "not a tuned value"
+        ),
+    )
+    _add_setup_style_arguments(parser)
+
+
+def _backtest_window(args: argparse.Namespace) -> tuple[datetime, datetime]:
+    end = _reference_time(args.end, omit=False)
+    start = (
+        datetime.fromisoformat(args.start)
+        if args.start is not None
+        else end - timedelta(days=DEFAULT_BACKTEST_DAYS)
+    )
+    if start.tzinfo is None:
+        raise ValueError("--start must be timezone-aware, e.g. 2026-01-01T00:00:00+00:00")
+    return start, end
+
+
+def _run_backtest(args: argparse.Namespace) -> int:
+    """Run the historical Swing Setup backtest and print its report.
+
+    Reuses the unmodified production composition path over a replay
+    transport — see `fmis.swing_setup.backtest_harness` for the no-lookahead
+    argument in full. Not a portfolio backtest and not a claim of
+    profitability; every limitation prints on the report itself.
+    """
+    start, end = _backtest_window(args)
+    try:
+        run = run_backtest(
+            args.symbols,
+            start_time=start,
+            end_time=end,
+            run_at=datetime.now(timezone.utc),
+            timeframes={
+                TimeframeRole.CONTEXT: args.context,
+                TimeframeRole.SETUP: args.setup,
+                TimeframeRole.EXECUTION: args.execution,
+            },
+            limit=args.limit,
+            policy=_policy_from(args),
+            detection=_detection_from(args),
+            evaluation_window_bars=args.window,
+        )
+    except BacktestError as error:
+        print(f"fmits backtest: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    metrics = compute_metrics(run)
+    print(render_backtest_report(run, metrics))
+    return EXIT_OK
+
+
+BACKTEST_COMMAND = Command(
+    name="backtest",
+    help="replay the Swing Setup v1 policy over real historical candles",
+    description=(
+        "Replay the exact, unmodified Swing Setup v1 policy across a "
+        "historical window of real closed candles, one simulated instant at "
+        "a time, using only candles already closed at that instant. Records "
+        "every WAIT/CANDIDATE/CONFIRMED observation, classifies what "
+        "happened after each confirmed setup (TARGET_FIRST / STOP_FIRST / "
+        "AMBIGUOUS_SAME_BAR / NEITHER_WITHIN_WINDOW), and prints deterministic "
+        "aggregate measurements. This measures the current policy; it does "
+        "not change it, rank it, or claim realized profitability."
+    ),
+    configure=_configure_backtest,
+    run=_run_backtest,
+)
+
+
 def _configure_daily(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "symbols",
@@ -774,6 +877,7 @@ COMMANDS: tuple[Command, ...] = (
     SWING_COMMAND,
     SETUP_COMMAND,
     SCAN_COMMAND,
+    BACKTEST_COMMAND,
     DAILY_COMMAND,
     ARCHIVE_COMMAND,
 )

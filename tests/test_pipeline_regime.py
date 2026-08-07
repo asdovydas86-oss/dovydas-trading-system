@@ -317,9 +317,13 @@ def test_rendering_is_deterministic() -> None:
 # ============ 5. the command ================================================
 
 
-def test_the_registry_carries_eight_commands() -> None:
+def test_the_registry_carries_nine_commands() -> None:
+    # Widened for Milestone AV to admit "backtest", registered right after
+    # "scan" — additive, not a replacement for any existing command.
     names = [command.name for command in cli_module.COMMANDS]
-    assert names == ["facts", "mtf", "regime", "swing", "setup", "scan", "daily", "archive"]
+    assert names == [
+        "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily", "archive",
+    ]
     assert len(set(names)) == len(names)
 
 

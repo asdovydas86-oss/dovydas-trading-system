@@ -47,7 +47,7 @@ Examples:
 - Reports are **never deleted** unless the user explicitly authorizes deletion.
 - Do **not** create generic `REPORT.md` files in the repository root.
 
-**Next available report number: `0011`**
+**Next available report number: `0012`**
 
 ## Metadata header
 
@@ -70,6 +70,7 @@ Each report should open with a short metadata table:
 
 | # | Date | Type | Title | Status | Branch / Commit | File |
 |---|---|---|---|---|---|---|
+| 0011 | 2026-08-08 | Implementation | Swing Setup Historical Backtest Harness V1 — Implementation Record | Final | `main` / uncommitted (base `35bce7a`) | [0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md](0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md) |
 | 0010 | 2026-08-07 | Implementation | Market Scanner Intelligence Report V1 — Implementation Record | Final | `main` / uncommitted (base `81a6202`) | [0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md](0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md) |
 | 0009 | 2026-08-07 | Implementation | Market Scanner V1 — Implementation Record | Final | `main` / uncommitted (base `9977274`) | [0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md](0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md) |
 | 0008 | 2026-08-04 | Audit | Documentation Consistency Audit | Final | `main` / `36f5a30` | [0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md](0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md) |

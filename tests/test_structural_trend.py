@@ -1267,6 +1267,11 @@ def test_nothing_below_imports_this_package() -> None:
     direction rule is unchanged — the workspace consumes this package and this
     package cannot see the workspace — and the exemption is named rather than
     pattern-matched, so a further consumer still fails this test.
+
+    Widened for Milestone AR to admit `fmis.swing_setup`, at the same tier as
+    `fmis.workspace` (ADR-0028): it reads `StructuralTrendType` per role,
+    directly, as one of its independent directional evidence families. The
+    direction rule is unchanged.
     """
     root = Path(st.__file__).parent.parent
     permitted = {
@@ -1274,6 +1279,7 @@ def test_nothing_below_imports_this_package() -> None:
         root / "pipeline",
         root / "market_regime",
         root / "workspace",
+        root / "swing_setup",
     }
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:

@@ -472,9 +472,14 @@ def test_no_engine_below_imports_this_package() -> None:
     `fmis.daily` (Milestone AN) joins `fmis.workspace` as a permitted importer:
     both are composition roots above this package, which is the direction
     ADR-0007 allows. No engine has been permitted anything.
+
+    Widened for Milestone AR to admit `fmis.swing_setup`: a third top-level
+    composition root, at the same tier as `fmis.workspace`, that reads decision
+    context sufficiency to gate a directional candidate (ADR-0028). The
+    direction rule is unchanged.
     """
     root = PACKAGE_DIR.parent
-    permitted = {root / "workspace", root / "daily", PACKAGE_DIR}
+    permitted = {root / "workspace", root / "daily", root / "swing_setup", PACKAGE_DIR}
     for py in root.rglob("*.py"):
         if py.parent in permitted:
             continue

@@ -620,12 +620,18 @@ def test_the_engine_reads_no_clock_and_no_network() -> None:
 
 
 def test_no_engine_below_imports_this_package() -> None:
+    """Widened for Milestone AR to admit `fmis.swing_setup` — a third top-level
+    composition root (ADR-0028) that classifies each role's regime through the
+    same `regime_for_sheet` adapter `fmis.workspace` already uses. The
+    direction rule is unchanged.
+    """
     root = PACKAGE_DIR.parent
     permitted = {
         root / "pipeline",
         root / "workspace",
         root / "decision_context",
         root / "daily",  # AN: a second application-layer root, above the workspace
+        root / "swing_setup",  # AR: a third, at the same tier as the workspace
         PACKAGE_DIR,
     }
     for py in root.rglob("*.py"):

@@ -54,6 +54,7 @@ from fmis.market_structure import DEFAULT_LEFT_BARS, DEFAULT_RIGHT_BARS
 from fmis.pipeline.market_analysis import PipelineError
 from fmis.daily import DailyRun, DailyRunError, render_daily_run, run_daily
 from fmis.market_regime import RegimePolicy
+from fmis.swing_setup import render_setup, run_setup_for_symbols
 from fmis.workspace import Workspace, render_workspace, workspace_for_symbol
 from fmis.pipeline.regime import (
     REGIME_LIMITATIONS,
@@ -421,6 +422,88 @@ SWING_COMMAND = Command(
 )
 
 
+def _configure_setup(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "symbols",
+        nargs="+",
+        metavar="SYMBOL",
+        help="one or more symbols, assessed in the order given",
+    )
+    parser.add_argument(
+        "-n", "--limit", type=int, default=None,
+        help="candles to request per timeframe, applied to every symbol",
+    )
+    parser.add_argument(
+        "--left-bars", type=int, default=DEFAULT_LEFT_BARS,
+        help=f"swing detection left neighbours (default: {DEFAULT_LEFT_BARS})",
+    )
+    parser.add_argument(
+        "--right-bars", type=int, default=DEFAULT_RIGHT_BARS,
+        help=f"swing detection right neighbours (default: {DEFAULT_RIGHT_BARS})",
+    )
+    for role in (TimeframeRole.CONTEXT, TimeframeRole.SETUP, TimeframeRole.EXECUTION):
+        default = DEFAULT_TIMEFRAMES[role]
+        parser.add_argument(
+            f"--{role.value}", default=default, metavar="INTERVAL",
+            help=f"interval playing the {role.value} role (default: {default})",
+        )
+    parser.add_argument(
+        "--band", type=float, default=None, metavar="FRACTION",
+        help="regime policy band, applied identically to every symbol",
+    )
+    parser.add_argument(
+        "--transition-lookback", type=int, default=None, metavar="BARS",
+        help="regime transition lookback, applied identically to every symbol",
+    )
+
+
+def _run_setup(args: argparse.Namespace) -> int:
+    """Print one full setup page per symbol, in requested order.
+
+    A symbol whose analysis failed prints a failure block and does not stop the
+    remaining symbols (design record §14) — the same isolation `fmits daily`
+    applies, without depending on it. The command exits non-zero only when
+    every requested symbol failed, matching `fmits daily`'s own "at least one
+    result is a true report" contract.
+    """
+    results = run_setup_for_symbols(
+        args.symbols,
+        timeframes={
+            TimeframeRole.CONTEXT: args.context,
+            TimeframeRole.SETUP: args.setup,
+            TimeframeRole.EXECUTION: args.execution,
+        },
+        limit=args.limit,
+        policy=_policy_from(args),
+        detection=_detection_from(args),
+    )
+    for position, result in enumerate(results):
+        if position:
+            print()
+        if result.assessment is not None:
+            print(render_setup(result.assessment))
+        else:
+            print(f"fmits setup: {result.requested_symbol}: {result.failure}", file=sys.stderr)
+    return EXIT_OK if any(r.assessment is not None for r in results) else EXIT_FAILURE
+
+
+SETUP_COMMAND = Command(
+    name="setup",
+    help="a deterministic swing-trade setup assessment for one or more symbols",
+    description=(
+        "Fetch every timeframe once per symbol and compose an explicit, "
+        "testable swing-trade setup assessment: state (WAIT/CANDIDATE/"
+        "CONFIRMED), direction when a candidate exists, the independent "
+        "evidence families behind it, confirmation, invalidation, stop, "
+        "target(s), risk/reward when computable, and every limitation that "
+        "applies. WAIT is a successful result, not a failure. No position "
+        "size and no calibrated probability are ever produced."
+    ),
+    configure=_configure_setup,
+    run=_run_setup,
+)
+
+
 def _configure_daily(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "symbols",
@@ -609,6 +692,7 @@ COMMANDS: tuple[Command, ...] = (
     MTF_COMMAND,
     REGIME_COMMAND,
     SWING_COMMAND,
+    SETUP_COMMAND,
     DAILY_COMMAND,
     ARCHIVE_COMMAND,
 )

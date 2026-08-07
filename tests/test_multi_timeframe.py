@@ -842,7 +842,7 @@ def test_new_limitation_texts_are_fact_only() -> None:
 def test_registry_names_are_unique() -> None:
     names = [c.name for c in cli_module.COMMANDS]
     assert len(names) == len(set(names))
-    assert set(names) == {"facts", "mtf", "regime", "swing", "daily", "archive"}
+    assert set(names) == {"facts", "mtf", "regime", "swing", "setup", "daily", "archive"}
 
 
 def test_every_registered_command_is_reachable_from_the_parser() -> None:
@@ -959,9 +959,14 @@ def test_no_engine_imports_the_multi_timeframe_root() -> None:
     root, above the workspace, and running the same analysis across a universe is
     what it exists to do. The guard's direction is unchanged — an engine still
     may not reach upward — and every engine remains covered.
+
+    Widened again for Milestone AR: `fmis.swing_setup` is a third
+    application-layer root, at the same tier as the workspace (ADR-0028),
+    fetching the same multi-timeframe sheet through the identical composition
+    root. The direction is still unchanged.
     """
     root = Path(mtf_module.__file__).parent.parent
-    above = {"pipeline", "workspace", "daily"}
+    above = {"pipeline", "workspace", "daily", "swing_setup"}
     for path in root.rglob("*.py"):
         if above & set(path.parts) or "__pycache__" in path.parts:
             continue

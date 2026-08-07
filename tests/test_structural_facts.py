@@ -719,9 +719,13 @@ def test_no_engine_imports_the_fact_sheet_root() -> None:
     root, above the workspace, and running the same analysis across a universe is
     what it exists to do. The guard's direction is unchanged — an engine still
     may not reach upward — and every engine remains covered.
+
+    Widened again for Milestone AR: `fmis.swing_setup` is a third
+    application-layer root, at the same tier as the workspace (ADR-0028). The
+    direction is still unchanged.
     """
     root = Path(sf_module.__file__).parent.parent
-    above = {"pipeline", "workspace", "daily"}
+    above = {"pipeline", "workspace", "daily", "swing_setup"}
     for path in root.rglob("*.py"):
         if above & set(path.parts) or "__pycache__" in path.parts:
             continue

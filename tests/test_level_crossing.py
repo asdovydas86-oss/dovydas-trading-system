@@ -1870,6 +1870,11 @@ def test_nothing_below_imports_level_crossing() -> None:
     imports **nothing** from `fmis` — it names this package only in the
     provenance string it renders beside each check, so a reader can see which
     layer owns the rule. The direction rule is untouched.
+
+    Widened for Milestone AR to admit `fmis.swing_setup`, at the same tier as
+    `fmis.workspace` (ADR-0028): it reuses `PriceLevel`/`LevelSide` **by
+    reference** as its own stop/target/trigger values, computing nothing new.
+    The direction rule is unchanged.
     """
     root = PACKAGE_DIR.parent
     permitted = {
@@ -1878,6 +1883,7 @@ def test_nothing_below_imports_level_crossing() -> None:
         root / "pipeline",
         root / "workspace",
         root / "decision_context",
+        root / "swing_setup",
     }
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:

@@ -235,7 +235,7 @@ def test_verify_detects_corruption(
 
 def test_the_registry_still_has_every_original_command() -> None:
     names = {command.name for command in cli_module.COMMANDS}
-    assert {"facts", "mtf", "regime", "swing", "setup", "daily", "archive"} == names
+    assert {"facts", "mtf", "regime", "swing", "setup", "scan", "daily", "archive"} == names
 
 
 def test_swing_still_works_exactly_as_before_when_archive_is_omitted(

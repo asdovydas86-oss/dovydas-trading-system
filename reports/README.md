@@ -47,7 +47,7 @@ Examples:
 - Reports are **never deleted** unless the user explicitly authorizes deletion.
 - Do **not** create generic `REPORT.md` files in the repository root.
 
-**Next available report number: `0009`**
+**Next available report number: `0010`**
 
 ## Metadata header
 
@@ -70,6 +70,7 @@ Each report should open with a short metadata table:
 
 | # | Date | Type | Title | Status | Branch / Commit | File |
 |---|---|---|---|---|---|---|
+| 0009 | 2026-08-07 | Implementation | Market Scanner V1 — Implementation Record | Final | `main` / uncommitted (base `9977274`) | [0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md](0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md) |
 | 0008 | 2026-08-04 | Audit | Documentation Consistency Audit | Final | `main` / `36f5a30` | [0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md](0008_2026-08-04_DOCUMENTATION_CONSISTENCY_AUDIT.md) |
 | 0007 | 2026-08-02 | Readiness Check | Implementation Readiness Check | Final | `main` / `d132cea` + uncommitted AF | [0007_2026-08-02_IMPLEMENTATION_READINESS_CHECK.md](0007_2026-08-02_IMPLEMENTATION_READINESS_CHECK.md) |
 | 0006 | 2026-08-02 | Architecture Gate | Milestone AF Architecture Gate | Final | `main` / `d132cea` + AF | [0006_2026-08-02_MILESTONE_AF_ARCHITECTURE_GATE.md](0006_2026-08-02_MILESTONE_AF_ARCHITECTURE_GATE.md) |
@@ -246,6 +247,7 @@ its technical records in `docs/`. The current implementation state always lives 
 | **AK — Swing Trading Workspace v1** | Made the third stranded dependency island reachable: `fmis.workspace`, eleven sections (unbuilt ones rendered rather than omitted), deterministic conflict detection that never resolves. `fmits swing SYMBOL`. No ADR — no new boundary | [design](../docs/design/SWING_WORKSPACE_V1.md) · [review](../docs/reviews/SWING_WORKSPACE_V1_REVIEW.md) |
 | **AL — Decision Context Engine v1** | `fmis.decision_context` answers one question — does this analysis contain enough trustworthy information to continue — and adds a twelfth workspace section; a policy object carrying no numbers | [ADR-0026](../docs/adr/ADR-0026-decision-context-boundary.md) · [design](../docs/design/DECISION_CONTEXT_V1.md) · [review](../docs/reviews/DECISION_CONTEXT_V1_REVIEW.md) |
 | **AN — Deterministic Daily Workflow v1** | The first capability answering about more than one symbol: `fmis.daily`, a per-symbol error-isolated sequential runner, a readiness index that is never a ranking. `fmits daily SYMBOL...`. No ADR — no new boundary | [design](../docs/design/DETERMINISTIC_DAILY_WORKFLOW_V1.md) · [review](../docs/reviews/DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md) |
+| **AT — Market Scanner v1** | The first market scanner: `fmis.swing_setup.scan`, a hardcoded twenty-symbol watchlist run through the existing Swing Setup Engine (AR) with per-symbol failure isolation, rendered as one compact table. No new engine, no ranking, no ADR | [design](../docs/design/MARKET_SCANNER_V1.md) · [review](../docs/reviews/MARKET_SCANNER_V1_REVIEW.md) · [report 0009](0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md) |
 
 ## Archive policy
 

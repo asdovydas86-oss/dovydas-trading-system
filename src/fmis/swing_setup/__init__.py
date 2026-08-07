@@ -48,6 +48,7 @@ from fmis.swing_setup.policy import (
     evaluate_setup,
 )
 from fmis.swing_setup.render import render_setup
+from fmis.swing_setup.scan import SCAN_UNIVERSE, render_scan, run_market_scan
 
 __all__ = [
     # entry points
@@ -57,6 +58,10 @@ __all__ = [
     "SetupRunResult",
     "evaluate_setup",
     "render_setup",
+    # market scanner
+    "SCAN_UNIVERSE",
+    "run_market_scan",
+    "render_scan",
     # the artifact
     "SetupAssessment",
     "SetupState",

@@ -54,7 +54,13 @@ from fmis.market_structure import DEFAULT_LEFT_BARS, DEFAULT_RIGHT_BARS
 from fmis.pipeline.market_analysis import PipelineError
 from fmis.daily import DailyRun, DailyRunError, render_daily_run, run_daily
 from fmis.market_regime import RegimePolicy
-from fmis.swing_setup import render_setup, run_setup_for_symbols
+from fmis.swing_setup import (
+    SetupRunResult,
+    render_scan,
+    render_setup,
+    run_market_scan,
+    run_setup_for_symbols,
+)
 from fmis.workspace import Workspace, render_workspace, workspace_for_symbol
 from fmis.pipeline.regime import (
     REGIME_LIMITATIONS,
@@ -422,13 +428,13 @@ SWING_COMMAND = Command(
 )
 
 
-def _configure_setup(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "symbols",
-        nargs="+",
-        metavar="SYMBOL",
-        help="one or more symbols, assessed in the order given",
-    )
+def _add_setup_style_arguments(parser: argparse.ArgumentParser) -> None:
+    """Arguments `setup` and `scan` share — everything but the symbol list.
+
+    `setup` takes its symbols from the command line; `scan` takes them from
+    `SCAN_UNIVERSE`. Every other option — candle limit, detection window,
+    timeframe roles, regime policy — applies identically to both.
+    """
     parser.add_argument(
         "-n", "--limit", type=int, default=None,
         help="candles to request per timeframe, applied to every symbol",
@@ -455,6 +461,21 @@ def _configure_setup(parser: argparse.ArgumentParser) -> None:
         "--transition-lookback", type=int, default=None, metavar="BARS",
         help="regime transition lookback, applied identically to every symbol",
     )
+
+
+def _configure_setup(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "symbols",
+        nargs="+",
+        metavar="SYMBOL",
+        help="one or more symbols, assessed in the order given",
+    )
+    _add_setup_style_arguments(parser)
+
+
+def _exit_code_for(results: Sequence[SetupRunResult]) -> int:
+    """`EXIT_OK` unless every result failed — "at least one true report"."""
+    return EXIT_OK if any(r.assessment is not None for r in results) else EXIT_FAILURE
 
 
 def _run_setup(args: argparse.Namespace) -> int:
@@ -484,7 +505,7 @@ def _run_setup(args: argparse.Namespace) -> int:
             print(render_setup(result.assessment))
         else:
             print(f"fmits setup: {result.requested_symbol}: {result.failure}", file=sys.stderr)
-    return EXIT_OK if any(r.assessment is not None for r in results) else EXIT_FAILURE
+    return _exit_code_for(results)
 
 
 SETUP_COMMAND = Command(
@@ -501,6 +522,51 @@ SETUP_COMMAND = Command(
     ),
     configure=_configure_setup,
     run=_run_setup,
+)
+
+
+def _configure_scan(parser: argparse.ArgumentParser) -> None:
+    _add_setup_style_arguments(parser)
+
+
+def _run_scan(args: argparse.Namespace) -> int:
+    """Scan the fixed watchlist and print one compact table.
+
+    Reuses `run_market_scan` — itself `run_setup_for_symbols` over
+    `SCAN_UNIVERSE` — so a scan row and a `fmits setup` page for the same
+    symbol are produced by identical code and cannot disagree. A symbol whose
+    analysis failed is isolated exactly as `setup` isolates it; the scan never
+    stops early.
+    """
+    results = run_market_scan(
+        timeframes={
+            TimeframeRole.CONTEXT: args.context,
+            TimeframeRole.SETUP: args.setup,
+            TimeframeRole.EXECUTION: args.execution,
+        },
+        limit=args.limit,
+        policy=_policy_from(args),
+        detection=_detection_from(args),
+    )
+    print(render_scan(results))
+    return _exit_code_for(results)
+
+
+SCAN_COMMAND = Command(
+    name="scan",
+    help="scan a fixed watchlist of major crypto pairs for a swing setup",
+    description=(
+        "Run the same deterministic swing-setup assessment `fmits setup` "
+        "produces across a fixed, hardcoded watchlist of major crypto pairs, "
+        "and print one compact table: state (WAIT/CANDIDATE/CONFIRMED/ERROR), "
+        "direction, risk/reward, stop and target. A symbol whose analysis "
+        "fails is reported as ERROR and does not stop the scan. Rows stay in "
+        "the fixed list order — this is not a ranking, and no score or "
+        "probability is computed. A CANDIDATE or CONFIRMED result also "
+        "appears in a TOP OPPORTUNITIES section."
+    ),
+    configure=_configure_scan,
+    run=_run_scan,
 )
 
 
@@ -693,6 +759,7 @@ COMMANDS: tuple[Command, ...] = (
     REGIME_COMMAND,
     SWING_COMMAND,
     SETUP_COMMAND,
+    SCAN_COMMAND,
     DAILY_COMMAND,
     ARCHIVE_COMMAND,
 )

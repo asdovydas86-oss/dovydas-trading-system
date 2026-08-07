@@ -7,7 +7,7 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `aca2628` (Milestone AS) |
+| **Last verified against** | `aca2628` (Milestone AS), plus Milestone AT — Market Scanner v1, implemented and tested, **pending commit** (rule 4) |
 | **Verified on** | 2026-08-07 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -67,11 +67,13 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `1480766` (`AR`) — what the owner can do today.**
+**As of `1480766` (`AR`), plus `AT` — Market Scanner v1 (implemented, pending commit) — what the owner
+can do today.**
 
 ```
 fmits setup  BTCUSDT                            # a deterministic swing-trade setup assessment
 fmits setup  BTCUSDT ETHUSDT SOLUSDT            # one per symbol, in the order requested
+fmits scan                                      # the fixed 20-symbol watchlist, one compact table
 fmits daily  BTCUSDT ETHUSDT SOLUSDT            # the morning routine, one row per symbol
 fmits swing  BTCUSDT                            # the whole page, end to end
 fmits regime BTCUSDT --multi                    # the environment, per role, with evidence
@@ -92,6 +94,11 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
   invalidation, stop, target(s) and risk/reward when computable, and every limitation that applies.
   Direction never comes from one indicator — at least two of three independent families must agree
   with zero opposing — and `WAIT` is a first-class, successful result, not a failure;
+- a **fixed-watchlist market scanner**: one command runs the swing-setup assessment across twenty
+  hardcoded major pairs and prints one compact table — state, direction, risk/reward, stop and target
+  — plus a `TOP OPPORTUNITIES` section for whatever cleared `CANDIDATE`/`CONFIRMED`. A symbol whose
+  analysis fails is reported as `ERROR` and does not stop the scan. **Not a ranking**: rows stay in the
+  fixed list order, and the opportunities section is a filter over that order, never a sort;
 - a **repeatable multi-symbol routine**: one command runs the same analysis over a requested universe
   under one set of settings, and prints one row per symbol in the order requested — with the symbols
   that **failed, and why**, kept on the page. **Not a ranking**: no score, no order by any property of
@@ -128,7 +135,7 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 |---|---|
 | AI interpretation of any kind — the numbers are computed, not read | EP — after regime |
 | ~~Trade signal, direction~~ | **Direction delivered by `AR`, scoped narrowly** — `fmits setup` states a `WAIT`/`CANDIDATE`/`CONFIRMED` direction under an explicit, testable policy; still no ranking, score, or recommendation |
-| Opportunity ranking or score across symbols | `EP-02`/`EP-03` — deliberately absent from `fmits setup`'s multi-symbol mode: sequential, input order preserved, no sort |
+| Opportunity ranking or score across symbols | `EP-02`/`EP-03` — deliberately absent from `fmits setup`'s and `fmits scan`'s multi-symbol modes: sequential, input order preserved, no sort |
 | Cross-timeframe **synthesis** — the views are reported, never reconciled | `AI` Market Regime Engine |
 | ~~Market regime classification~~ | **Delivered by `AI`** — see below |
 | Support/resistance naming — levels are reported as *nearest above / below* | `EP-01` |
@@ -136,7 +143,7 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 | ~~Persistence — a run is printed, never stored~~ | **Delivered by `AO`** — see above |
 | Historical replay — recomputing a past analysis from its original raw inputs | not archived yet; snapshot reproduction only |
 | A journal, discretionary notes, trade outcomes | `EP-18`, blocked on **D-04** |
-| Opportunity scanning and candidate ranking | `EP-02`, `EP-03` — a **named future capability** (SPEC §10 and the Opportunity Scanner; vision addendum; `reports/0005` C-164). Deferred, not withdrawn, and it must arrive as an explicit, deterministic, testable, backtested policy |
+| ~~Opportunity scanning~~ over a fixed watchlist, ranked | **Scanning over a fixed watchlist delivered by `AT`**, unranked, exactly as designed — `fmits scan` returns every symbol's existing setup, never a score or order. **Ranking** remains `EP-02`/`EP-03` — a **named future capability** (SPEC §10 and the Opportunity Scanner; vision addendum; `reports/0005` C-164) that must arrive as its own explicit, deterministic, testable, backtested policy, per `AN`'s own warning against ranking as a side effect of a workflow |
 | Ranking *by readiness* — sorting the daily index by its own states | **never**, in any version. Readiness describes the analysis, not the instrument; see AN's design §3.4 |
 | Alerts, scheduling, unattended runs, notification delivery | `EP-03` — scheduling still owns no architecture layer |
 | Watchlist persistence as its own model — a universe is typed, or supplied by the shell | `EP-03`, **D-06** — unrelated to D-01; `AO` archives whatever universe it is given |
@@ -155,6 +162,47 @@ the automation ladder remains unstarted.
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-07 · `AT` — Market Scanner v1
+
+**Status:** **Implemented — pending commit**, per rule 4 — carries no SHA. The eighth user-visible
+product capability.
+
+**What shipped.** `fmits scan`: one command runs the existing Swing Setup Engine (`AR`) across a
+fixed, hardcoded twenty-symbol watchlist of major crypto pairs, isolating one symbol's failure from
+the rest exactly as `fmits setup`'s own multi-symbol mode already does, and prints one compact table —
+`SYMBOL`/`STATUS`/`SIDE`/`RR`/`STOP`/`TARGET` — plus a summary line and a `TOP OPPORTUNITIES` section
+for whatever cleared `CANDIDATE`/`CONFIRMED`.
+
+**What changed for the owner.** Before `AT`, seeing every symbol's setup meant one `fmits setup` call
+per symbol, with no compact overview of which ones were worth a second look. `fmits scan` answers that
+in one command, over the same deterministic engine, with nothing recomputed.
+
+**No new engine, no new ADR.** `run_market_scan` is `run_setup_for_symbols` (`AR`) called with a
+default watchlist; the table renderer formats fields `SetupAssessment` already carries.
+`fmis.swing_setup.compose`/`.policy`/`.models`/`.render` have a zero-line diff. The scanner lives
+inside `fmis.swing_setup` rather than a new top-level package specifically because
+[ADR-0028](docs/adr/ADR-0028-directional-interpretation-boundary.md)'s directional-vocabulary boundary
+already permits that location and no other outside `pipeline/cli.py` — reusing the ADR rather than
+amending it.
+
+**No ranking, on purpose.** `AN`'s own record already warns that a scanner "must rank on an explicit,
+deterministic, testable and backtested policy... never as a side effect of a workflow." `AT` ships the
+"return what the engine already knows" half only: rows stay in the fixed watchlist's order, and
+`TOP OPPORTUNITIES` filters that order rather than sorting it — pinned by a test that deliberately
+places a weaker result ahead of a stronger one to rule out an implicit sort.
+
+**Validated before this record:** 4,332 → 4,375 tests, all green under `-W error`; 100 % line and
+branch coverage on both new/modified production files; 7 targeted mutation probes, all detected, zero
+survivors, byte-identical source restoration verified; independent review found no P0, P1 or P2. Full
+record: [design](docs/design/MARKET_SCANNER_V1.md) ·
+[review](docs/reviews/MARKET_SCANNER_V1_REVIEW.md) ·
+[report 0009](reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md).
+
+**Not committed.** Per `CLAUDE.md`'s git safety rule, nothing is committed without the owner's explicit
+authorization; none was requested or given for this task.
 
 ---
 

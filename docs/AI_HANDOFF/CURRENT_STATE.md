@@ -7,24 +7,85 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AS — Market Regime Time-Reference Correction (2026-08-07), a defect fix,
-not a new product capability. `fmis.pipeline.regime.regime_input_from_sheet` supplied the last
-*confirmed swing's* position in a field the engine validated and consumed as the last *closed candle's*
-position — two different, routinely divergent positions in the same closed-candle sequence. Fixed by
-replacing `RegimeInput.last_index` with `RegimeInput.closed_count`, matching the existing
-`fmis.swing_setup` precedent (`execution_closed_count`). Full record:
-[`REGIME_ROOT_CAUSE_ANALYSIS_V1.md`](../design/REGIME_ROOT_CAUSE_ANALYSIS_V1.md) (root cause) and
-[`MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md`](../reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md)
-(independent review of the fix). The preceding milestone was AR — Swing Setup Engine v1 (2026-08-07),
-the seventh user-visible product capability.
-**Latest commit at time of writing:** `aca2628` — `fix(regime): correct structural time reference`.
-**Milestones AF through AR are pushed** — `origin/main` (`2a9bdcc`) descends from `AR` (`1480766`) and
-its docs reconciliation. **`AS` (`aca2628`) is committed locally, one commit ahead of `origin/main`, and
-has NOT been pushed** — pushing requires the owner's separate, explicit authorization.
+**Last updated for:** Milestone AT — Market Scanner v1 (2026-08-07), the eighth user-visible product
+capability. `fmits scan` runs the existing Swing Setup Engine (`AR`) across a fixed, hardcoded
+twenty-symbol watchlist with per-symbol failure isolation, printing one compact table. No new engine,
+no ranking, no ADR — the scanner lives inside `fmis.swing_setup`, the location
+[ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md) already permits. Full record:
+[`MARKET_SCANNER_V1.md`](../design/MARKET_SCANNER_V1.md) (design),
+[`MARKET_SCANNER_V1_REVIEW.md`](../reviews/MARKET_SCANNER_V1_REVIEW.md) (independent review), and
+[report 0009](../../reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md) (implementation
+record). The preceding milestone was AS — Market Regime Time-Reference Correction (2026-08-07), a
+defect fix, not a new capability.
+**`AT` is implemented, tested and reviewed but NOT committed** — per `CLAUDE.md`'s git safety rule,
+nothing is committed without the owner's explicit authorization, and none was given for this task; the
+working tree sits on top of `9977274`.
+**Latest committed commit:** `9977274` — `docs(product): record market regime reliability fix`.
+**Milestones AF through AS (plus AS's docs reconciliation) are pushed** — `origin/main` (`2a9bdcc`)
+descends from `AR` (`1480766`) and its docs reconciliation; `aca2628` (AS) and `9977274` (AS's docs)
+are committed locally and have **NOT** been pushed — pushing requires the owner's separate, explicit
+authorization.
 
 ---
 
 ## Current milestone
+
+- **AT — Market Scanner v1** (implemented, tested, reviewed; **not yet committed** — see the banner
+  above). The first market scanner. `docs/design/MARKET_SCANNER_V1.md` traces the one design decision
+  this milestone made: `fmis.swing_setup.scan` is a new module **inside** the existing
+  `fmis.swing_setup` package rather than a new top-level package, because
+  [ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md) already confines directional
+  vocabulary (`SIDE: LONG`/`SHORT`) to that package plus `pipeline/cli.py`, and the repository-wide
+  guard test (`tests/test_directional_vocabulary_boundary.py`) already exempts any file directly
+  inside it — so no ADR amendment was needed.
+
+  **What shipped.** `run_market_scan` — a thin, default-watchlist wrapper over
+  `fmis.swing_setup.compose.run_setup_for_symbols` (Milestone AR), reusing its exact per-symbol
+  failure isolation — and `render_scan`, a compact plain-text table
+  (`SYMBOL`/`STATUS`/`SIDE`/`RR`/`STOP`/`TARGET`) with a one-line summary of counts and a
+  `TOP OPPORTUNITIES` section, present only when at least one `CANDIDATE`/`CONFIRMED` result exists,
+  filtered — never sorted — from the same scan-list order. `SCAN_UNIVERSE` is the twenty-symbol
+  hardcoded tuple the task brief specified, not fetched from any exchange endpoint. The CLI command,
+  `fmits scan`, takes no symbol argument; every other flag `fmits setup` accepts (candle limit,
+  detection window, timeframe roles, regime policy) is available identically, refactored into a
+  shared `_add_setup_style_arguments` helper so the two commands cannot drift apart.
+
+  **Zero-line diff on the engine.** `fmis.swing_setup.compose`, `.policy`, `.models` and `.render` are
+  untouched — this milestone adds no market computation and recomputes nothing. A scan row and a
+  `fmits setup SYMBOL` page for the same symbol, at the same instant, are produced by identical
+  underlying code and cannot disagree.
+
+  **No ranking, deliberately, and the hazard was already named on the backlog.** Milestone AN's own
+  record states that a future scanner "must rank on an explicit, deterministic, testable and
+  backtested policy... never as a side effect of a workflow, and never on a readiness state." `AT`
+  avoids that hazard entirely by shipping only the "return what the engine already knows" half: no
+  score, no probability, no sort by any property of the result. A test
+  (`test_render_scan_top_opportunities_preserves_scan_order_not_desirability`) deliberately places a
+  weaker `CANDIDATE` result ahead of a stronger `CONFIRMED` one in the input to prove the
+  `TOP OPPORTUNITIES` section is a filter, not an implicit readiness sort.
+
+  **Independently reviewed**, not merely tested: seven targeted mutation probes (a filter-condition
+  inversion, a status mislabel, a stop/target column swap, a silent page-width widening, a corrupted
+  watchlist symbol, an inverted exit-code polarity, a dropped computed value) — all seven detected,
+  zero survivors, byte-identical source restoration verified. 100 % line and branch coverage on both
+  new/modified production files. The review found no P0, P1 or P2; two issues were found and fixed
+  during implementation itself (a docstring reference that tripped `fmis.daily`'s own raw-text import
+  guard, and an unnecessary submodule import in `pipeline/cli.py`), both caught by running the full
+  existing suite rather than only the new tests. A third issue — an untested `_clip` overflow branch
+  — was found and closed with a dedicated test in the same review pass, confirmed live against real
+  Binance data (`NOTAREALSYMBOLXYZ` → `NOTAREALS…`); two P3s remain, recorded as informational and
+  inherited from existing patterns (`fmis.daily`'s own equally-unreachable render-width guard) rather
+  than introduced here. Full record:
+  [the review](../reviews/MARKET_SCANNER_V1_REVIEW.md) — no P0, no P1, no P2, two P3 remaining.
+
+  **Quality.** 4,332 → **4,375 tests** (+43), identically under `-W error`. Coverage **100 %** line and
+  branch on `src/fmis/swing_setup/scan.py` and `src/fmis/pipeline/cli.py`. **7 mutation probes, 7
+  detected, 0 survivors**, byte-identical source restoration verified. +3 new exported names on
+  `fmis.swing_setup` (`SCAN_UNIVERSE`, `run_market_scan`, `render_scan`), 0 collisions, import
+  cycles 0, runtime dependencies 0.
+
+**The most recent milestone before this that changed what the owner can do was AR — this file's own
+next entry covers AS, a reliability fix rather than a capability, in between.**
 
 - **AS — Market Regime Time-Reference Correction** (commit `aca2628`) — a defect fix, not a new
   capability. `docs/design/REGIME_ROOT_CAUSE_ANALYSIS_V1.md` traced two defects (D-1, D-2) to one

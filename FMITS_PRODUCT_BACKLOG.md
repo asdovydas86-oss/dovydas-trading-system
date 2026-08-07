@@ -11,7 +11,7 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `aca2628` (Milestone AS — Market Regime Time-Reference Correction, a defect fix) |
+| **Last verified against** | working tree on top of `9977274` (Milestone AS + its docs reconciliation), plus Milestone AT — Market Scanner v1, **implemented and tested, not yet committed** (§8) |
 | **Verified on** | 2026-08-07 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -70,27 +70,29 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
+| **Milestone AT status** | **Implemented and tested, not yet committed** — production code + tests + design + review (§8); see [report 0009](reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md) |
 | **Milestone AS commit** | `aca2628` (production fix + tests + RCA + independent review — defect fix, not a new capability) |
 | **Milestone AR commit** | `1480766e57526d48266a4aa5ff48b3a945614656` (production code + tests + ADR-0028 + design + review) |
 | **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) |
 | **Milestone AP commit** | `0ea041477dbe9584618495dc334e9685e3e6eb0e` (architecture only — no code, no tests, no product-surface change) |
-| **HEAD** | `aca2628` (AS) on top of `2a9bdcc` |
-| **`origin/main`** | `2a9bdcc` (AR and its docs reconciliation are already pushed) — **AS (`aca2628`) is 1 commit ahead, committed locally and not pushed; push requires separate, explicit authorization** |
-| **Working tree** | clean once this commit lands |
-| **Test count** | **4,332 passing**, identically under `-W error` (4,319 before AS; +13) |
-| **Public exports / collisions** | 293 / 0 (unchanged — `RegimeInput.last_index` → `closed_count` is a field rename, not a new export) |
+| **HEAD** | `9977274` (AS docs reconciliation) — **Milestone AT's code and tests sit uncommitted on top of it** |
+| **`origin/main`** | `2a9bdcc` (AR and its docs reconciliation are already pushed) — **AS (`aca2628`) and AS's docs (`9977274`) are 2 commits ahead, committed locally and not pushed; AT is uncommitted; push requires separate, explicit authorization** |
+| **Working tree** | not clean — Milestone AT's implementation is present, tested and reviewed but uncommitted (§8, report 0009) |
+| **Test count** | **4,375 passing**, identically under `-W error` (4,332 before AT; +43) |
+| **Public exports / collisions** | +3 new names on `fmis.swing_setup` (`SCAN_UNIVERSE`, `run_market_scan`, `render_scan`), 0 collisions |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 (`coverage` used only as an ephemeral measurement tool, never added to `pyproject.toml`) |
-| **Latest completed milestone** | **AS — Market Regime Time-Reference Correction** (commit `aca2628`) — a reliability fix: Market Regime measures structural change age from the last closed candle, not the last confirmed swing; see [the review](docs/reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md) |
-| **Product Value Level** | **Level 2 — usable swing-analysis assistant** — now including a deterministic swing-setup assessment with direction, confirmation, stop, target and R/R when justified (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
+| **Latest completed milestone** | **AT — Market Scanner v1** (uncommitted; see [report 0009](reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md)) — `fmits scan` runs the existing Swing Setup Engine (AR) across a hardcoded twenty-symbol watchlist with per-symbol failure isolation, printing one compact table. No new engine, no ranking, no ADR; see [the design](docs/design/MARKET_SCANNER_V1.md) and [the review](docs/reviews/MARKET_SCANNER_V1_REVIEW.md) |
+| **Product Value Level** | **Level 2 — usable swing-analysis assistant** — now including a deterministic swing-setup assessment with direction, confirmation, stop, target and R/R when justified, and a fixed-watchlist scan that surfaces every non-`WAIT` result in one command (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule is temporarily unsatisfied, not relaxed, per the same recorded exception AP and AO both used. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
+| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT was itself an explicitly-scoped, owner-directed implementation task, not a NOW selection, and this row is unchanged by it. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
 
 ### Current user-visible capability
 
 ```
 fmits setup  BTCUSDT                       # a deterministic swing-trade setup assessment
 fmits setup  BTCUSDT ETHUSDT SOLUSDT       # one per symbol, in the order requested
+fmits scan                                 # the fixed 20-symbol watchlist, one compact table
 fmits daily  BTCUSDT ETHUSDT SOLUSDT       # the morning routine, one row per symbol
 fmits swing  BTCUSDT                       # the whole page, end to end
 fmits regime BTCUSDT --multi               # the environment, per role, with evidence
@@ -103,6 +105,13 @@ fmits archive show RECORD_ID               # render a stored record, no network 
 fmits archive verify RECORD_ID             # integrity check; omit the id to verify the whole archive
 python -m fmis.pipeline daily BTCUSDT      # works without reinstalling
 ```
+
+`scan` runs the **same** deterministic swing-setup assessment `setup` produces across a **fixed,
+hardcoded** twenty-symbol watchlist of major pairs — not a caller-supplied universe — and prints one
+compact table: state, direction, risk/reward, stop and target. A symbol whose analysis fails is
+reported as `ERROR` and does not stop the scan. Rows stay in the fixed list order; it is **not a
+ranking** — no score, no probability — and a `CANDIDATE`/`CONFIRMED` result also appears in a
+`TOP OPPORTUNITIES` section, filtered from the same order rather than sorted by it.
 
 `daily` runs the **same** swing analysis across a requested universe, one symbol at a time, and
 prints a compact **readiness index**: one row per symbol, in the order requested, carrying the
@@ -198,11 +207,55 @@ designed. It requires its own vision decision (**D-14**, **D-15**) before it can
 
 ## 8. DONE
 
-Repository-verified only. Every SHA below was confirmed to exist with `git cat-file -e`.
+Repository-verified only. Every SHA below was confirmed to exist with `git cat-file -e`, **except
+`AT`, which is implemented, tested and reviewed but not yet committed** — recorded here on the
+evidence of the working tree and the full test run (report 0009), not on a SHA, per §11 rule 3's
+requirement that a status change be traceable; the traceable evidence for `AT` is the report and the
+reproducible test/coverage/mutation numbers it cites, and the row will gain a commit SHA once the
+owner authorizes committing.
 
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the five most recent milestones.
+
+### `AT` — Market Scanner v1 · **DONE** *(implemented, uncommitted)*
+
+| Field | Value |
+|---|---|
+| **Commit** | **none yet** — implemented and tested on top of `9977274`; commit requires the owner's explicit authorization (`CLAUDE.md`) |
+| **ADR** | **none** — reuses ADR-0028 exactly as written; the scanner lives inside `fmis.swing_setup`, the location that ADR already permits directional vocabulary |
+| **Design** | [MARKET_SCANNER_V1.md](docs/design/MARKET_SCANNER_V1.md) |
+| **Review** | [MARKET_SCANNER_V1_REVIEW.md](docs/reviews/MARKET_SCANNER_V1_REVIEW.md) — no P0, no P1, no P2, one P3 found and closed during review, two P3 remaining (informational, inherited from existing patterns) |
+| **Tests** | 4,332 → **4,375** (+43). 100 % line and branch coverage on both new/modified production files. 7 targeted mutation probes, 7 detected, 0 survivors |
+
+**Product value delivered.** The first market scanner. Before `AT`, seeing every symbol's swing setup
+meant typing `fmits setup` once per symbol, or once for all of them with no compact overview of which
+ones actually produced a `CANDIDATE` or `CONFIRMED` result. `fmits scan` runs the fixed twenty-symbol
+watchlist in one command and prints one table plus a `TOP OPPORTUNITIES` section for whatever cleared
+the bar — reusing the exact engine `fmits setup` already shipped (Milestone AR), by reference, not by
+reimplementation.
+
+**No new engine, no new ADR.** `run_market_scan` is `run_setup_for_symbols` (AR) called with a default
+watchlist; `render_scan` formats fields that already exist on `SetupAssessment`. `fmis.swing_setup.compose`,
+`.policy`, `.models` and `.render` have a zero-line diff. The one design choice — placing the new
+`scan.py` module inside `fmis.swing_setup` rather than a new top-level package — needed no ADR change,
+because ADR-0028's own directional-vocabulary guard test already exempts every file directly inside
+that package.
+
+**No ranking, and Milestone `AN`'s own warning is why.** `AN`'s record
+(`docs/AI_HANDOFF/CURRENT_STATE.md`) already states that a scanner "must rank on an explicit,
+deterministic, testable and backtested policy... never as a side effect of a workflow, and never on a
+readiness state." `AT` avoids that hazard by not ranking at all:
+rows stay in the fixed watchlist's own order, and `TOP OPPORTUNITIES` is a filter over that order, not
+a sort — pinned by a test that deliberately places a weaker result before a stronger one to rule out
+an implicit sort.
+
+**Status note.** Implemented, tested and reviewed on repository evidence: the full suite is green
+under `-W error` at 4,375 tests, coverage is 100 % line and branch on every new/modified production
+file, mutation is 7/7 with byte-identical source restoration, and the independent review found no
+P0/P1/P2. **Not yet committed** — per `CLAUDE.md`'s git safety rule, nothing is committed without the
+owner's explicit authorization, and this task did not request or receive one. Full record:
+[report 0009](reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md).
 
 ### `AS` — Market Regime Time-Reference Correction · **DONE** *(defect fix)*
 
@@ -337,60 +390,9 @@ live Binance data — both before and after the record-ID correction — with by
 output and zero
 network calls on show.
 
-### `AN` — Deterministic Daily Workflow v1 · **DONE**
-
-| Field | Value |
-|---|---|
-| **Commit** | **`74036a4b81967618a809e420b85d320ab566d6b5`** |
-| **ADR** | none — no new boundary was created. `fmis.daily` composes AK and AL under ADR-0007's existing application-layer rule, and the review records why an ADR was not warranted |
-| **Design** | [DETERMINISTIC_DAILY_WORKFLOW_V1.md](docs/design/DETERMINISTIC_DAILY_WORKFLOW_V1.md) |
-| **Review** | [DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md](docs/reviews/DETERMINISTIC_DAILY_WORKFLOW_V1_REVIEW.md) — no P0, no P1, **2 P2 fixed**, 1 P3 fixed, 3 P3 documented |
-| **Tests** | 3,766 → **3,905** (+139). Mutation 81/81, zero survivors, zero no-ops |
-
-**Product value delivered.** A repeatable morning routine. Before AN every capability answered about
-one symbol; an owner watching eight instruments ran eight commands and read eight ~270-line pages.
-`fmits daily` runs the same analysis across a universe and prints **83 lines for fifty symbols**.
-
-**What the owner can now do that was impossible before.** Analyse a whole watchlist in one command,
-under one set of settings, and see at a glance which analyses rest on enough data — and, critically,
-**which symbols failed and why**. Before AN a symbol whose fetch failed was a command that scrolled
-past; nothing recorded that it had been skipped.
-
-**Limitations shipped with it, printed on every run.** It is an index, not a ranking · a
-decision-context state is not an opportunity · each symbol is fetched at a different instant, so the
-run has **no shared as-of** and rows are not comparable in time · a failed symbol gets no substituted
-cached analysis.
-
-**Deviation from the boarded acceptance criteria — recorded, not quietly dropped.** The board's line
-read *"A scheduled run produces a brief without interaction · scanning **ranks** a watchlist on
-computed facts with stated reasons · every run is **archived** · failures are visible."* The
-milestone brief explicitly forbade scheduling, ranking and persistence. AN therefore delivers the
-multi-symbol routine and **failures are visible**; scheduling belongs to no architecture layer yet,
-and archiving is `AO`, blocked on D-01. Three of Phase 4's four completion criteria are therefore
-**still open**, carried by `EP-02`, `EP-03` and `AO` — not met, and not withdrawn.
-
-**On ranking, precisely.** Two different things were being named by one word, and only one of them is
-refused:
-
-- **Ranking by readiness is a category error, permanently.** A decision-context state describes the
-  *analysis*, not the instrument, so sorting by it produces a list of picks out of a list of data
-  qualities. This is the design §3.4 argument, and it binds every future version of the daily index.
-- **Ranking opportunities remains a named FMITS capability, and is deferred, not withdrawn.**
-  `PROJECT_SPECIFICATION_V1.md` §10 lists *market scanning* and *candidate ranking* among the Swing
-  Trading Module's responsibilities, and its **Opportunity Scanner** *"ranks possible long-term
-  investments, swing trades and later short-term trades"*; `PROJECT_VISION_ADDENDUM_V1.md` carries the
-  same scanner; `reports/0005` Phase 4 carries **C-164 opportunity scanning over a watchlist**; and
-  this board's own **`EP-02`** (scanning, ranking) and **`EP-03`** (opportunity scanner) rows in §7
-  remain LATER · High. None of that is affected by AN.
-
-When a scanner is built it must rank on an **explicit, deterministic, testable and backtested
-policy** — a named milestone with its own ADR, evidence and acceptance criteria — never as a side
-effect of a workflow, and never on a readiness state.
-
-**Status note.** DONE on repository evidence: the suite is green under `-W error`, coverage is 100 %
-on all four new modules and on `pipeline/cli.py`, mutation is 81/81 with byte-identical source
-restoration, the review is complete with every P0–P2 fixed, and `fmits daily` was run against live
-Binance data including a deliberately invalid symbol.
+*Milestone `AN` — Deterministic Daily Workflow v1 — has aged out of this five-most-recent window. Its
+full record, including the ranking-vs-readiness distinction `AT` above relies on, remains in
+[`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md).*
 
 ### `AL` — Decision Context Engine v1 · **DONE**
 

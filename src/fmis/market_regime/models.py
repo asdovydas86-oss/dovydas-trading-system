@@ -374,19 +374,27 @@ class RegimeInput:
     produce it — an indicator still warming up, or a series with no confirmed
     swing. `None` means **not available**, never zero and never neutral.
 
-    ``last_index`` and ``latest_change_index`` are positions in the closed-candle
-    sequence, matching `SwingPoint.index`. They are supplied as indices rather
-    than as a pre-computed distance because the subtraction is the engine's
-    arithmetic to do: `fmis.pipeline` asserts it contains no arithmetic operator
-    at all, and moving one subtraction up there to save a field would break that
-    guarantee for a worse boundary.
+    ``closed_count`` is the number of closed candles the sheet was computed
+    over — matching `StructuralFactSheet.window.closed_count` exactly, never a
+    position in the series. It is not optional: a sheet always knows how many
+    closed candles it has, even when that count is zero. ``latest_change_index``
+    is a position *within* that same closed-candle sequence, matching
+    `SwingPoint.index`, and is supplied as an index rather than folded into a
+    pre-computed distance because the subtraction is the engine's arithmetic to
+    do: `fmis.pipeline` asserts it contains no arithmetic operator at all, and
+    moving one subtraction up there to save a field would break that guarantee
+    for a worse boundary. A position may be compared only against the endpoint
+    of the sequence it indexes — `latest_change_index` is bounded by
+    `closed_count`, never by the last *confirmed swing*, which is a different,
+    routinely older position in the same sequence (ADR-0024's confirmation
+    delay and ordinary pivot sparsity both hold it back independently).
     """
 
     symbol: str
     timeframe: str
     as_of: datetime
     structural_trend: StructuralTrendType
-    last_index: int | None = None
+    closed_count: int
     latest_change_index: int | None = None
     close: float | None = None
     ema_fast: float | None = None
@@ -415,14 +423,22 @@ class RegimeInput:
                 "structural_trend must be a StructuralTrendType, got "
                 f"{type(self.structural_trend).__name__}"
             )
-        for name in ("last_index", "latest_change_index"):
-            value = getattr(self, name)
-            if value is None:
-                continue
+        if isinstance(self.closed_count, bool) or not isinstance(self.closed_count, int):
+            raise TypeError(
+                f"closed_count must be an int, got {type(self.closed_count).__name__}"
+            )
+        if self.closed_count < 0:
+            raise RegimeInputError(
+                f"closed_count cannot be negative, got {self.closed_count}"
+            )
+        if self.latest_change_index is not None:
+            value = self.latest_change_index
             if isinstance(value, bool) or not isinstance(value, int):
-                raise TypeError(f"{name} must be an int or None")
+                raise TypeError("latest_change_index must be an int or None")
             if value < 0:
-                raise RegimeInputError(f"{name} cannot be negative, got {value}")
+                raise RegimeInputError(
+                    f"latest_change_index cannot be negative, got {value}"
+                )
         for name in (
             "close",
             "ema_fast",
@@ -440,13 +456,12 @@ class RegimeInput:
                 raise RegimeInputError(f"{name} must be finite, got {value}")
         if (
             self.latest_change_index is not None
-            and self.last_index is not None
-            and self.latest_change_index > self.last_index
+            and self.latest_change_index >= self.closed_count
         ):
             raise RegimeInputError(
-                f"latest_change_index ({self.latest_change_index}) cannot exceed "
-                f"last_index ({self.last_index}); a change of character cannot "
-                "occur after the last closed candle"
+                f"latest_change_index ({self.latest_change_index}) cannot be at "
+                f"or beyond closed_count ({self.closed_count}); a change of "
+                "character cannot occur after the last closed candle"
             )
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
 

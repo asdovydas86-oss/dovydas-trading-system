@@ -171,7 +171,7 @@ def test_regime_structure_disagreement_is_reported() -> None:
 def test_transitioning_and_insufficient_are_not_opposites() -> None:
     """Only trending against ranging is a decisive disagreement."""
     transitioning = regime_of(
-        StructuralTrendType.SUSTAINED_HIGHER, last_index=100, latest_change_index=99
+        StructuralTrendType.SUSTAINED_HIGHER, closed_count=101, latest_change_index=99
     )
     insufficient = regime_of(StructuralTrendType.INDETERMINATE)
     conflicts = detect_conflicts(

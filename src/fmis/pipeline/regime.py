@@ -170,13 +170,12 @@ def regime_input_from_sheet(sheet: StructuralFactSheet) -> RegimeInput:
         )
     structure = sheet.structure
     latest_change = structure.latest_change
-    swings = structure.swings
     return RegimeInput(
         symbol=sheet.symbol,
         timeframe=sheet.interval,
         as_of=sheet.as_of,
         structural_trend=structure.trend,
-        last_index=swings[-1].index if swings else None,
+        closed_count=sheet.window.closed_count,
         latest_change_index=latest_change.index if latest_change is not None else None,
         close=sheet.window.last_close,
         ema_fast=_value(sheet, _EMA_FAST),

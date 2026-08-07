@@ -131,6 +131,21 @@ def test_a_warming_up_feature_reaches_the_engine_as_none() -> None:
     )
 
 
+def test_the_adapter_needs_no_confirmed_swing_to_supply_closed_count() -> None:
+    """RCA §8.4: 'no confirmed swings at all' — previously the adapter's other
+    branch, untested against real data. Under Option B the adapter never reads
+    `structure.swings` at all, so an empty swing history cannot affect
+    `closed_count`; it is read straight off the window regardless.
+    """
+    short = build_structural_facts(
+        seeded_series(count=6), features=regime_features(), source="fixture"
+    )
+    assert short.structure.swings == ()
+    subject = regime_input_from_sheet(short)
+    assert subject.closed_count == 6
+    assert subject.latest_change_index is None
+
+
 def test_the_adapter_rejects_anything_that_is_not_a_sheet() -> None:
     with pytest.raises(TypeError):
         regime_input_from_sheet("not a sheet")  # type: ignore[arg-type]
@@ -395,6 +410,49 @@ def test_custom_detection_settings_reach_the_regime() -> None:
         assert level.origin.confirmation_bars == 4
 
 
+def test_a_forming_candle_cannot_change_the_regime_result() -> None:
+    """The repository's closed-candles-only rule, pinned end to end.
+
+    `closed_count` is now load-bearing (ADR-0025 §6's residual risk under
+    Option B): if a forming candle ever leaked into it, `bars_since` would be
+    silently wrong on every run with one. `build_structural_facts` already
+    drops the forming candle unconditionally via `series.closed()` — this
+    proves the adapter's `closed_count` and the whole regime result agree.
+    """
+    closed_only = seeded_series(count=120)
+    with_forming = CandleSeries(
+        symbol=closed_only.symbol,
+        timeframe=closed_only.timeframe,
+        candles=closed_only.candles
+        + (
+            Candle(
+                timestamp=closed_only.candles[-1].timestamp + timedelta(hours=4),
+                symbol=closed_only.symbol,
+                timeframe=closed_only.timeframe,
+                open=1_000_000.0,
+                high=2_000_000.0,
+                low=1.0,
+                close=1_500_000.0,
+                volume=999.0,
+                is_closed=False,
+            ),
+        ),
+    )
+
+    sheet_a = build_structural_facts(
+        closed_only, features=regime_features(), source="fixture"
+    )
+    sheet_b = build_structural_facts(
+        with_forming, features=regime_features(), source="fixture"
+    )
+
+    subject_a = regime_input_from_sheet(sheet_a)
+    subject_b = regime_input_from_sheet(sheet_b)
+    assert subject_a.closed_count == subject_b.closed_count == 120
+    assert subject_a == subject_b
+    assert regime_for_sheet(sheet_a) == regime_for_sheet(sheet_b)
+
+
 # ============ 7. prefix stability and replay ================================
 
 
@@ -443,16 +501,27 @@ def test_states_actually_vary_across_seeds() -> None:
 def test_the_adapter_carries_the_change_of_character_when_one_exists() -> None:
     """Survivor 41: dropping it would silently disable the transitioning state.
 
-    Seed 5 produces three changes of character with the latest at bar 254 and the
-    last swing at 255, so the adapter's two indices are both non-trivial and the
-    engine can compute a real distance from them.
+    Seed 5 produces three changes of character with the latest at bar 254, while
+    the last *confirmed swing* sits at bar 255 — the reference-frame mismatch
+    documented in `REGIME_ROOT_CAUSE_ANALYSIS_V1.md`. The adapter must supply
+    `closed_count`, the number of closed candles the sheet was built over, never
+    a swing position: `subject.last_index == swings[-1].index` was this test's
+    original assertion, and it pinned the defect (D-1/D-2) as correct behaviour.
     """
     built = sheet(seed=5)
     assert built.structure.changes
     subject = regime_input_from_sheet(built)
     assert subject.latest_change_index == built.structure.latest_change.index
-    assert subject.last_index == built.structure.swings[-1].index
+    assert subject.closed_count == built.window.closed_count
+    # Hand-derived, not read back off the sheet: `seeded_series()`'s default
+    # `count=260` candles are all built with `is_closed=True`, so the closed
+    # count is the raw series length regardless of what the adapter computes.
+    assert subject.closed_count == 260
     assert subject.latest_change_index is not None
+    # The corrected contract: a change of character is always inside the closed
+    # series, never beyond it — the invariant the old guard's message claimed
+    # to enforce but never actually checked.
+    assert subject.latest_change_index < subject.closed_count
 
     # And it reaches the classification: with a lookback wide enough to include
     # it, structure must report transitioning rather than trending or ranging.
@@ -463,6 +532,258 @@ def test_the_adapter_carries_the_change_of_character_when_one_exists() -> None:
         RegimeDimensionName.STRUCTURE
     ]
     assert dimension.state is StructureState.TRANSITIONING
+
+
+# ============ 7b. permanent regression fixtures — the reference-frame defect =
+#
+# `docs/design/REGIME_ROOT_CAUSE_ANALYSIS_V1.md` §8.2 traces why 4,319 passing
+# tests never caught D-1/D-2: `seeded_series`'s independent-uniform random walk
+# pivots on nearly every bar, so the gap between the last confirmed swing and
+# the last closed candle almost never opens. These fixtures are built from a
+# fixed, hand-written sequence of price deltas — no `random` call anywhere —
+# so they deterministically exercise the state space a random walk does not:
+# a long, sparsely-pivoting trend followed by a late reversal.
+
+
+def _trending_candle(i: int, open_: float, close: float) -> Candle:
+    high = max(open_, close) + 0.1
+    low = min(open_, close) - 0.1
+    return Candle(
+        timestamp=_BASE + timedelta(hours=4 * i),
+        symbol="FIXUSDT",
+        timeframe="4h",
+        open=open_,
+        high=high,
+        low=low,
+        close=close,
+        volume=1.0,
+        is_closed=True,
+    )
+
+
+def _series_from_legs(legs: list[list[float]]) -> CandleSeries:
+    """Build a `CandleSeries` from a fixed list of price-delta legs.
+
+    Every delta is a literal, not a draw — the whole series is reproducible by
+    inspection, not merely by re-running a seed.
+    """
+    candles: list[Candle] = []
+    price = 100.0
+    index = 0
+    for leg in legs:
+        for step in leg:
+            open_ = price
+            close = price + step
+            candles.append(_trending_candle(index, open_, close))
+            index += 1
+            price = close
+    return CandleSeries(symbol="FIXUSDT", timeframe="4h", candles=tuple(candles))
+
+
+#: A short zigzag (establishes real structure — swing highs and lows on both
+#: sides), then a 200-candle monotonic climb (sparse pivots: nothing but the
+#: zigzag's last dip forms a swing for 200 bars), then a sharp plunge whose
+#: *first* candle already closes below that dip's level — landing the change of
+#: character on the series' very last closed candle, the confirmation frontier.
+#: Verified empirically once and pinned here: 224 closed candles, one change of
+#: character at index 223 (`closed_count - 1`), last confirmed swing at index
+#: 219 — `latest_change_index (223) > last-swing-index (219)`, exactly the
+#: shape the old `last_index` guard rejected as impossible.
+_FRONTIER_LEGS = [
+    [-3, -3, -3, -3],
+    [3, 3, 3, 3],
+    [-2, -2, -2, -2],
+    [3, 3, 3, 3],
+    [-1.5, -1.5, -1.5, -1.5],
+    [1.0] * 200,
+    [-60, -60, -60, -60],
+]
+
+#: The same opening structure, but the plunge is shaped so the level-breaking
+#: candle (the change of character) and the pivot the plunge itself creates
+#: land on *different* bars, followed by a long flat pad. Verified empirically
+#: once and pinned here: 246 closed candles, the change of character at index
+#: 220, the last confirmed swing at index 222 (a later, and therefore
+#: *irrelevant*, position) — the true age of the change is
+#: ``246 - 1 - 220 = 25`` bars, while the old `last_index - latest_change_index`
+#: arithmetic would have reported ``222 - 220 = 2`` bars: a 23-bar
+#: understatement that flips `TRANSITIONING` under the default 5-bar lookback.
+_UNDERSTATEMENT_LEGS = [
+    [-3, -3, -3, -3],
+    [3, 3, 3, 3],
+    [-2, -2, -2, -2],
+    [3, 3, 3, 3],
+    [-1.5, -1.5, -1.5, -1.5],
+    [1.0] * 200,
+    [-220, -10, -5],
+    [1.0, 1.0, 1.0],
+    [0.1] * 20,
+]
+
+
+def test_a_change_of_character_on_the_confirmation_frontier_does_not_raise() -> None:
+    """D-1, reproduced deterministically: a valid state the old guard rejected.
+
+    The change of character lands on the last closed candle — the newest
+    position a structural fact can occupy — while the last confirmed swing
+    sits four bars earlier. The old `last_index` field would have carried the
+    swing position (219) and the invariant `latest_change_index > last_index`
+    would have raised `RegimeInputError` on data with nothing wrong with it.
+    """
+    series = _series_from_legs(_FRONTIER_LEGS)
+    built = build_structural_facts(series, features=regime_features(), source="fixture")
+
+    assert built.window.closed_count == 224
+    assert built.structure.latest_change is not None
+    assert built.structure.latest_change.index == 223
+    assert built.structure.swings[-1].index == 219
+    assert built.structure.latest_change.index > built.structure.swings[-1].index
+
+    subject = regime_input_from_sheet(built)  # must not raise
+    assert subject.closed_count == 224
+    assert subject.latest_change_index == 223
+
+    regime = regime_for_sheet(built)
+    dimension = regime.by_dimension[RegimeDimensionName.STRUCTURE]
+    assert dimension.state in (
+        StructureState.TRANSITIONING,
+        StructureState.TRENDING,
+        StructureState.RANGING,
+        StructureState.INDETERMINATE,
+        StructureState.INSUFFICIENT,
+    )  # classifies rather than raising — that is the whole assertion
+
+
+def test_structural_age_is_measured_from_the_last_closed_candle_not_the_swing() -> None:
+    """D-2, reproduced deterministically: the age the engine reports is real.
+
+    Hand-computed, not read back off `classify_regime`'s own output: with
+    `closed_count = 246` and `latest_change_index = 220`, the true age is
+    `246 - 1 - 220 = 25` bars. The old `last_index - latest_change_index`
+    arithmetic — with `last_index` bound to the last confirmed swing (222) —
+    would have answered `222 - 220 = 2`, understating the age by 23 bars and
+    putting it inside the default 5-bar `transition_lookback_bars` window.
+    """
+    series = _series_from_legs(_UNDERSTATEMENT_LEGS)
+    built = build_structural_facts(series, features=regime_features(), source="fixture")
+
+    assert built.window.closed_count == 246
+    assert built.structure.latest_change is not None
+    assert built.structure.latest_change.index == 220
+    assert built.structure.swings[-1].index == 222
+
+    closed_count = built.window.closed_count
+    change_index = built.structure.latest_change.index
+    true_bars_since = closed_count - 1 - change_index
+    old_buggy_bars_since = built.structure.swings[-1].index - change_index
+    assert true_bars_since == 25
+    assert old_buggy_bars_since == 2
+
+    subject = regime_input_from_sheet(built)
+    assert subject.closed_count == closed_count
+    assert subject.latest_change_index == change_index
+
+    default_policy_dimension = regime_for_sheet(built).by_dimension[
+        RegimeDimensionName.STRUCTURE
+    ]
+    # 25 bars is well outside the default 5-bar lookback: structure must NOT
+    # report transitioning under the corrected arithmetic.
+    assert default_policy_dimension.state is not StructureState.TRANSITIONING
+
+    # And the evidence, when the change is inside a wide-enough lookback,
+    # states the correct age explicitly rather than the understated one.
+    wide = RegimePolicy(transition_lookback_bars=30)
+    wide_dimension = regime_for_sheet(built, policy=wide).by_dimension[
+        RegimeDimensionName.STRUCTURE
+    ]
+    assert wide_dimension.state is StructureState.TRANSITIONING
+    change_evidence = next(
+        item for item in wide_dimension.evidence if "change of character" in item.observed
+    )
+    assert change_evidence.value == 25.0
+    assert "25 bars ago" in change_evidence.observed
+
+
+def test_the_window_closed_count_matches_the_closed_series_length() -> None:
+    """Frame consistency at the boundary — the residual risk ADR-0025 §6 and
+    the RCA's Option B both name: `closed_count` must describe the same closed
+    series every other structural fact was derived from.
+    """
+    for series in (
+        _series_from_legs(_FRONTIER_LEGS),
+        _series_from_legs(_UNDERSTATEMENT_LEGS),
+        seeded_series(seed=58),
+    ):
+        built = build_structural_facts(series, features=regime_features(), source="fixture")
+        assert built.window.closed_count == len(series.closed().candles)
+        subject = regime_input_from_sheet(built)
+        assert subject.closed_count == len(series.closed().candles)
+
+
+def test_no_valid_series_is_ever_rejected_over_a_wide_seed_range() -> None:
+    """The property the bug's whole shape violates: valid data must never raise.
+
+    Widened so seed 58 — the first seed at which the repository's own
+    `seeded_series` generator reproduces D-1, per the RCA's `seed_sweep.py`
+    finding — sits inside the range this suite actually runs, not past it.
+    """
+    saw_a_change_of_character = False
+    for seed in range(0, 120):
+        built = build_structural_facts(
+            seeded_series(seed=seed), features=regime_features(), source="fixture"
+        )
+        subject = regime_input_from_sheet(built)  # must never raise
+        if subject.latest_change_index is not None:
+            saw_a_change_of_character = True
+            assert subject.latest_change_index < subject.closed_count
+    assert saw_a_change_of_character
+
+
+def test_seed_58_specifically_no_longer_raises() -> None:
+    """The exact historical failure the RCA names, pinned by seed rather than
+    by the fixture's internal state, so a future change to `seeded_series`
+    cannot silently retire the regression this guards.
+    """
+    built = build_structural_facts(
+        seeded_series(seed=58), features=regime_features(), source="fixture"
+    )
+    assert built.structure.latest_change.index == 255
+    assert built.structure.swings[-1].index == 254
+    subject = regime_input_from_sheet(built)  # this line raised before the fix
+    assert subject.latest_change_index == 255
+    assert subject.closed_count == 260
+
+
+def test_a_frontier_change_of_character_does_not_abort_a_three_view_result() -> None:
+    """Multi-view isolation: `MultiTimeframeRegime` assembles three
+    independently classified views (`pipeline/regime.py:298-313`) with no
+    further computation, so a frontier change of character in one role must
+    not prevent the other two — or itself — from reaching the assembled
+    result, exactly what `fmits regime --multi` and `fmits setup` depend on.
+    """
+    frontier_sheet = build_structural_facts(
+        _series_from_legs(_FRONTIER_LEGS), features=regime_features(), source="fixture"
+    )
+    ordinary_sheet = sheet(seed=1)
+    another_sheet = sheet(seed=2)
+
+    views = tuple(
+        RegimeView(role=role, interval=interval, regime=regime_for_sheet(view_sheet))
+        for role, interval, view_sheet in (
+            (TimeframeRole.CONTEXT, "1w", frontier_sheet),
+            (TimeframeRole.SETUP, "1d", ordinary_sheet),
+            (TimeframeRole.EXECUTION, "4h", another_sheet),
+        )
+    )
+    multi = MultiTimeframeRegime(
+        symbol="FIXUSDT",
+        source="fixture",
+        views=views,
+        policy=views[0].regime.policy,
+        limitations=REGIME_LIMITATIONS,
+    )
+    assert len(multi.views) == 3
+    assert multi.by_role[TimeframeRole.CONTEXT].regime is views[0].regime
 
 
 # ============ 8. the network-facing roots, the CLI, and the multi renderer ==

@@ -152,8 +152,8 @@ def _structure_dimension(
     average_reading, average_evidence = _moving_average_evidence(subject)
 
     transitioning = False
-    if subject.latest_change_index is not None and subject.last_index is not None:
-        bars_since = subject.last_index - subject.latest_change_index
+    if subject.latest_change_index is not None:
+        bars_since = subject.closed_count - 1 - subject.latest_change_index
         transitioning = bars_since <= policy.transition_lookback_bars
         if transitioning:
             change_evidence = RegimeEvidence(

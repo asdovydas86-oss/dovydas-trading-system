@@ -132,8 +132,8 @@ be called support (ADR-0019 §I).
 
 ### 6. The engine's boundary is a narrow model, not a fact sheet
 
-`RegimeInput` carries an identity, an `as_of`, one enum, two indices and six optional floats.
-`fmis.market_regime` imports exactly **one** name from the rest of the repository —
+`RegimeInput` carries an identity, an `as_of`, one enum, a candle count, a position index and six
+optional floats. `fmis.market_regime` imports exactly **one** name from the rest of the repository —
 `StructuralTrendType` — and cannot see `fmis.pipeline`, `fmis.features`, `fmis.data` or a provider.
 
 The application root `fmis.pipeline.regime` adapts a `StructuralFactSheet` into that model. An engine
@@ -141,8 +141,17 @@ that imported a fact sheet to read six numbers would invert ADR-0007's dependenc
 gain, and would be unreachable from a test without building a whole sheet.
 
 The root contains **no arithmetic**, the rule `structural_facts` already follows. That is why the input
-carries `last_index` and `latest_change_index` rather than a pre-computed distance: the subtraction is
-the engine's to do.
+carries `closed_count` and `latest_change_index` rather than a pre-computed distance: the subtraction is
+the engine's to do. **`closed_count` is a count, not a position** — the number of closed candles the
+sheet was computed over, matching `StructuralFactSheet.window.closed_count`. `latest_change_index` is a
+position *within* that same closed-candle sequence, and it may be compared only against the endpoint of
+the sequence it indexes: `closed_count`, never the last *confirmed swing*, which is a different and
+routinely older position governed by ADR-0024's confirmation delay and by ordinary pivot sparsity. An
+earlier draft of this boundary carried a `last_index` field that did not state which of these two
+referents it named; both the adapter and the engine's own validator resolved the ambiguity differently,
+which is the defect
+[`REGIME_ROOT_CAUSE_ANALYSIS_V1.md`](../design/REGIME_ROOT_CAUSE_ANALYSIS_V1.md) traces in full. This
+section states the referent so the ambiguity cannot recur.
 
 ### 7. Volatility is a ratio of two ATRs, not a level
 

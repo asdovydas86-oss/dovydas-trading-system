@@ -63,7 +63,7 @@ def make_input(**overrides: object) -> RegimeInput:
         timeframe="4h",
         as_of=_BASE,
         structural_trend=StructuralTrendType.SUSTAINED_HIGHER,
-        last_index=100,
+        closed_count=101,
         latest_change_index=None,
         close=110.0,
         ema_fast=100.0,
@@ -129,7 +129,7 @@ def test_structure_insufficient_when_a_family_cannot_be_read() -> None:
 
 def test_structure_transitioning_on_a_recent_change_of_character() -> None:
     dimension = classify_regime(
-        make_input(last_index=100, latest_change_index=98)
+        make_input(closed_count=101, latest_change_index=98)
     ).by_dimension[RegimeDimensionName.STRUCTURE]
     assert dimension.state is StructureState.TRANSITIONING
     assert dimension.consistent[0].source == FAMILY_SWING_STRUCTURE
@@ -270,7 +270,7 @@ def test_structure_counts_two_families_not_three_observations() -> None:
     classifies.
     """
     dimension = classify_regime(
-        make_input(latest_change_index=50, last_index=100)
+        make_input(latest_change_index=50, closed_count=101)
     ).by_dimension[RegimeDimensionName.STRUCTURE]
     swing_items = [i for i in dimension.evidence if i.source == FAMILY_SWING_STRUCTURE]
     assert len(swing_items) == 2
@@ -313,7 +313,7 @@ def test_unavailable_evidence_is_never_counted_as_conflicting() -> None:
 
 def test_a_stale_change_of_character_is_context_not_conflict() -> None:
     dimension = classify_regime(
-        make_input(last_index=100, latest_change_index=10)
+        make_input(closed_count=101, latest_change_index=10)
     ).by_dimension[RegimeDimensionName.STRUCTURE]
     stale = [i for i in dimension.context if "change of character" in i.observed]
     assert len(stale) == 1
@@ -531,15 +531,52 @@ def test_a_non_finite_number_is_rejected(field: str) -> None:
         make_input(**{field: float("nan")})
 
 
-def test_a_negative_index_is_rejected() -> None:
+def test_a_negative_closed_count_is_rejected() -> None:
     with pytest.raises(RegimeInputError):
-        make_input(last_index=-1)
+        make_input(closed_count=-1)
+
+
+def test_a_negative_change_index_is_rejected() -> None:
+    with pytest.raises(RegimeInputError):
+        make_input(latest_change_index=-1)
 
 
 def test_a_change_after_the_last_candle_is_rejected() -> None:
+    """A change of character index at or beyond `closed_count` is impossible:
+    `closed_count` candles occupy indices ``0 .. closed_count - 1``.
+    """
     with pytest.raises(RegimeInputError) as excinfo:
-        make_input(last_index=10, latest_change_index=11)
-    assert "cannot exceed" in str(excinfo.value)
+        make_input(closed_count=11, latest_change_index=11)
+    assert "closed_count" in str(excinfo.value)
+
+
+def test_a_change_on_the_last_closed_candle_is_accepted() -> None:
+    """The confirmation frontier case: `latest_change_index == closed_count - 1`
+    is the newest possible position and must classify, not raise.
+    """
+    subject = make_input(closed_count=11, latest_change_index=10)
+    assert subject.latest_change_index == 10
+
+
+def test_a_closed_count_of_zero_with_no_change_is_valid() -> None:
+    """No candles closed yet and nothing to report is a legitimate warm-up
+    state, not an error — `closed_count` is a count, and zero is a real count.
+    """
+    subject = make_input(closed_count=0, latest_change_index=None)
+    assert subject.closed_count == 0
+
+
+def test_a_closed_count_of_zero_cannot_carry_a_change_index() -> None:
+    """No closed candles means index 0 does not exist yet either."""
+    with pytest.raises(RegimeInputError):
+        make_input(closed_count=0, latest_change_index=0)
+
+
+def test_a_closed_count_of_one_accepts_only_index_zero() -> None:
+    subject = make_input(closed_count=1, latest_change_index=0)
+    assert subject.latest_change_index == 0
+    with pytest.raises(RegimeInputError):
+        make_input(closed_count=1, latest_change_index=1)
 
 
 def test_an_empty_symbol_or_timeframe_is_rejected() -> None:
@@ -694,10 +731,10 @@ def test_the_transition_lookback_boundary_is_inclusive() -> None:
     """Survivor 12: exactly `transition_lookback_bars` ago still transitions."""
     policy = RegimePolicy(transition_lookback_bars=5)
     inside = classify_regime(
-        make_input(last_index=100, latest_change_index=95), policy
+        make_input(closed_count=101, latest_change_index=95), policy
     ).by_dimension[RegimeDimensionName.STRUCTURE]
     outside = classify_regime(
-        make_input(last_index=100, latest_change_index=94), policy
+        make_input(closed_count=101, latest_change_index=94), policy
     ).by_dimension[RegimeDimensionName.STRUCTURE]
     assert inside.state is StructureState.TRANSITIONING
     assert outside.state is not StructureState.TRANSITIONING
@@ -854,7 +891,7 @@ def test_the_input_rejects_a_wrong_as_of_type() -> None:
         make_input(as_of="2026-01-01")
 
 
-@pytest.mark.parametrize("field", ["last_index", "latest_change_index"])
+@pytest.mark.parametrize("field", ["closed_count", "latest_change_index"])
 def test_the_input_rejects_a_non_int_index(field: str) -> None:
     with pytest.raises(TypeError):
         make_input(**{field: 1.5})

@@ -11,7 +11,7 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | working tree on top of `9977274` (Milestone AS + its docs reconciliation), plus Milestone AT — Market Scanner v1, **implemented and tested, not yet committed** (§8) |
+| **Last verified against** | `HEAD`/`origin/main` at `81a6202` (Milestone AT — Market Scanner v1, code + docs, **committed and pushed**), plus Milestone AU — Market Scanner Intelligence Report v1, **implemented and tested, not yet committed** (§8) |
 | **Verified on** | 2026-08-07 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -70,29 +70,31 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AT status** | **Implemented and tested, not yet committed** — production code + tests + design + review (§8); see [report 0009](reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md) |
+| **Milestone AU status** | **Implemented and tested, not yet committed** — production code + tests + design + review (§8); see [report 0010](reports/0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md) |
+| **Milestone AT commits** | code `a271f33` (production code + tests) · docs `81a6202` (backlog/changelog/current-state reconciliation) — **committed and pushed** |
 | **Milestone AS commit** | `aca2628` (production fix + tests + RCA + independent review — defect fix, not a new capability) |
 | **Milestone AR commit** | `1480766e57526d48266a4aa5ff48b3a945614656` (production code + tests + ADR-0028 + design + review) |
 | **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) |
 | **Milestone AP commit** | `0ea041477dbe9584618495dc334e9685e3e6eb0e` (architecture only — no code, no tests, no product-surface change) |
-| **HEAD** | `9977274` (AS docs reconciliation) — **Milestone AT's code and tests sit uncommitted on top of it** |
-| **`origin/main`** | `2a9bdcc` (AR and its docs reconciliation are already pushed) — **AS (`aca2628`) and AS's docs (`9977274`) are 2 commits ahead, committed locally and not pushed; AT is uncommitted; push requires separate, explicit authorization** |
-| **Working tree** | not clean — Milestone AT's implementation is present, tested and reviewed but uncommitted (§8, report 0009) |
-| **Test count** | **4,375 passing**, identically under `-W error` (4,332 before AT; +43) |
-| **Public exports / collisions** | +3 new names on `fmis.swing_setup` (`SCAN_UNIVERSE`, `run_market_scan`, `render_scan`), 0 collisions |
+| **HEAD** | `81a6202` (AT code + docs) — **Milestone AU's code and tests sit uncommitted on top of it** |
+| **`origin/main`** | `81a6202` — **identical to `HEAD`; AT is fully pushed. AU is uncommitted; committing and pushing both require separate, explicit authorization** |
+| **Working tree** | not clean — Milestone AU's implementation is present, tested and reviewed but uncommitted (§8, report 0010) |
+| **Test count** | **4,426 passing**, identically under the full suite (4,423 before AU; +3 net — 45 new tests in `test_swing_setup_scan_report.py`, 4 CLI tests renamed/added, no regressions) |
+| **Public exports / collisions** | +2 new names on `fmis.swing_setup` (`render_scan_report`, `result_status`; the latter promoted from a private `scan._status` of the same name/body), 0 collisions |
 | **Import cycles** | 0 |
-| **Runtime dependencies** | 0 (`coverage` used only as an ephemeral measurement tool, never added to `pyproject.toml`) |
-| **Latest completed milestone** | **AT — Market Scanner v1** (uncommitted; see [report 0009](reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md)) — `fmits scan` runs the existing Swing Setup Engine (AR) across a hardcoded twenty-symbol watchlist with per-symbol failure isolation, printing one compact table. No new engine, no ranking, no ADR; see [the design](docs/design/MARKET_SCANNER_V1.md) and [the review](docs/reviews/MARKET_SCANNER_V1_REVIEW.md) |
-| **Product Value Level** | **Level 2 — usable swing-analysis assistant** — now including a deterministic swing-setup assessment with direction, confirmation, stop, target and R/R when justified, and a fixed-watchlist scan that surfaces every non-`WAIT` result in one command (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
+| **Runtime dependencies** | 0 (`coverage`/`pytest-cov` unavailable offline in this environment; mutation testing used in their place — see report 0010 §6–7) |
+| **Latest completed milestone** | **AU — Market Scanner Intelligence Report v1** (uncommitted; see [report 0010](reports/0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md)) — `fmits scan` now prints a readable market intelligence report by default (scan summary, market overview, actionable CONFIRMED/CANDIDATE setups with verbatim reasons, WAIT results grouped by reason); `--table` keeps AT's original compact table. No new engine, no ranking, no ADR; see [the design](docs/design/MARKET_SCANNER_INTELLIGENCE_REPORT_V1.md) and [the review](docs/reviews/MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md) |
+| **Product Value Level** | **Level 2 — usable swing-analysis assistant** — now including a deterministic swing-setup assessment with direction, confirmation, stop, target and R/R when justified, and a fixed-watchlist scan that surfaces every non-`WAIT` result as a readable report, not only a raw table (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT was itself an explicitly-scoped, owner-directed implementation task, not a NOW selection, and this row is unchanged by it. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
+| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT and AU were both explicitly-scoped, owner-directed implementation tasks, not NOW selections, and this row is unchanged by either. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
 
 ### Current user-visible capability
 
 ```
 fmits setup  BTCUSDT                       # a deterministic swing-trade setup assessment
 fmits setup  BTCUSDT ETHUSDT SOLUSDT       # one per symbol, in the order requested
-fmits scan                                 # the fixed 20-symbol watchlist, one compact table
+fmits scan                                 # the fixed 20-symbol watchlist, a readable market report
+fmits scan --table                         # the same scan, as the original compact table
 fmits daily  BTCUSDT ETHUSDT SOLUSDT       # the morning routine, one row per symbol
 fmits swing  BTCUSDT                       # the whole page, end to end
 fmits regime BTCUSDT --multi               # the environment, per role, with evidence
@@ -208,21 +210,39 @@ designed. It requires its own vision decision (**D-14**, **D-15**) before it can
 ## 8. DONE
 
 Repository-verified only. Every SHA below was confirmed to exist with `git cat-file -e`, **except
-`AT`, which is implemented, tested and reviewed but not yet committed** — recorded here on the
-evidence of the working tree and the full test run (report 0009), not on a SHA, per §11 rule 3's
-requirement that a status change be traceable; the traceable evidence for `AT` is the report and the
-reproducible test/coverage/mutation numbers it cites, and the row will gain a commit SHA once the
-owner authorizes committing.
+`AU`, which is implemented, tested and reviewed but not yet committed** — recorded here on the
+evidence of the working tree and the full test run (report 0010), not on a SHA, per §11 rule 3's
+requirement that a status change be traceable; the traceable evidence for `AU` is the report and the
+reproducible test/mutation numbers it cites, and the row will gain a commit SHA once the owner
+authorizes committing. `AT`, previously recorded here uncommitted, is now confirmed committed and
+pushed (`a271f33` code, `81a6202` docs — both verified present on `origin/main`).
 
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the five most recent milestones.
 
-### `AT` — Market Scanner v1 · **DONE** *(implemented, uncommitted)*
+### `AU` — Market Scanner Intelligence Report v1 · **DONE** *(implemented, uncommitted)*
 
 | Field | Value |
 |---|---|
-| **Commit** | **none yet** — implemented and tested on top of `9977274`; commit requires the owner's explicit authorization (`CLAUDE.md`) |
+| **Commit** | **none yet** — implemented and tested on top of `81a6202`; commit requires the owner's explicit authorization (`CLAUDE.md`) |
+| **ADR** | **none** — reuses ADR-0028 exactly as written; the report renderer lives inside `fmis.swing_setup`, the location that ADR already permits directional vocabulary |
+| **Design** | [MARKET_SCANNER_INTELLIGENCE_REPORT_V1.md](docs/design/MARKET_SCANNER_INTELLIGENCE_REPORT_V1.md) |
+| **Review** | [MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md](docs/reviews/MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md) — one P0 and two P1s found live and fixed (a market-overview label that could contradict a WAIT reason for the same symbol; CANDIDATE rows silently dropping an already-computed RR/target), confirmed against a second live scan; one P2 disclosed, not fixed, for a stated reason |
+| **Tests** | 4,423 → **4,426** (+3 net; 45 new tests in `test_swing_setup_scan_report.py`). No automated coverage tool available offline; 7 targeted mutation probes run in its place, 7 detected, 0 survivors |
+
+**Product value delivered.** `fmits scan` now prints a report a trader can actually act on in one
+reading, not twenty rows to scan by eye: a summary, which symbols are showing directional character,
+every CONFIRMED/CANDIDATE setup with its RR/target/stop and the exact reasons the engine already
+computed, and every WAIT result grouped by why. `--table` keeps AT's original table for scripting or a
+narrower terminal. No new engine, no ranking, no score — every fact printed already existed on
+`SetupAssessment` before this milestone.
+
+### `AT` — Market Scanner v1 · **DONE**
+
+| Field | Value |
+|---|---|
+| **Commit** | code `a271f33` · docs `81a6202` — both confirmed present on `origin/main` |
 | **ADR** | **none** — reuses ADR-0028 exactly as written; the scanner lives inside `fmis.swing_setup`, the location that ADR already permits directional vocabulary |
 | **Design** | [MARKET_SCANNER_V1.md](docs/design/MARKET_SCANNER_V1.md) |
 | **Review** | [MARKET_SCANNER_V1_REVIEW.md](docs/reviews/MARKET_SCANNER_V1_REVIEW.md) — no P0, no P1, no P2, one P3 found and closed during review, two P3 remaining (informational, inherited from existing patterns) |
@@ -253,8 +273,8 @@ an implicit sort.
 **Status note.** Implemented, tested and reviewed on repository evidence: the full suite is green
 under `-W error` at 4,375 tests, coverage is 100 % line and branch on every new/modified production
 file, mutation is 7/7 with byte-identical source restoration, and the independent review found no
-P0/P1/P2. **Not yet committed** — per `CLAUDE.md`'s git safety rule, nothing is committed without the
-owner's explicit authorization, and this task did not request or receive one. Full record:
+P0/P1/P2. **Committed and pushed** (code `a271f33`, docs `81a6202`) — confirmed against `HEAD`,
+local `main` and `origin/main` all matching. Full record:
 [report 0009](reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md).
 
 ### `AS` — Market Regime Time-Reference Correction · **DONE** *(defect fix)*

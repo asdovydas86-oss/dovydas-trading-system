@@ -7,7 +7,7 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `aca2628` (Milestone AS), plus Milestone AT — Market Scanner v1, implemented and tested, **pending commit** (rule 4) |
+| **Last verified against** | `81a6202` (Milestone AT — Market Scanner v1, code + docs, **released**), plus Milestone AU — Market Scanner Intelligence Report v1, implemented and tested, **pending commit** (rule 4) |
 | **Verified on** | 2026-08-07 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -67,13 +67,14 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `1480766` (`AR`), plus `AT` — Market Scanner v1 (implemented, pending commit) — what the owner
-can do today.**
+**As of `81a6202` (`AT`, released), plus `AU` — Market Scanner Intelligence Report v1 (implemented,
+pending commit) — what the owner can do today.**
 
 ```
 fmits setup  BTCUSDT                            # a deterministic swing-trade setup assessment
 fmits setup  BTCUSDT ETHUSDT SOLUSDT            # one per symbol, in the order requested
-fmits scan                                      # the fixed 20-symbol watchlist, one compact table
+fmits scan                                      # the fixed 20-symbol watchlist, a readable market report
+fmits scan --table                              # the same scan, as the original compact table
 fmits daily  BTCUSDT ETHUSDT SOLUSDT            # the morning routine, one row per symbol
 fmits swing  BTCUSDT                            # the whole page, end to end
 fmits regime BTCUSDT --multi                    # the environment, per role, with evidence
@@ -95,10 +96,12 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
   Direction never comes from one indicator — at least two of three independent families must agree
   with zero opposing — and `WAIT` is a first-class, successful result, not a failure;
 - a **fixed-watchlist market scanner**: one command runs the swing-setup assessment across twenty
-  hardcoded major pairs and prints one compact table — state, direction, risk/reward, stop and target
-  — plus a `TOP OPPORTUNITIES` section for whatever cleared `CANDIDATE`/`CONFIRMED`. A symbol whose
-  analysis fails is reported as `ERROR` and does not stop the scan. **Not a ranking**: rows stay in the
-  fixed list order, and the opportunities section is a filter over that order, never a sort;
+  hardcoded major pairs. By default it prints a **readable market intelligence report** — a scan
+  summary, which symbols are showing directional character, every `CONFIRMED`/`CANDIDATE` setup with
+  its risk/reward, target, stop and the exact reasons the engine already computed, and every `WAIT`
+  result grouped by why; `--table` prints the original compact one-row-per-symbol table. A symbol whose
+  analysis fails is reported as `ERROR` and does not stop the scan. **Not a ranking**: symbols stay in
+  the fixed list order in every section, and no score, probability or recommendation is computed;
 - a **repeatable multi-symbol routine**: one command runs the same analysis over a requested universe
   under one set of settings, and prints one row per symbol in the order requested — with the symbols
   that **failed, and why**, kept on the page. **Not a ranking**: no score, no order by any property of
@@ -143,7 +146,7 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 | ~~Persistence — a run is printed, never stored~~ | **Delivered by `AO`** — see above |
 | Historical replay — recomputing a past analysis from its original raw inputs | not archived yet; snapshot reproduction only |
 | A journal, discretionary notes, trade outcomes | `EP-18`, blocked on **D-04** |
-| ~~Opportunity scanning~~ over a fixed watchlist, ranked | **Scanning over a fixed watchlist delivered by `AT`**, unranked, exactly as designed — `fmits scan` returns every symbol's existing setup, never a score or order. **Ranking** remains `EP-02`/`EP-03` — a **named future capability** (SPEC §10 and the Opportunity Scanner; vision addendum; `reports/0005` C-164) that must arrive as its own explicit, deterministic, testable, backtested policy, per `AN`'s own warning against ranking as a side effect of a workflow |
+| ~~Opportunity scanning~~ over a fixed watchlist, ranked | **Scanning over a fixed watchlist delivered by `AT`, presented as a readable report by `AU`**, unranked in both, exactly as designed — `fmits scan` returns every symbol's existing setup, never a score or order. **Ranking** remains `EP-02`/`EP-03` — a **named future capability** (SPEC §10 and the Opportunity Scanner; vision addendum; `reports/0005` C-164) that must arrive as its own explicit, deterministic, testable, backtested policy, per `AN`'s own warning against ranking as a side effect of a workflow |
 | Ranking *by readiness* — sorting the daily index by its own states | **never**, in any version. Readiness describes the analysis, not the instrument; see AN's design §3.4 |
 | Alerts, scheduling, unattended runs, notification delivery | `EP-03` — scheduling still owns no architecture layer |
 | Watchlist persistence as its own model — a universe is typed, or supplied by the shell | `EP-03`, **D-06** — unrelated to D-01; `AO` archives whatever universe it is given |
@@ -165,10 +168,52 @@ An entry whose milestone is implemented and validated but not yet versioned is m
 
 ---
 
+### 2026-08-07 · `AU` — Market Scanner Intelligence Report v1
+
+**Status:** **Implemented — pending commit**, per rule 4 — carries no SHA. A material reliability/
+usability improvement to the eighth capability (`AT`'s scanner) — the same command, a report the owner
+can act on instead of a table they had to scan by eye.
+
+**What shipped.** `fmits scan` now prints a readable market intelligence report by default: a scan
+summary (counts), a market overview (which symbols are showing directional character, from data the
+engine already computed), every `CONFIRMED`/`CANDIDATE` setup with its risk/reward, target, stop and
+the exact reasons the engine already stated, and every `WAIT` result grouped by its own reason with a
+count. `--table` prints `AT`'s original compact table, unchanged, for scripting or a narrower terminal.
+
+**What changed for the owner.** Before `AU`, reading a scan meant scanning twenty rows by eye and
+re-running `fmits setup SYMBOL` to see *why* any one of them landed where it did. `fmits scan` now
+answers "what should I actually look at this morning, and why" in the same one command.
+
+**No new engine, no new ADR, no invented text.** Every fact printed by the new report already existed
+on `SetupAssessment` before this milestone — the "reason" lines are the engine's own
+`thesis`/`confirmation`/`invalidation` sentences, printed verbatim, never paraphrased or summarised by
+this presentation layer. `fmis.swing_setup.compose`/`.policy`/`.models` have a zero-line diff.
+
+**Found and fixed before release, confirmed live.** An independent adversarial review (run against the
+brief's own checklist: does the report lie, do counts disagree, is logic duplicated, does presentation
+leak into the engine or vice versa) found one P0 and two P1s, all reproducible through real analysis of
+real market data — not only hand-built test fixtures: a market-overview label that could sit beside a
+`WAIT` reason literally stating the opposite for the same symbol, and `CANDIDATE` setups silently
+dropping an already-computed risk/reward and target. Both were fixed and the fixes were confirmed
+against a second live scan before this record was written. Full account:
+[review](docs/reviews/MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md).
+
+**Validated before this record:** 4,423 → 4,426 tests, all green; no coverage tool available in this
+offline environment, 7 targeted mutation probes run in its place, all detected, zero survivors,
+byte-identical source restoration verified. Full record:
+[design](docs/design/MARKET_SCANNER_INTELLIGENCE_REPORT_V1.md) ·
+[review](docs/reviews/MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md) ·
+[report 0010](reports/0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md).
+
+**Not committed.** Per `CLAUDE.md`'s git safety rule, nothing is committed without the owner's explicit
+authorization; none was requested or given for this task.
+
+---
+
 ### 2026-08-07 · `AT` — Market Scanner v1
 
-**Status:** **Implemented — pending commit**, per rule 4 — carries no SHA. The eighth user-visible
-product capability.
+**Status:** Released · the eighth user-visible product capability.
+**Commit:** code `a271f33` · docs `81a6202`
 
 **What shipped.** `fmits scan`: one command runs the existing Swing Setup Engine (`AR`) across a
 fixed, hardcoded twenty-symbol watchlist of major crypto pairs, isolating one symbol's failure from
@@ -201,8 +246,9 @@ record: [design](docs/design/MARKET_SCANNER_V1.md) ·
 [review](docs/reviews/MARKET_SCANNER_V1_REVIEW.md) ·
 [report 0009](reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md).
 
-**Not committed.** Per `CLAUDE.md`'s git safety rule, nothing is committed without the owner's explicit
-authorization; none was requested or given for this task.
+**Committed and pushed.** Code `a271f33`, docs `81a6202` — confirmed against `HEAD`, local `main` and
+`origin/main` all matching. Table output unchanged by `AU`; `--table` is the exact renderer this record
+describes.
 
 ---
 

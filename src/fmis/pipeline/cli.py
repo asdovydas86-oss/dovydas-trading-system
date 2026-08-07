@@ -57,6 +57,7 @@ from fmis.market_regime import RegimePolicy
 from fmis.swing_setup import (
     SetupRunResult,
     render_scan,
+    render_scan_report,
     render_setup,
     run_market_scan,
     run_setup_for_symbols,
@@ -527,16 +528,28 @@ SETUP_COMMAND = Command(
 
 def _configure_scan(parser: argparse.ArgumentParser) -> None:
     _add_setup_style_arguments(parser)
+    parser.add_argument(
+        "--table", action="store_true",
+        help=(
+            "print the old compact one-row-per-symbol table instead of the "
+            "market intelligence report"
+        ),
+    )
 
 
 def _run_scan(args: argparse.Namespace) -> int:
-    """Scan the fixed watchlist and print one compact table.
+    """Scan the fixed watchlist and print a market intelligence report.
 
     Reuses `run_market_scan` — itself `run_setup_for_symbols` over
     `SCAN_UNIVERSE` — so a scan row and a `fmits setup` page for the same
     symbol are produced by identical code and cannot disagree. A symbol whose
     analysis failed is isolated exactly as `setup` isolates it; the scan never
     stops early.
+
+    Prints `render_scan_report` (Milestone AU) by default — a readable
+    summary, market overview, actionable setups and grouped WAIT reasons over
+    the exact same results. `--table` prints the original compact table
+    (Milestone AT) instead, unchanged, for scripting or a narrower terminal.
     """
     results = run_market_scan(
         timeframes={
@@ -548,7 +561,7 @@ def _run_scan(args: argparse.Namespace) -> int:
         policy=_policy_from(args),
         detection=_detection_from(args),
     )
-    print(render_scan(results))
+    print(render_scan(results) if args.table else render_scan_report(results))
     return _exit_code_for(results)
 
 
@@ -558,12 +571,13 @@ SCAN_COMMAND = Command(
     description=(
         "Run the same deterministic swing-setup assessment `fmits setup` "
         "produces across a fixed, hardcoded watchlist of major crypto pairs, "
-        "and print one compact table: state (WAIT/CANDIDATE/CONFIRMED/ERROR), "
-        "direction, risk/reward, stop and target. A symbol whose analysis "
-        "fails is reported as ERROR and does not stop the scan. Rows stay in "
-        "the fixed list order — this is not a ranking, and no score or "
-        "probability is computed. A CANDIDATE or CONFIRMED result also "
-        "appears in a TOP OPPORTUNITIES section."
+        "and print a readable market intelligence report: scan summary, "
+        "market overview, actionable CONFIRMED/CANDIDATE setups with their "
+        "stated reasons, and WAIT results grouped by reason. A symbol whose "
+        "analysis fails is reported as ERROR and does not stop the scan. "
+        "Symbols stay in the fixed list order within every section — this is "
+        "not a ranking, and no score or probability is computed. `--table` "
+        "prints the original compact one-row-per-symbol table instead."
     ),
     configure=_configure_scan,
     run=_run_scan,

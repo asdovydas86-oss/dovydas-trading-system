@@ -38,7 +38,7 @@ from fmis.providers.binance import Transport
 from fmis.swing_setup.compose import SetupRunResult, run_setup_for_symbols
 from fmis.swing_setup.models import SwingSetupError
 
-__all__ = ["SCAN_UNIVERSE", "run_market_scan", "render_scan"]
+__all__ = ["SCAN_UNIVERSE", "run_market_scan", "render_scan", "result_status"]
 
 #: A small, hardcoded list of major crypto pairs. Not fetched from Binance and
 #: not configurable at the CLI: the scanner's whole point is one command over
@@ -133,7 +133,14 @@ def _price(value: float) -> str:
     return f"{value:,.6g}"
 
 
-def _status(result: SetupRunResult) -> str:
+def result_status(result: SetupRunResult) -> str:
+    """`ERROR` when the symbol's analysis failed, else the assessment's own state.
+
+    Public so every renderer over `SetupRunResult` — this module's table and
+    `fmis.swing_setup.scan_report`'s intelligence report — classifies a result
+    identically. One function, never two copies of the same three-line rule
+    that could quietly drift apart.
+    """
     if result.assessment is None:
         return "ERROR"
     return result.assessment.state.value.upper()
@@ -166,7 +173,7 @@ def _target(result: SetupRunResult) -> str:
 def _row(result: SetupRunResult) -> str:
     return (
         f" {_clip(result.requested_symbol, _SYMBOL_WIDTH):<{_SYMBOL_WIDTH}} "
-        f"{_clip(_status(result), _STATUS_WIDTH):<{_STATUS_WIDTH}} "
+        f"{_clip(result_status(result), _STATUS_WIDTH):<{_STATUS_WIDTH}} "
         f"{_clip(_side(result), _SIDE_WIDTH):<{_SIDE_WIDTH}} "
         f"{_clip(_risk_reward(result), _RR_WIDTH):<{_RR_WIDTH}} "
         f"{_clip(_stop(result), _STOP_WIDTH):<{_STOP_WIDTH}} "
@@ -215,9 +222,9 @@ def render_scan(results: Sequence[SetupRunResult]) -> str:
 
     counts: dict[str, int] = {"WAIT": 0, "CANDIDATE": 0, "CONFIRMED": 0, "ERROR": 0}
     for result in results:
-        counts[_status(result)] += 1
+        counts[result_status(result)] += 1
     opportunities = [
-        result for result in results if _status(result) in ("CANDIDATE", "CONFIRMED")
+        result for result in results if result_status(result) in ("CANDIDATE", "CONFIRMED")
     ]
 
     lines: list[str] = [_rule("═")]

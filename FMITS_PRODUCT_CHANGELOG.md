@@ -7,7 +7,7 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `1480766e57526d48266a4aa5ff48b3a945614656` (Milestone AR) |
+| **Last verified against** | `aca2628` (Milestone AS) |
 | **Verified on** | 2026-08-07 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
@@ -155,6 +155,60 @@ the automation ladder remains unstarted.
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-07 · `AS` — Market Regime Time-Reference Correction
+
+**Status:** Released · **reliability fix, not a new capability** — per §1, recorded because it
+*materially improves the reliability* of an existing capability (`fmits regime`, and every command
+that depends on it).
+**Commit:** `aca2628`
+
+**What was broken.** `fmis.pipeline.regime.regime_input_from_sheet` supplied the index of the last
+*confirmed swing* into a field the engine validated and read as the index of the last *closed candle* —
+two different, routinely divergent positions in the same closed-candle sequence (the confirmation
+delay and ordinary pivot sparsity both hold the confirmed swing behind the candle count). One
+reference-frame mismatch produced two defects, traced in full in
+[`REGIME_ROOT_CAUSE_ANALYSIS_V1.md`](docs/design/REGIME_ROOT_CAUSE_ANALYSIS_V1.md): `RegimeInputError`
+raised on **valid** data whenever a change of character occurred after the last confirmed swing
+(measured live during this milestone at 15.6 % of 6,452 historical states across 11 symbols and 4
+intervals — matching the RCA's own 30-symbol, all-prefix measurement of 16.1 %); and, on every run that
+*did* succeed, the reported age of a change of character was silently understated (0 of 6,452
+successful classifications computed it correctly), systematically over-reporting `TRANSITIONING`.
+
+**What changed for the owner.** `fmits regime --multi`, `fmits swing`, `fmits setup` and `fmits daily`
+no longer abort on data that was always valid — verified live against ADAUSDT (the symbol on which the
+defect was originally reported; its previously-failing SETUP·1d view now classifies correctly) and
+against BTCUSDT, ETHUSDT, SOLUSDT, DOTUSDT, LINKUSDT. `fmits daily BTCUSDT ADAUSDT ETHUSDT` — which
+previously discarded already-succeeded symbols the moment one `RegimeInputError` occurred — now
+completes with 3/3 analysed, 0 failed, as a downstream consequence of the fix rather than a change to
+`fmis.daily` itself. And the age FMITS reports for a structural change is now correct: measured against
+the same 6,452-state sweep, 837 classifications move from a wrongly-reported `TRANSITIONING` to the
+correct state, zero move the other way — every flip in the direction the root-cause analysis predicted.
+
+**The fix.** `RegimeInput.last_index` (ambiguous — the adapter and the engine's own validator had
+silently resolved it to two different referents) becomes `RegimeInput.closed_count`: the number of
+closed candles the sheet was computed over, matching the pattern `fmis.swing_setup` already shipped for
+the same problem (`execution_closed_count`). The engine — never `fmis.pipeline`, which remains
+arithmetic-free by an AST-enforced guard — now owns `bars_since = closed_count - 1 -
+latest_change_index` and the invariant `latest_change_index < closed_count`. Three production files
+changed; `fmis.swing_setup`, `fmis.workspace` and `fmis.daily` have a zero-line diff.
+
+**Validated before release:** 4,332 tests green including `-W error` (4,319 before this milestone),
+100 % line and branch coverage on every modified module, 8 targeted mutation probes (all detected, zero
+survivors, byte-identical source restoration verified by SHA-256), and an independent adversarial review
+across twelve specific failure angles that found no P0, P1 or P2. Full record:
+[the review](docs/reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md).
+
+**What did not change.** `transition_lookback_bars` (the policy threshold `TRANSITIONING` is compared
+against) is untouched — this milestone corrected the arithmetic, not the policy, and the two are kept
+deliberately separate. No new architectural decision was required: this repair makes the implementation
+conform to [ADR-0025](docs/adr/ADR-0025-market-regime-engine-v1.md) §6 (amended to state explicitly what
+the boundary's fields mean) rather than changing it.
+
+**Related.** RCA: [`REGIME_ROOT_CAUSE_ANALYSIS_V1.md`](docs/design/REGIME_ROOT_CAUSE_ANALYSIS_V1.md) ·
+Review: [`MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md`](docs/reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md)
 
 ---
 

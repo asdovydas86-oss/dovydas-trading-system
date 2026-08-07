@@ -11,8 +11,8 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `0ea0414` (Milestone AP — architecture only). The measured code figures in §4 are unchanged since `c84b2a1` (Milestone AO), because AP changed no code |
-| **Verified on** | 2026-08-06 |
+| **Last verified against** | `aca2628` (Milestone AS — Market Regime Time-Reference Correction, a defect fix) |
+| **Verified on** | 2026-08-07 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -70,17 +70,18 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
+| **Milestone AS commit** | `aca2628` (production fix + tests + RCA + independent review — defect fix, not a new capability) |
 | **Milestone AR commit** | `1480766e57526d48266a4aa5ff48b3a945614656` (production code + tests + ADR-0028 + design + review) |
 | **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) |
 | **Milestone AP commit** | `0ea041477dbe9584618495dc334e9685e3e6eb0e` (architecture only — no code, no tests, no product-surface change) |
-| **HEAD** | `1480766` (AR) on top of `75a4f40` |
-| **`origin/main`** | `0c09824` — **AR is committed locally and not pushed; push requires separate, explicit authorization** |
+| **HEAD** | `aca2628` (AS) on top of `2a9bdcc` |
+| **`origin/main`** | `2a9bdcc` (AR and its docs reconciliation are already pushed) — **AS (`aca2628`) is 1 commit ahead, committed locally and not pushed; push requires separate, explicit authorization** |
 | **Working tree** | clean once this commit lands |
-| **Test count** | **4,319 passing**, identically under `-W error` (4,194 before AR; +125) |
-| **Public exports / collisions** | 293 / 0 (255 before AR — `fmis.swing_setup` is new) |
+| **Test count** | **4,332 passing**, identically under `-W error` (4,319 before AS; +13) |
+| **Public exports / collisions** | 293 / 0 (unchanged — `RegimeInput.last_index` → `closed_count` is a field rename, not a new export) |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 (`coverage` used only as an ephemeral measurement tool, never added to `pyproject.toml`) |
-| **Latest completed milestone** | **AR — Swing Setup Engine v1** (commit `1480766`) — the seventh user-visible product capability, and the first to make a directional claim, confined to `fmis.swing_setup` by ADR-0028 |
+| **Latest completed milestone** | **AS — Market Regime Time-Reference Correction** (commit `aca2628`) — a reliability fix: Market Regime measures structural change age from the last closed candle, not the last confirmed swing; see [the review](docs/reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md) |
 | **Product Value Level** | **Level 2 — usable swing-analysis assistant** — now including a deterministic swing-setup assessment with direction, confirmation, stop, target and R/R when justified (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
 | **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule is temporarily unsatisfied, not relaxed, per the same recorded exception AP and AO both used. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
@@ -202,6 +203,25 @@ Repository-verified only. Every SHA below was confirmed to exist with `git cat-f
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the five most recent milestones.
+
+### `AS` — Market Regime Time-Reference Correction · **DONE** *(defect fix)*
+
+| Field | Value |
+|---|---|
+| **Commit** | **`aca2628`** |
+| **RCA** | [REGIME_ROOT_CAUSE_ANALYSIS_V1.md](docs/design/REGIME_ROOT_CAUSE_ANALYSIS_V1.md) — validated against the live tree before any code changed |
+| **Review** | [MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md](docs/reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md) — **no P0, no P1, no P2**, one P3 (unreachable from any live call site) documented |
+| **Tests** | 4,319 → **4,332** (+13 net; 11 pre-existing references migrated off the defective contract). 100 % line and branch coverage on all three modified modules. 8 targeted mutation probes, 8 detected, 0 survivors |
+
+**Not a new capability — a correctness and reliability fix**, per §1's recording rule. `RegimeInput`
+carried a field (`last_index`) that the adapter filled with the last confirmed swing's position and the
+engine validated as the last closed candle's position — one reference-frame mismatch producing two
+defects (D-1: valid data raising `RegimeInputError`, measured at 15.6 % of a live 6,452-state sweep;
+D-2: the reported age of a structural change silently understated on every successful run). Fixed by
+replacing `last_index` with `closed_count`, adopting the pattern `fmis.swing_setup` already shipped.
+`fmits regime --multi`, `fmits swing`, `fmits setup` and `fmits daily` no longer abort on valid data;
+recorded in [`FMITS_PRODUCT_CHANGELOG.md`](FMITS_PRODUCT_CHANGELOG.md) as a reliability entry, not a new
+capability count.
 
 ### `AR` — Swing Setup Engine v1 · **DONE**
 

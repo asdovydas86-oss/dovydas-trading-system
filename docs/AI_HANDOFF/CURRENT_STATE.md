@@ -7,19 +7,66 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AR — Swing Setup Engine v1 (2026-08-07), the seventh user-visible
-product capability and the first milestone permitted to make a directional (`LONG`/`SHORT`) claim,
-confined to one new package by ADR-0028. The preceding milestone was AP — Trading Domain Architecture
-v1 (2026-08-06), architecture-only. AR required none of AP's AP-D1…AP-D6 decisions — see
-`docs/design/ADR_IMPLEMENTATION_GATE.md`'s assessment, which named AR's slice as the owner's
-unblocked, unscheduled first priority.
-**Latest commit at time of writing:** `1480766` — `feat(setup): Swing Setup Engine v1 — deterministic swing-trade setup assessment`.
-**Milestones AF through AO are pushed. `AP` (`0ea0414`) and `AR` (`1480766`) are committed locally and
-have NOT been pushed** — pushing requires the owner's separate, explicit authorization.
+**Last updated for:** Milestone AS — Market Regime Time-Reference Correction (2026-08-07), a defect fix,
+not a new product capability. `fmis.pipeline.regime.regime_input_from_sheet` supplied the last
+*confirmed swing's* position in a field the engine validated and consumed as the last *closed candle's*
+position — two different, routinely divergent positions in the same closed-candle sequence. Fixed by
+replacing `RegimeInput.last_index` with `RegimeInput.closed_count`, matching the existing
+`fmis.swing_setup` precedent (`execution_closed_count`). Full record:
+[`REGIME_ROOT_CAUSE_ANALYSIS_V1.md`](../design/REGIME_ROOT_CAUSE_ANALYSIS_V1.md) (root cause) and
+[`MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md`](../reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md)
+(independent review of the fix). The preceding milestone was AR — Swing Setup Engine v1 (2026-08-07),
+the seventh user-visible product capability.
+**Latest commit at time of writing:** `aca2628` — `fix(regime): correct structural time reference`.
+**Milestones AF through AR are pushed** — `origin/main` (`2a9bdcc`) descends from `AR` (`1480766`) and
+its docs reconciliation. **`AS` (`aca2628`) is committed locally, one commit ahead of `origin/main`, and
+has NOT been pushed** — pushing requires the owner's separate, explicit authorization.
 
 ---
 
 ## Current milestone
+
+- **AS — Market Regime Time-Reference Correction** (commit `aca2628`) — a defect fix, not a new
+  capability. `docs/design/REGIME_ROOT_CAUSE_ANALYSIS_V1.md` traced two defects (D-1, D-2) to one
+  cause: `RegimeInput.last_index` carried the last confirmed swing's index but was validated and read
+  as the last closed candle's index. **D-1** — `RegimeInputError` raised on valid data whenever a
+  change of character occurred after the last confirmed swing, aborting `fmits regime --multi`,
+  `fmits swing`, `fmits setup` and (via an unrelated all-or-nothing failure mode) `fmits daily`.
+  **D-2** — `bars_since`, silently understated because it was measured from the swing rather than from
+  the last closed candle, systematically over-reporting `TRANSITIONING`.
+
+  **The fix.** `RegimeInput.last_index` → `RegimeInput.closed_count` (required, not optional): the
+  number of closed candles the sheet was computed over, matching the pattern `fmis.swing_setup` already
+  shipped (`execution_closed_count`, `policy.py:347`). The engine now owns
+  `bars_since = closed_count - 1 - latest_change_index` and the invariant
+  `latest_change_index < closed_count`; `fmis.pipeline` still performs no arithmetic (AST-guarded,
+  confirmed by a mutation probe during review). Three production files changed
+  (`market_regime/models.py`, `market_regime/classify.py`, `pipeline/regime.py`); `fmis.swing_setup`,
+  `fmis.workspace` and `fmis.daily` are untouched.
+
+  **Measured, not argued.** A live walk-forward sweep — 11 symbols × 4 intervals × 6,452 historical
+  states replayed prefix-by-prefix on real Binance data — recorded **zero** `RegimeInputError`s after
+  the fix, against 1,006 (15.6 %) before it. 837 classifications moved from a wrongly-reported
+  `TRANSITIONING` to the correct state; zero moved the other way. Live-verified against ADAUSDT (the
+  originally reported failure, now succeeds on the exact previously-failing view) plus BTCUSDT, ETHUSDT,
+  SOLUSDT, DOTUSDT and LINKUSDT; `fmits daily BTCUSDT ADAUSDT ETHUSDT` now succeeds end to end as a
+  downstream consequence, without any change to `fmis.daily`.
+
+  **Independently reviewed**, not merely tested: 8 targeted mutations (off-by-one, swing-index
+  regression, forming-candle leakage, transition-boundary asymmetry, guard bypass, arithmetic-in-pipeline,
+  invariant removal, field-swap) — all 8 detected, zero survivors, byte-identical source restoration
+  verified by SHA-256. 100 % line and branch coverage on all three modified modules. Full record:
+  [the review](../reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md) — no P0, no P1, no P2; one P3
+  (a residual API risk already unreachable from every live call site) documented as a watch item.
+
+  **What did not change.** `transition_lookback_bars` (the policy threshold) is untouched — this
+  milestone corrected the arithmetic that threshold is applied to, not the threshold itself, per
+  `CLAUDE.md`'s separation of correctness repair from policy recalibration. `fmis.swing_setup`'s
+  directional policy is untouched; a corrected regime fact may legitimately change what `fmits setup`
+  reports (DOTUSDT reached `CONFIRMED SHORT` on corrected regime facts during live verification — a
+  real, non-manufactured result, not evidence either way of what the old code would have said, since it
+  was not re-run against the identical instant), and that is the fix working as intended, not a
+  regression.
 
 - **AR — Swing Setup Engine v1** (commit `1480766`) — the owner's stated first priority: a deterministic
   swing-trade setup assessment. Design in [the design document](../design/SWING_SETUP_ENGINE_V1.md);
@@ -947,7 +994,10 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**3,905 passing** (`uv run pytest`, ~8 s), identically with `-W error`.
+**4,332 passing** (`uv run python -m pytest`, ~13 s), identically with `-W error`. Measured at `AS`
+(`aca2628`); AR measured 4,319 — `AS` migrated 11 pre-existing `RegimeInput` test references and added
+13 net new tests (regression fixtures, mutation-testing targets, boundary cases) for the time-reference
+fix, per [the review](../reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md).
 
 > **The per-module table below is a partial breakdown and has not been maintained since Milestone AG**
 > (it totals 3,404). The headline figure above is the measured one. The suites added since are:

@@ -7,31 +7,116 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AT — Market Scanner v1 (2026-08-07), the eighth user-visible product
-capability. `fmits scan` runs the existing Swing Setup Engine (`AR`) across a fixed, hardcoded
-twenty-symbol watchlist with per-symbol failure isolation, printing one compact table. No new engine,
-no ranking, no ADR — the scanner lives inside `fmis.swing_setup`, the location
-[ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md) already permits. Full record:
-[`MARKET_SCANNER_V1.md`](../design/MARKET_SCANNER_V1.md) (design),
-[`MARKET_SCANNER_V1_REVIEW.md`](../reviews/MARKET_SCANNER_V1_REVIEW.md) (independent review), and
-[report 0009](../../reports/0009_2026-08-07_MARKET_SCANNER_V1_IMPLEMENTATION.md) (implementation
-record). The preceding milestone was AS — Market Regime Time-Reference Correction (2026-08-07), a
-defect fix, not a new capability.
-**`AT` is implemented, tested and reviewed but NOT committed** — per `CLAUDE.md`'s git safety rule,
-nothing is committed without the owner's explicit authorization, and none was given for this task; the
-working tree sits on top of `9977274`.
-**Latest committed commit:** `9977274` — `docs(product): record market regime reliability fix`.
-**Milestones AF through AS (plus AS's docs reconciliation) are pushed** — `origin/main` (`2a9bdcc`)
-descends from `AR` (`1480766`) and its docs reconciliation; `aca2628` (AS) and `9977274` (AS's docs)
-are committed locally and have **NOT** been pushed — pushing requires the owner's separate, explicit
-authorization.
+**Last updated for:** Milestone AV — Swing Setup Historical Backtest Harness v1 (2026-08-08), the first
+deterministic historical backtest for the existing Swing Setup Engine. `fmits backtest` replays the
+exact, unmodified policy over real historical closed candles with no lookahead, one simulated instant
+at a time, and reports what it would have produced — never a portfolio backtest, never realized PnL.
+Full record: [`SWING_SETUP_BACKTEST_V1.md`](../design/SWING_SETUP_BACKTEST_V1.md) (design),
+[`SWING_SETUP_BACKTEST_V1_REVIEW.md`](../reviews/SWING_SETUP_BACKTEST_V1_REVIEW.md) (independent
+review), and [report 0011](../../reports/0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md)
+(implementation record). The preceding milestones were AU — Market Scanner Intelligence Report v1
+(2026-08-07) and AT — Market Scanner v1 (2026-08-07); this file's own entries for both were never
+written at the time (a pre-existing gap, corrected below rather than left silent, using the facts
+already recorded in `FMITS_PRODUCT_CHANGELOG.md` and the reports each milestone produced).
+**`AV`'s production code, tests, design and review are committed locally as `2000ba2`** — per
+`CLAUDE.md`'s git safety rule, nothing is pushed without the owner's explicit authorization, and none
+was given for this task.
+**Latest committed commit:** `2000ba2` — `feat(backtest): add Swing Setup historical harness`, on top
+of `35bce7a` (AU's docs) and `fd8a781` (AU's production code + tests).
+**Milestones AF through AU (plus AU's own docs reconciliation) are pushed** — `origin/main` (`35bce7a`)
+is one commit behind local `HEAD` (`2000ba2`); `AV` is committed locally, not pushed — pushing requires
+the owner's separate, explicit authorization.
 
 ---
 
 ## Current milestone
 
-- **AT — Market Scanner v1** (implemented, tested, reviewed; **not yet committed** — see the banner
-  above). The first market scanner. `docs/design/MARKET_SCANNER_V1.md` traces the one design decision
+- **AV — Swing Setup Historical Backtest Harness v1** (commit `2000ba2` — **committed locally, not
+  pushed**; see the banner above). The first deterministic historical backtest for the existing
+  Swing Setup Engine (`AR`). Answers exactly one question — *"what would the current Swing Setup v1
+  policy have produced historically?"* — never a strategy redesign, never a tuning exercise.
+
+  **What shipped.** Seven new flat modules directly inside `fmis/swing_setup/`
+  (`backtest_models.py`, `backtest_replay.py`, `backtest_identity.py`, `backtest_outcomes.py`,
+  `backtest_harness.py`, `backtest_metrics.py`, `backtest_render.py`) plus one small, additive,
+  backward-compatible refactor to `compose.py` (`setup_assessment_for_sheet` is now a thin wrapper over
+  a new `setup_inputs_and_assessment_for_sheet`, which also returns the `SetupInputs` an assessment was
+  reasoned from). `fmits backtest [SYMBOL...]` needs no arguments for a default run: ten liquid crypto
+  pairs, 400 days, the production 1w/1d/4h timeframe roles.
+
+  **No duplicate signal logic, by construction.** The harness calls the exact, unmodified
+  `multi_timeframe_facts_for_symbol` → `setup_inputs_and_assessment_for_sheet` → `evaluate_setup` chain
+  `fmits setup`/`fmits scan` already use, through a real historical raw-kline cache and a replay
+  `Transport` bound to one simulated instant — the same `transport`/`clock` injection points every
+  existing test in this repository already uses to run network-free.
+  `fmis.swing_setup.policy`/`.models` have a zero-line diff.
+
+  **No lookahead, verified two independent ways.** The replay transport filters the raw cache to
+  `close_time < now` before a single byte reaches `fetch_klines`; `fetch_klines` then independently
+  re-derives `is_closed` from the same clock. A bug in either mechanism alone still cannot leak a
+  forming or future candle into a historical decision — proven by tests that corrupt future candles and
+  assert byte-identical earlier observations, and by a mutation probe that breaks the boundary and is
+  caught.
+
+  **Outcome classification, not realized PnL.** `TARGET_FIRST`/`STOP_FIRST`/`AMBIGUOUS_SAME_BAR`/
+  `NEITHER_WITHIN_WINDOW` — a same-bar touch of both stop and target is never guessed from candle
+  colour, following the identical intrabar refusal `fmis.change_of_character`'s design record already
+  states for two structural events. No fees, slippage, spread, execution delay, or position sizing are
+  modelled; every limitation prints on the report itself.
+
+  **A real historical measurement, reported honestly.** Live on real Binance data, 10 symbols, 400 days
+  (2025-07-04 → 2026-08-07): 21,730 observations, 182 confirmed setups, 151 with evaluable stop/target
+  geometry — **47.4% target-first, 52.6% stop-first**, reported as measured, close to a coin flip, not
+  reinterpreted positively. 76.5% of observations fell in a context-role regime the engine classified
+  `INSUFFICIENT` — a real, measured consequence of `fmis.market_regime` needing 50 closed weekly
+  candles before it can classify anything, not a defect (and the reason `DEFAULT_BACKTEST_DAYS` is 400,
+  not a shorter, rounder number — a 180-day first draft produced **zero** `CONFIRMED` results on a
+  synthetic fixture, traced to exactly this cause and fixed before any live run). The R:R distribution's
+  tail is genuinely pathological (p90 = 20.0, max = 41,282 on this run) — evidence for the hostile
+  audit's own concern about unbounded stop/target geometry, surfaced rather than hidden.
+
+  **Independently reviewed**, not merely tested: an explicit adversarial checklist (lookahead, duplicate
+  setups, a dishonest denominator, guessed ambiguity, LONG/SHORT asymmetry, run-order dependence,
+  non-determinism) tried directly against the shipped code. Found and fixed: a real width-overflow
+  defect that crashed the CLI's own documented default arguments — caught only by the live Binance run,
+  never by a hand-built fixture, because every unit fixture up to that point used at most two short
+  symbol names; and the 180-day default described above. One mutation survivor (an unchecked
+  `risk_reward_mean` divisor) closed with a new test. Full record:
+  [the review](../reviews/SWING_SETUP_BACKTEST_V1_REVIEW.md) — one P1, one P2 (both fixed pre-live-run
+  or immediately after), one P3 survivor (closed), one P3 informational note, no P0.
+
+  **Quality.** 4,426 → **4,488 tests** (+62, all in the new `tests/test_swing_setup_backtest.py`),
+  identically under `-W error`, except two pre-existing failures unrelated to this milestone (a
+  float-formatting flake in `test_swing_setup_scan_report.py`, reproduced on the clean pre-AV tree and
+  named here rather than silently absorbed into this milestone's scope). **8 mutation probes, 8
+  detected** (1 initial survivor, closed with a new test and reconfirmed caught), byte-identical source
+  restoration verified by SHA-256 after every probe. +17 new exported names on `fmis.swing_setup`
+  (34 → 51), 0 collisions, import cycles 0, runtime dependencies 0.
+
+**The most recent milestone before this that changed what the owner can do was AU, described next.**
+
+- **AU — Market Scanner Intelligence Report v1** (commit `fd8a781`, docs `35bce7a`) — a material
+  reliability/usability improvement to `AT`'s scanner, not a new command. `fmits scan` now prints a
+  readable market intelligence report by default: a scan summary, a market overview, every
+  `CONFIRMED`/`CANDIDATE` setup with its risk/reward, target, stop and the engine's own verbatim
+  reasons, and every `WAIT` result grouped by reason. `--table` prints `AT`'s original compact table,
+  unchanged. No new engine, no ranking, no ADR — every fact printed already existed on
+  `SetupAssessment` before this milestone; `fmis.swing_setup.compose`/`.policy`/`.models` have a
+  zero-line diff. An independent adversarial review found one P0 and two P1s (a market-overview label
+  that could contradict a `WAIT` reason for the same symbol; `CANDIDATE` setups silently dropping an
+  already-computed risk/reward and target), both fixed and confirmed against a second live scan before
+  release. 4,423 → 4,426 tests, 7 mutation probes, 7 detected, zero survivors. Full record:
+  [design](../design/MARKET_SCANNER_INTELLIGENCE_REPORT_V1.md) ·
+  [review](../reviews/MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md) ·
+  [report 0010](../../reports/0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md).
+  *(This file's own entry for `AU` was not written at the time it landed — a pre-existing gap in this
+  document, corrected here rather than left silent, using the facts already recorded in
+  `FMITS_PRODUCT_CHANGELOG.md` and report 0010.)*
+
+**The most recent milestone before that was AT, described next.**
+
+- **AT — Market Scanner v1** (commits `a271f33` code, `81a6202` docs — **committed and pushed**). The
+  first market scanner. `docs/design/MARKET_SCANNER_V1.md` traces the one design decision
   this milestone made: `fmis.swing_setup.scan` is a new module **inside** the existing
   `fmis.swing_setup` package rather than a new top-level package, because
   [ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md) already confines directional

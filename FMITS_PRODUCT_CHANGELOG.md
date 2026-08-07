@@ -7,8 +7,8 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `fd8a781` (Milestone AU — Market Scanner Intelligence Report v1, code + tests + docs, **committed locally, not pushed**), on top of `81a6202` (Milestone AT, released) |
-| **Verified on** | 2026-08-07 |
+| **Last verified against** | `2000ba2` (Milestone AV — Swing Setup Historical Backtest Harness v1, code + tests + docs, **committed locally, not pushed**), on top of `35bce7a` (Milestone AU's docs, committed and pushed) |
+| **Verified on** | 2026-08-08 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -67,14 +67,15 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `fd8a781` (`AU` — Market Scanner Intelligence Report v1, committed locally, not pushed), on top
-of `81a6202` (`AT`, released) — what the owner can do today.**
+**As of `2000ba2` (`AV` — Swing Setup Historical Backtest Harness v1, committed locally, not pushed), on
+top of `35bce7a` (`AU`'s docs, released) — what the owner can do today.**
 
 ```
 fmits setup  BTCUSDT                            # a deterministic swing-trade setup assessment
 fmits setup  BTCUSDT ETHUSDT SOLUSDT            # one per symbol, in the order requested
 fmits scan                                      # the fixed 20-symbol watchlist, a readable market report
 fmits scan --table                              # the same scan, as the original compact table
+fmits backtest                                  # the current policy, replayed over real history
 fmits daily  BTCUSDT ETHUSDT SOLUSDT            # the morning routine, one row per symbol
 fmits swing  BTCUSDT                            # the whole page, end to end
 fmits regime BTCUSDT --multi                    # the environment, per role, with evidence
@@ -90,6 +91,13 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 
 **Delivered:**
 
+- a **deterministic historical backtest harness**: `fmits backtest` replays the exact, unmodified
+  swing-setup policy over real historical closed candles — no lookahead, by construction of a replay
+  transport verified two independent ways — and reports what it would have produced: every
+  WAIT/CANDIDATE/CONFIRMED observation, what happened after each confirmed setup (target-first /
+  stop-first / same-bar-ambiguous / unresolved-within-window), reconciled counts, and every limitation
+  on the page itself. **Not a portfolio backtest** — no fees, no slippage, no realized PnL, no position
+  sizing — and not a ranking or a tuning exercise: the policy is measured exactly as it stands;
 - a **deterministic swing-trade setup assessment**: `WAIT` / `CANDIDATE` / `CONFIRMED`, with a
   direction only when a candidate exists, the independent evidence families behind it, confirmation,
   invalidation, stop, target(s) and risk/reward when computable, and every limitation that applies.
@@ -151,7 +159,7 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 | Alerts, scheduling, unattended runs, notification delivery | `EP-03` — scheduling still owns no architecture layer |
 | Watchlist persistence as its own model — a universe is typed, or supplied by the shell | `EP-03`, **D-06** — unrelated to D-01; `AO` archives whatever universe it is given |
 | Any asset class other than crypto | `EP-05` |
-| Backtesting, paper trading, shadow mode, execution | `EP-14` … `EP-17` |
+| ~~Historical backtest of setup outcomes~~ | **Delivered by `AV`** — see above. A realized-PnL portfolio backtest, paper trading, shadow mode and execution remain `EP-14` … `EP-17` |
 
 **Safety position.** The system executes nothing and holds no credentials that could move funds.
 `AR` is the first and only capability that makes a directional claim (`fmits setup`), confined to one
@@ -165,6 +173,60 @@ the automation ladder remains unstarted.
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-08 · `AV` — Swing Setup Historical Backtest Harness v1
+
+**Status:** Released · **committed locally, not pushed**. A new capability: the owner can now ask, and
+get a real answer to, "what would the current Swing Setup v1 policy have produced historically?"
+**Commit:** `2000ba2`
+
+**What shipped.** `fmits backtest [SYMBOL...]` replays the exact, unmodified Swing Setup v1 policy over
+real historical closed candles from public Binance data — one simulated instant at a time, seeing only
+candles already closed at that instant — and prints a deterministic report: every
+WAIT/CANDIDATE/CONFIRMED observation counted and reconciled, what happened after each confirmed setup
+(`TARGET_FIRST`/`STOP_FIRST`/`AMBIGUOUS_SAME_BAR`/`NEITHER_WITHIN_WINDOW`), the exact data window used,
+and every limitation, printed on the page itself rather than left in a document. A default run needs no
+arguments: ten liquid crypto pairs, 400 days, the production 1w/1d/4h timeframe roles.
+
+**Zero duplicate signal logic.** The harness calls the same `multi_timeframe_facts_for_symbol` →
+`setup_inputs_and_assessment_for_sheet` → `evaluate_setup` chain `fmits setup`/`fmits scan` already use,
+through a real historical data cache and a replay `Transport` bound to one simulated instant — the same
+injection point every existing test in this repository already uses to run network-free.
+`fmis.swing_setup.policy` has a zero-line diff; the 2-of-3 family rule, regime thresholds, confirmation
+lookback, stop rule, target rule and RR policy are all exactly what they were before this milestone.
+
+**The first honest measurement of the policy this repository has produced.** Live, on real Binance data,
+10 symbols, 400 days (2025-07-04 → 2026-08-07): 21,730 observations, 182 confirmed setups, 151 with
+evaluable stop/target geometry — **47.4% target-first, 52.6% stop-first**, close to a coin flip and
+reported as exactly that, not reinterpreted positively. 76.5% of observations fell in a regime the
+context-role dimension classified `INSUFFICIENT` (a real, measured consequence of `fmis.market_regime`
+needing 50 closed weekly candles before it can classify anything, not a defect). The R:R distribution's
+tail is genuinely pathological (p90 = 20.0, max = 41,282 on this run) — evidence for, not against, the
+hostile audit's own concern about unbounded stop/target geometry. None of this is spun; the task brief's
+own instruction — *"if the result is bad, report that it is bad"* — is what this entry does.
+
+**Not a portfolio backtest, and the report says so on every page.** No fees, slippage, spread, or
+execution delay; no position sizing; printed R:R is never confused with realized PnL; a same-bar
+touch of both stop and target is reported as `AMBIGUOUS_SAME_BAR`, never guessed from candle colour.
+
+**Independently reviewed**, not merely tested: an explicit adversarial checklist (lookahead, duplicate
+setups, a dishonest denominator, guessed ambiguity, LONG/SHORT asymmetry, run-order dependence,
+non-determinism) tried directly against the shipped code, each with a reproducing test or a mutation
+probe. Found and fixed: a real width-overflow defect that crashed the CLI's own documented default
+arguments, caught only by the live Binance run (never by a hand-built fixture); a default lookback
+window too short for the regime engine to ever classify anything, corrected before any live run. Full
+record: [review](docs/reviews/SWING_SETUP_BACKTEST_V1_REVIEW.md).
+
+**Quality.** 4,426 → **4,487 tests** (+61), identically under `-W error` except two pre-existing,
+unrelated failures on `main` before this milestone (a float-formatting flake in
+`test_swing_setup_scan_report.py`, reproduced on the clean tree and named rather than silently fixed
+under this milestone's scope). 8 targeted mutation probes, 8 detected (1 initial survivor closed with a
+new test), byte-identical source restoration verified by SHA-256. Full record:
+[design](docs/design/SWING_SETUP_BACKTEST_V1.md) ·
+[review](docs/reviews/SWING_SETUP_BACKTEST_V1_REVIEW.md) ·
+[report 0011](reports/0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md).
 
 ---
 

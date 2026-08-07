@@ -11,8 +11,8 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `HEAD`/`origin/main` at `81a6202` (Milestone AT — Market Scanner v1, code + docs, **committed and pushed**), plus Milestone AU — Market Scanner Intelligence Report v1, **implemented and tested, not yet committed** (§8) |
-| **Verified on** | 2026-08-07 |
+| **Last verified against** | `HEAD` at `2000ba2` (Milestone AV — Swing Setup Historical Backtest Harness v1, code + tests + design + review + report, **committed locally, not pushed**), on top of `35bce7a` (Milestone AU's docs, committed and pushed). `origin/main` remains at `35bce7a` (§4) |
+| **Verified on** | 2026-08-08 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -70,23 +70,23 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AU status** | **Committed locally, not pushed** — `fd8a781` (production code + tests + design + review, §8); see [report 0010](reports/0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md). The report itself was written and frozen pre-commit, per this repository's own point-in-time report convention (see report 0009/`AT`, which is never revised after its own later commit either) |
+| **Milestone AV status** | **Committed locally, not pushed** — `2000ba2` (production code + tests + design + review + report, §8); see [report 0011](reports/0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md). The report itself was written and frozen pre-commit, per this repository's own point-in-time report convention (see report 0009/`AT`, which is never revised after its own later commit either) |
+| **Milestone AU commit** | `35bce7a` (docs) on top of `fd8a781` (production code + tests) — **committed and pushed** |
 | **Milestone AT commits** | code `a271f33` (production code + tests) · docs `81a6202` (backlog/changelog/current-state reconciliation) — **committed and pushed** |
 | **Milestone AS commit** | `aca2628` (production fix + tests + RCA + independent review — defect fix, not a new capability) |
 | **Milestone AR commit** | `1480766e57526d48266a4aa5ff48b3a945614656` (production code + tests + ADR-0028 + design + review) |
 | **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) |
-| **Milestone AP commit** | `0ea041477dbe9584618495dc334e9685e3e6eb0e` (architecture only — no code, no tests, no product-surface change) |
-| **HEAD** | `fd8a781` (AU code + tests + docs, committed locally on top of `81a6202`) |
-| **`origin/main`** | `81a6202` — **one commit behind local `HEAD`; `fd8a781` (AU) is committed locally, not pushed, per this milestone's own explicit instruction. Pushing requires separate, explicit authorization** |
-| **Working tree** | clean relative to `HEAD` (`fd8a781`) — the five untracked docs unrelated to this milestone (`ADR_IMPLEMENTATION_GATE.md` and siblings) predate it and are unchanged |
-| **Test count** | **4,426 passing**, identically under the full suite (4,423 before AU; +3 net — 45 new tests in `test_swing_setup_scan_report.py`, 4 CLI tests renamed/added, no regressions) |
-| **Public exports / collisions** | +2 new names on `fmis.swing_setup` (`render_scan_report`, `result_status`; the latter promoted from a private `scan._status` of the same name/body), 0 collisions |
+| **HEAD** | `2000ba2` (AV production code + tests + design + review + report, committed locally on top of `35bce7a`) |
+| **`origin/main`** | `35bce7a` — **one commit behind local `HEAD`; `2000ba2` (AV) is committed locally, not pushed, per this milestone's own explicit instruction. Pushing requires separate, explicit authorization** |
+| **Working tree** | This product-docs commit (backlog/changelog/current-state reconciliation, recording `2000ba2`'s real SHA) is the only remaining uncommitted change. The pre-existing untracked AP/AQ-era docs (`ADR_IMPLEMENTATION_GATE.md` and siblings) predate this milestone and are unchanged |
+| **Test count** | **4,488 collected, 4,486 passing** (4,426 before AV; +62 net, all in the new `tests/test_swing_setup_backtest.py`), identically under `-W error`, **except two pre-existing failures unrelated to this milestone** — a float-formatting flake in `tests/test_swing_setup_scan_report.py`, reproduced on the clean pre-AV tree and named here rather than silently absorbed into this milestone's scope |
+| **Public exports / collisions** | +17 new names on `fmis.swing_setup` (34 → 51: the historical backtest harness's public API — `run_backtest`, `compute_metrics`, `render_backtest_report`, `BacktestRun`, `BacktestMetrics`, `HistoricalObservation`, `SetupOutcome`, `OutcomeStatus`, `DataBoundary`, `BacktestError` and five constants — plus `setup_inputs_and_assessment_for_sheet` from the `compose.py` refactor), 0 collisions |
 | **Import cycles** | 0 |
-| **Runtime dependencies** | 0 (`coverage`/`pytest-cov` unavailable offline in this environment; mutation testing used in their place — see report 0010 §6–7) |
-| **Latest completed milestone** | **AU — Market Scanner Intelligence Report v1** (uncommitted; see [report 0010](reports/0010_2026-08-07_MARKET_SCANNER_INTELLIGENCE_REPORT_V1_IMPLEMENTATION.md)) — `fmits scan` now prints a readable market intelligence report by default (scan summary, market overview, actionable CONFIRMED/CANDIDATE setups with verbatim reasons, WAIT results grouped by reason); `--table` keeps AT's original compact table. No new engine, no ranking, no ADR; see [the design](docs/design/MARKET_SCANNER_INTELLIGENCE_REPORT_V1.md) and [the review](docs/reviews/MARKET_SCANNER_INTELLIGENCE_REPORT_V1_REVIEW.md) |
-| **Product Value Level** | **Level 2 — usable swing-analysis assistant** — now including a deterministic swing-setup assessment with direction, confirmation, stop, target and R/R when justified, and a fixed-watchlist scan that surfaces every non-`WAIT` result as a readable report, not only a raw table (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
+| **Runtime dependencies** | 0 (`coverage`/`pytest-cov` unavailable offline in this environment; 8 targeted mutation probes used in their place, 8/8 detected — see report 0011 §7) |
+| **Latest completed milestone** | **AV — Swing Setup Historical Backtest Harness v1** (uncommitted; see [report 0011](reports/0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md)) — `fmits backtest` replays the exact, unmodified Swing Setup v1 policy over real historical closed candles with no lookahead, classifies what happened after every confirmed setup, and reports deterministic, reconciled aggregate measurements. Live on real Binance data (10 symbols, 400 days): 21,730 observations, 182 confirmed setups, 151 evaluable outcomes, 47.4% target-first / 52.6% stop-first — reported as measured, not reinterpreted. See [the design](docs/design/SWING_SETUP_BACKTEST_V1.md) and [the review](docs/reviews/SWING_SETUP_BACKTEST_V1_REVIEW.md) |
+| **Product Value Level** | **Level 2 — usable swing-analysis assistant**, now with a first honest measurement of the swing-setup policy's own historical behaviour (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT and AU were both explicitly-scoped, owner-directed implementation tasks, not NOW selections, and this row is unchanged by either. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
+| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT, AU and AV were all explicitly-scoped, owner-directed implementation tasks, not NOW selections, and this row is unchanged by any of them. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
 
 ### Current user-visible capability
 

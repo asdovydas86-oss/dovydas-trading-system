@@ -11,8 +11,8 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `HEAD` at `2000ba2` (Milestone AV — Swing Setup Historical Backtest Harness v1, code + tests + design + review + report, **committed locally, not pushed**), on top of `35bce7a` (Milestone AU's docs, committed and pushed). `origin/main` remains at `35bce7a` (§4) |
-| **Verified on** | 2026-08-08 |
+| **Last verified against** | `HEAD` at `f9ddc54` (Milestone AV's product docs, committed and pushed) plus **Milestone BC — Research Dataset & Counterfactual Replay Correction**, committed locally on top of it and **not pushed** (§4) |
+| **Verified on** | 2026-08-11 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -70,20 +70,22 @@ before?"* An item that cannot answer it does not belong here.
 
 | Fact | Value |
 |---|---|
-| **Milestone AV status** | **Committed locally, not pushed** — `2000ba2` (production code + tests + design + review + report, §8); see [report 0011](reports/0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md). The report itself was written and frozen pre-commit, per this repository's own point-in-time report convention (see report 0009/`AT`, which is never revised after its own later commit either) |
+| **Milestone BC status** | **Committed locally, not pushed** — research-harness correction (production code + tests + design + implementation record + hostile review, §8); see [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) |
+| **Milestone AV status** | **Committed and pushed** — `2000ba2` code, `f9ddc54` docs; see [report 0011](reports/0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md). **Read report 0011's setup counts beside report 0012 §7**: AV's setup identity is derived from a window-relative bar index and changes every bar, so its "unique setups" figure counts directional bars (549 from 552) rather than distinct setups |
+| **Milestone AV report caveat** | Report 0011 was written and frozen pre-commit, per this repository's point-in-time report convention, and is not revised |
 | **Milestone AU commit** | `35bce7a` (docs) on top of `fd8a781` (production code + tests) — **committed and pushed** |
 | **Milestone AT commits** | code `a271f33` (production code + tests) · docs `81a6202` (backlog/changelog/current-state reconciliation) — **committed and pushed** |
 | **Milestone AS commit** | `aca2628` (production fix + tests + RCA + independent review — defect fix, not a new capability) |
 | **Milestone AR commit** | `1480766e57526d48266a4aa5ff48b3a945614656` (production code + tests + ADR-0028 + design + review) |
 | **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) |
-| **HEAD** | `2000ba2` (AV production code + tests + design + review + report, committed locally on top of `35bce7a`) |
-| **`origin/main`** | `35bce7a` — **one commit behind local `HEAD`; `2000ba2` (AV) is committed locally, not pushed, per this milestone's own explicit instruction. Pushing requires separate, explicit authorization** |
-| **Working tree** | This product-docs commit (backlog/changelog/current-state reconciliation, recording `2000ba2`'s real SHA) is the only remaining uncommitted change. The pre-existing untracked AP/AQ-era docs (`ADR_IMPLEMENTATION_GATE.md` and siblings) predate this milestone and are unchanged |
-| **Test count** | **4,488 collected, 4,486 passing** (4,426 before AV; +62 net, all in the new `tests/test_swing_setup_backtest.py`), identically under `-W error`, **except two pre-existing failures unrelated to this milestone** — a float-formatting flake in `tests/test_swing_setup_scan_report.py`, reproduced on the clean pre-AV tree and named here rather than silently absorbed into this milestone's scope |
-| **Public exports / collisions** | +17 new names on `fmis.swing_setup` (34 → 51: the historical backtest harness's public API — `run_backtest`, `compute_metrics`, `render_backtest_report`, `BacktestRun`, `BacktestMetrics`, `HistoricalObservation`, `SetupOutcome`, `OutcomeStatus`, `DataBoundary`, `BacktestError` and five constants — plus `setup_inputs_and_assessment_for_sheet` from the `compose.py` refactor), 0 collisions |
+| **HEAD** | Milestone BC, committed locally on top of `f9ddc54` |
+| **`origin/main`** | `f9ddc54` — **behind local `HEAD`; Milestone BC is committed locally, not pushed, per this milestone's own explicit instruction. Pushing requires separate, explicit authorization** |
+| **Working tree** | Clean apart from the 12 pre-existing untracked AP/AQ/BA/BB-era research documents under `docs/design/` and `docs/reviews/`, which predate this milestone and are unchanged by it |
+| **Test count** | **4,653 collected, 4,653 passing**, identically under `-W error`. The two long-standing `test_swing_setup_scan_report.py` failures previously recorded here as "a float-formatting flake" were neither a flake nor a source defect: a git-ignored `__pycache__` entry compiled from an older `scan_report.py` (`,.2g` where the source says `,.6g`), with a matching recorded mtime and size, which also made `fmits scan` print prices in scientific notation on this machine. Clearing the cache resolved both with no source change — see [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) F7 |
+| **Public exports / collisions** | `fmis.swing_setup` 53 → **94** names (+41: the corrected research harness — `run_research_study`, `derive_warmup`, `compare_variant`, `post_filter_comparison`, the research models and their constants), **0 collisions** |
 | **Import cycles** | 0 |
-| **Runtime dependencies** | 0 (`coverage`/`pytest-cov` unavailable offline in this environment; 8 targeted mutation probes used in their place, 8/8 detected — see report 0011 §7) |
-| **Latest completed milestone** | **AV — Swing Setup Historical Backtest Harness v1** (uncommitted; see [report 0011](reports/0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md)) — `fmits backtest` replays the exact, unmodified Swing Setup v1 policy over real historical closed candles with no lookahead, classifies what happened after every confirmed setup, and reports deterministic, reconciled aggregate measurements. Live on real Binance data (10 symbols, 400 days): 21,730 observations, 182 confirmed setups, 151 evaluable outcomes, 47.4% target-first / 52.6% stop-first — reported as measured, not reinterpreted. See [the design](docs/design/SWING_SETUP_BACKTEST_V1.md) and [the review](docs/reviews/SWING_SETUP_BACKTEST_V1_REVIEW.md) |
+| **Runtime dependencies** | 0 added. No coverage package is installed; BC measured 92.4 % line coverage on its seven new modules using the stdlib `sys.monitoring`, and ran 14 mutation probes (14/14 detected) — see [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) §11 |
+| **Latest completed milestone** | **BC — Research Dataset & Counterfactual Replay Correction** (§8) — `fmits backtest --research` derives its warm-up prefix from the production dependencies, fetches it before the measurement window, and verifies per instant that nothing was still warming. Usable research period **41 → 380 days**; largest five-day outcome cluster **49.0 % → 11.4 %**; counterfactual confirmation-age bounds replayed rather than filtered. **No trading policy changed and no performance claim made.** See [the design](docs/design/RESEARCH_HARNESS_CORRECTION_V1.md), [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) and [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
 | **Product Value Level** | **Level 2 — usable swing-analysis assistant**, now with a first honest measurement of the swing-setup policy's own historical behaviour (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
 | **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT, AU and AV were all explicitly-scoped, owner-directed implementation tasks, not NOW selections, and this row is unchanged by any of them. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
@@ -95,6 +97,8 @@ fmits setup  BTCUSDT                       # a deterministic swing-trade setup a
 fmits setup  BTCUSDT ETHUSDT SOLUSDT       # one per symbol, in the order requested
 fmits scan                                 # the fixed 20-symbol watchlist, a readable market report
 fmits scan --table                         # the same scan, as the original compact table
+fmits backtest                             # replay the policy over real historical candles
+fmits backtest --research                  # the corrected research harness (Milestone BC)
 fmits daily  BTCUSDT ETHUSDT SOLUSDT       # the morning routine, one row per symbol
 fmits swing  BTCUSDT                       # the whole page, end to end
 fmits regime BTCUSDT --multi               # the environment, per role, with evidence
@@ -217,7 +221,30 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
-This section carries the five most recent milestones.
+This section carries the most recent milestones.
+
+### `BC` — Research Dataset & Counterfactual Replay Correction · **DONE** *(committed locally, not pushed)*
+
+| Field | Value |
+|---|---|
+| **Commit** | committed locally on top of `f9ddc54`; push requires separate, explicit authorization (`CLAUDE.md`) |
+| **ADR** | **none** — adds no boundary. One keyword-only, research-only parameter on `evaluate_setup`, contained by 30 tests |
+| **Design** | [RESEARCH_HARNESS_CORRECTION_V1.md](docs/design/RESEARCH_HARNESS_CORRECTION_V1.md) |
+| **Review** | [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) — hostile review; no P0, three P1 and three P2 found **during** the milestone and all fixed before the evidence run, four items disclosed as open limitations |
+| **Report** | [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) |
+| **Tests** | 4,488 → **4,653** (+165). 92.4 % line coverage on the seven new modules (stdlib `sys.monitoring`; no coverage package installed or added). 14 mutation probes, 14 detected, 0 survivors |
+
+**Product value delivered — research validity, not trading performance.** Milestone BB showed that
+every research number in the AV–BA chain rested on ~43 usable days of a window described as 400 days,
+and that the confirmation-age counterfactual had been emulated by deleting rows rather than replaying
+the policy. `fmits backtest --research` now derives the warm-up prefix from the production
+dependencies themselves, fetches it **before** the measurement window, and verifies at every measured
+instant that no role was warming up or short of its requested window (measured: 0 and 0, minimum 250
+candles at all three roles). The usable period rises from a measured **41 days to 380 days**, and the
+largest five-day outcome cluster falls from **49.0 % to 11.4 %**. Counterfactual staleness bounds are
+replayed through the unmodified production path; replaying at the production bound reproduces the
+baseline exactly. **No policy changed** — `CONFIRMATION_LOOKBACK_BARS` is still 10, no bound is
+recommended, and the milestone makes no claim of improved trading performance.
 
 ### `AU` — Market Scanner Intelligence Report v1 · **DONE** *(committed locally, not pushed)*
 

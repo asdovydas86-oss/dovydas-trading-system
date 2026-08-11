@@ -7,8 +7,8 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `2000ba2` (Milestone AV — Swing Setup Historical Backtest Harness v1, code + tests + docs, **committed locally, not pushed**), on top of `35bce7a` (Milestone AU's docs, committed and pushed) |
-| **Verified on** | 2026-08-08 |
+| **Last verified against** | `f9ddc54` (Milestone AV's product docs, committed and pushed) plus **Milestone BC**, committed locally on top of it and **not pushed** |
+| **Verified on** | 2026-08-11 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -173,6 +173,69 @@ the automation ladder remains unstarted.
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-11 · `BC` — Research Dataset & Counterfactual Replay Correction
+
+**Status:** Released · **committed locally, not pushed**. **Foundational** — this changes no trading
+policy and adds no trading capability. It is recorded here because it materially changes how far the
+owner can trust every number `fmits backtest` has ever printed, which rule 1 counts as materially
+improving the reliability of a user-visible capability.
+**Commit:** committed locally on top of `f9ddc54`.
+
+**What shipped.** `fmits backtest --research` — the corrected research harness. `--start`/`--end` now
+name the **measurement** window; the warm-up prefix is derived from the production dependencies
+themselves and fetched *before* it; outcome-tail candles are readable after it but can never create a
+setup; and counterfactual confirmation-age bounds are **replayed** through the unmodified production
+composition path rather than filtered out of the baseline's results. Without `--research`, the command
+behaves exactly as it always has.
+
+**Why it was needed.** Milestone BB found that AV's "400-day backtest" contained roughly 43 days in
+which the policy could reach `CONFIRMED` at all — the rest was weekly-EMA warm-up spent inside the
+measurement window — and that the confirmation-age counterfactual had been emulated by deleting
+already-observed rows, which cannot produce the setups a stricter rule *defers* onto a later break.
+Re-running AV's own harness confirmed it independently: outcomes spanned **41 calendar days of a
+400-day window**, with **49.0 % of them inside a single five-day span**.
+
+**What the owner can now trust that they could not before.**
+
+- **A research window that means what it says.** The usable period rises from a measured **41 days to
+  380 days** across the same ten symbols — and the harness *verifies*, at every one of ~160,000
+  measured instants, that no role was still warming up and none held fewer candles than requested
+  (measured: 0 and 0; minimum 250 closed candles at all three roles).
+- **A sample that is much less one stretch of market.** Largest five-day outcome cluster
+  **49.0 % → 11.4 %**; confirmations across **35 distinct days in 10 months and 2 calendar years**
+  rather than 23 days in 2 months of 1.
+- **A window the harness refuses to shorten silently.** If the provider cannot supply enough history,
+  the run fails with the measured shortfall rather than quietly measuring less and reporting it under
+  the requested dates.
+- **Counterfactuals that are real replays.** At a bound of 2, the old post-filter method keeps 21
+  confirmations; the true replay produces 39, of which **18 exist only in the replay** because a
+  stricter rule deferred the candidate onto a later, fresher break.
+
+**No policy changed, and no performance is claimed.** `CONFIRMATION_LOOKBACK_BARS` is still 10. The
+research override is unreachable from every live entry point, self-identifies in its own `policy_id`,
+and is contained by 30 dedicated tests; replaying it at the production bound reproduces the production
+baseline exactly — 45 confirmations, 45 unchanged, 0 shifted, 0 lost, 0 new. **No confirmation-age
+bound is recommended or described as better**, and the variant table is explicitly labelled
+sensitivity evidence. The corrected baseline is **not** comparable to AV's published figures, and the
+implementation record says so before it shows them.
+
+**A third defect was found and disclosed rather than absorbed.** AV's setup identity is keyed on a
+*window-relative* bar index, so it changes every bar: measured across ten symbols, AV recorded 549
+"unique setups" from 552 directional observations. Report 0011's counts stand as published and should
+be read beside report 0012 §7.
+
+**Also resolved:** the two long-standing test failures carried on the backlog since `AU` as "a
+float-formatting flake" were a stale, git-ignored bytecode cache compiled from an older
+`scan_report.py` — which was also making **`fmits scan` print prices in scientific notation** on this
+machine (`target 1.3e+02` instead of `target 130`). Clearing it fixed both with no source change, and
+the entire evidence run was re-executed on fresh bytecode.
+
+**Records:** [design](docs/design/RESEARCH_HARNESS_CORRECTION_V1.md) ·
+[implementation](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) ·
+[hostile review](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md).
 
 ---
 

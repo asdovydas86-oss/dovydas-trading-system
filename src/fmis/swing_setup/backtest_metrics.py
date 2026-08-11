@@ -33,7 +33,9 @@ from fmis.swing_setup.models import Direction, SetupState
 __all__ = [
     "MIN_SAMPLE_FOR_RATE",
     "Percentiles",
+    "percentiles_of",
     "CohortCount",
+    "outcome_cohort",
     "PairAgreement",
     "TripleAgreement",
     "AgreementCohortOutcomes",
@@ -114,6 +116,20 @@ def _cohort(label: str, outcomes: Sequence[SetupOutcome]) -> CohortCount:
             1 for o in outcomes if o.status is OutcomeStatus.NEITHER_WITHIN_WINDOW
         ),
     )
+
+
+def percentiles_of(values: Sequence[float]) -> Percentiles:
+    """`Percentiles` over ``values``, nearest-rank. Public so the research layer
+    reports a distribution the identical way this module does rather than
+    re-deriving percentile conventions that would then quietly disagree."""
+    return _percentiles(values)
+
+
+def outcome_cohort(label: str, outcomes: Sequence[SetupOutcome]) -> CohortCount:
+    """One named slice's outcome counts. Public for the same reason as
+    `percentiles_of`: two modules counting `OutcomeStatus` members with two
+    copies of the same four sums is how two reports come to disagree."""
+    return _cohort(label, outcomes)
 
 
 @dataclass(frozen=True, slots=True)

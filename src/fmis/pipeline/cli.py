@@ -59,14 +59,20 @@ from fmis.swing_setup import (
     DEFAULT_BACKTEST_DAYS,
     DEFAULT_BACKTEST_SYMBOLS,
     DEFAULT_EVALUATION_WINDOW_BARS,
+    DEFAULT_VARIANT_MAX_AGES,
     SetupRunResult,
+    compare_variant,
     compute_metrics,
+    post_filter_comparison,
+    render_availability_report,
     render_backtest_report,
+    render_research_report,
     render_scan,
     render_scan_report,
     render_setup,
     run_backtest,
     run_market_scan,
+    run_research_study,
     run_setup_for_symbols,
 )
 from fmis.workspace import Workspace, render_workspace, workspace_for_symbol
@@ -621,6 +627,26 @@ def _configure_backtest(parser: argparse.ArgumentParser) -> None:
             "not a tuned value"
         ),
     )
+    parser.add_argument(
+        "--research", action="store_true",
+        help=(
+            "run the corrected research harness (Milestone BC): --start/--end "
+            "then mean the MEASUREMENT window, warm-up history is fetched "
+            "before it, and outcome-tail candles are read after it. Without "
+            "this flag the command behaves exactly as it always has"
+        ),
+    )
+    parser.add_argument(
+        "--max-confirmation-age", type=int, action="append", default=None,
+        metavar="BARS", dest="max_confirmation_age",
+        help=(
+            "RESEARCH ONLY, repeatable: replay a counterfactual confirmation-"
+            "staleness bound alongside the production baseline. Requires "
+            "--research; it can never change live setup behaviour. Omitted "
+            f"under --research, the brief's own set is used: "
+            f"{', '.join(str(age) for age in DEFAULT_VARIANT_MAX_AGES)}"
+        ),
+    )
     _add_setup_style_arguments(parser)
 
 
@@ -636,6 +662,52 @@ def _backtest_window(args: argparse.Namespace) -> tuple[datetime, datetime]:
     return start, end
 
 
+def _run_research_backtest(args: argparse.Namespace) -> int:
+    """Run the corrected research harness and print the study.
+
+    ``--start``/``--end`` mean the **measurement** window here. Warm-up history
+    is derived and fetched before it, outcome-tail candles are read after it,
+    and every counterfactual staleness bound is replayed through the production
+    composition path rather than filtered out of the baseline's results.
+
+    A window the provider cannot supply enough history for is reported as an
+    availability failure and exits non-zero — never quietly shortened.
+    """
+    start, end = _backtest_window(args)
+    ages = (
+        tuple(DEFAULT_VARIANT_MAX_AGES)
+        if args.max_confirmation_age is None
+        else tuple(args.max_confirmation_age)
+    )
+    try:
+        study = run_research_study(
+            args.symbols,
+            measurement_start=start,
+            measurement_end=end,
+            run_at=datetime.now(timezone.utc),
+            variant_max_ages=ages,
+            timeframes={
+                TimeframeRole.CONTEXT: args.context,
+                TimeframeRole.SETUP: args.setup,
+                TimeframeRole.EXECUTION: args.execution,
+            },
+            limit=args.limit,
+            policy=_policy_from(args),
+            detection=_detection_from(args),
+            evaluation_window_bars=args.window,
+        )
+    except BacktestError as error:
+        print(f"fmits backtest --research: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    comparisons = tuple(compare_variant(study.baseline, run) for run in study.variants)
+    post_filters = tuple(
+        post_filter_comparison(study.baseline, run) for run in study.variants
+    )
+    print(render_availability_report(study.availability))
+    print(render_research_report(study.runs, comparisons, post_filters))
+    return EXIT_OK
+
+
 def _run_backtest(args: argparse.Namespace) -> int:
     """Run the historical Swing Setup backtest and print its report.
 
@@ -644,6 +716,16 @@ def _run_backtest(args: argparse.Namespace) -> int:
     argument in full. Not a portfolio backtest and not a claim of
     profitability; every limitation prints on the report itself.
     """
+    if args.max_confirmation_age is not None and not args.research:
+        print(
+            "fmits backtest: --max-confirmation-age is a research-only override "
+            "and requires --research. It is deliberately unreachable from any "
+            "production command.",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    if args.research:
+        return _run_research_backtest(args)
     start, end = _backtest_window(args)
     try:
         run = run_backtest(
@@ -680,7 +762,13 @@ BACKTEST_COMMAND = Command(
         "happened after each confirmed setup (TARGET_FIRST / STOP_FIRST / "
         "AMBIGUOUS_SAME_BAR / NEITHER_WITHIN_WINDOW), and prints deterministic "
         "aggregate measurements. This measures the current policy; it does "
-        "not change it, rank it, or claim realized profitability."
+        "not change it, rank it, or claim realized profitability. "
+        "--research switches to the corrected harness (Milestone BC): "
+        "--start/--end then name the MEASUREMENT window, warm-up history is "
+        "derived and fetched before it, outcome-tail candles are read after "
+        "it, and counterfactual confirmation-staleness bounds are replayed "
+        "rather than filtered out of the baseline. The research override is "
+        "unreachable without --research and never changes live behaviour."
     ),
     configure=_configure_backtest,
     run=_run_backtest,

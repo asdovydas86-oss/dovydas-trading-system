@@ -52,6 +52,8 @@ __all__ = [
     "SETUP_POLICY_ID",
     "MINIMUM_AGREEING_FAMILIES",
     "CONFIRMATION_LOOKBACK_BARS",
+    "RESEARCH_POLICY_ID_PREFIX",
+    "research_policy_id",
     "evaluate_setup",
 ]
 
@@ -76,6 +78,23 @@ MINIMUM_AGREEING_FAMILIES = 2
 #: review that found this gap is why the constant exists rather than an
 #: assumption that "latest" already meant "recent".
 CONFIRMATION_LOOKBACK_BARS = 10
+
+#: Every `SetupAssessment` produced under a research override carries a
+#: ``policy_id`` starting with this marker. It exists so a research artifact is
+#: **self-identifying**: no reader, no renderer and no archived record can
+#: mistake one for a production assessment, and a test asserts that nothing on
+#: the live path ever emits it.
+RESEARCH_POLICY_ID_PREFIX = f"{SETUP_POLICY_ID}+research"
+
+
+def research_policy_id(confirmation_max_age: int) -> str:
+    """The `policy_id` a research override stamps on every assessment it produces.
+
+    Deterministic and injective over the override's own domain: two runs under
+    the same override produce the same string, and two different overrides can
+    never collide on one, because the value is written out rather than hashed.
+    """
+    return f"{RESEARCH_POLICY_ID_PREFIX}(max_confirmation_age={confirmation_max_age})"
 
 
 def _trend_lean(trend: StructuralTrendType) -> Lean:
@@ -245,8 +264,11 @@ def _wait(
     inputs: SetupInputs,
     factors: tuple[DirectionalFactor, ...],
     thesis: tuple[str, ...],
+    *,
+    policy_id: str = SETUP_POLICY_ID,
+    extra_limitations: tuple[str, ...] = (),
 ) -> SetupAssessment:
-    limitations = inputs.inherited_limitations + _extra_limitations(factors)
+    limitations = inputs.inherited_limitations + _extra_limitations(factors) + extra_limitations
     return SetupAssessment(
         symbol=inputs.symbol,
         as_of=inputs.as_of,
@@ -266,7 +288,7 @@ def _wait(
         regime_context=_regime_context_lines(inputs),
         sufficiency=inputs.decision_context_state,
         limitations=limitations,
-        policy_id=SETUP_POLICY_ID,
+        policy_id=policy_id,
         source=inputs.source,
     )
 
@@ -285,14 +307,81 @@ def _extra_limitations(factors: tuple[DirectionalFactor, ...]) -> tuple[str, ...
     return tuple(lines)
 
 
-def evaluate_setup(inputs: SetupInputs) -> SetupAssessment:
+def evaluate_setup(
+    inputs: SetupInputs,
+    *,
+    research_confirmation_max_age: int | None = None,
+) -> SetupAssessment:
     """Interpret already-computed facts into one deterministic setup assessment.
 
     Pure: no network, no clock, no randomness. Equal inputs give an equal
     assessment, always.
+
+    ``research_confirmation_max_age`` is a **research-only** override of
+    `CONFIRMATION_LOOKBACK_BARS`, and the only parameter on this function.
+    Omitted — which is what every production caller does — it changes nothing:
+    the production constant is applied and the result is byte-identical to what
+    this function returned before the parameter existed. Supplied, it replaces
+    the staleness bound for this one call, stamps
+    `research_policy_id` on the result so the assessment says out loud that it
+    is not a production answer, and adds a limitation line saying the same.
+
+    It exists because Milestone BB found that a post-hoc filter over already
+    observed confirmations cannot answer what a different staleness bound would
+    have produced: under a stricter bound a stale break leaves the candidate as
+    `CANDIDATE`, which can then confirm later on a *different* break, at a
+    different bar, price, stop and target. Only replaying the decision can
+    produce that lifecycle, and replaying it requires the bound to be an
+    argument at the point the decision is made.
+
+    It is deliberately **not** a `RegimePolicy`-style policy object and
+    deliberately not offered as a knob on `setup_for_symbol`,
+    `run_setup_for_symbols` or `setup_assessment_for_sheet` — the three
+    functions the live product actually calls. The single reachable entry point
+    is `fmis.swing_setup.compose.setup_inputs_and_assessment_for_sheet`, which
+    the historical research harness already uses, so this override cannot reach
+    live behaviour without someone rewriting a production call site.
+
+    Raises:
+        TypeError: ``inputs`` is not a `SetupInputs`, or the override is not an
+            ``int``/``None``.
+        ValueError: the override is negative. Zero is meaningful and allowed —
+            it means "only a break on the last closed bar confirms".
     """
     if not isinstance(inputs, SetupInputs):
         raise TypeError(f"inputs must be a SetupInputs, got {type(inputs).__name__}")
+    if research_confirmation_max_age is not None:
+        if isinstance(research_confirmation_max_age, bool) or not isinstance(
+            research_confirmation_max_age, int
+        ):
+            raise TypeError(
+                "research_confirmation_max_age must be an int or None, got "
+                f"{type(research_confirmation_max_age).__name__}"
+            )
+        if research_confirmation_max_age < 0:
+            raise ValueError(
+                "research_confirmation_max_age cannot be negative, got "
+                f"{research_confirmation_max_age}"
+            )
+
+    is_research = research_confirmation_max_age is not None
+    confirmation_max_age = (
+        CONFIRMATION_LOOKBACK_BARS if not is_research else research_confirmation_max_age
+    )
+    policy_id = (
+        SETUP_POLICY_ID if not is_research else research_policy_id(confirmation_max_age)
+    )
+    research_limitations = (
+        ()
+        if not is_research
+        else (
+            "RESEARCH OVERRIDE ACTIVE: the confirmation-staleness bound was "
+            f"{confirmation_max_age} bar(s) for this assessment, not the "
+            f"production {CONFIRMATION_LOOKBACK_BARS}. This is a measurement "
+            "of a counterfactual policy and is not what the live product would "
+            "have said.",
+        )
+    )
 
     factors = _directional_factors(inputs)
 
@@ -305,7 +394,10 @@ def evaluate_setup(inputs: SetupInputs) -> SetupAssessment:
             "No directional candidate may be formed from data the system has "
             "already flagged as inadequate.",
         )
-        return _wait(inputs, factors, thesis)
+        return _wait(
+            inputs, factors, thesis,
+            policy_id=policy_id, extra_limitations=research_limitations,
+        )
 
     if inputs.context_regime_structure is not StructureState.TRENDING:
         thesis = (
@@ -315,7 +407,10 @@ def evaluate_setup(inputs: SetupInputs) -> SetupAssessment:
             "environment; this package does not infer a direction from a "
             "regime, which classifies environment only.",
         )
-        return _wait(inputs, factors, thesis)
+        return _wait(
+            inputs, factors, thesis,
+            policy_id=policy_id, extra_limitations=research_limitations,
+        )
 
     direction = _tally(factors)
     if direction is None:
@@ -329,7 +424,10 @@ def evaluate_setup(inputs: SetupInputs) -> SetupAssessment:
             f"unavailable. At least {MINIMUM_AGREEING_FAMILIES} independent "
             "families must agree with none opposing before a candidate exists.",
         )
-        return _wait(inputs, factors, thesis)
+        return _wait(
+            inputs, factors, thesis,
+            policy_id=policy_id, extra_limitations=research_limitations,
+        )
 
     # A candidate exists. Confirmation is EXECUTION-role only, and never votes
     # on direction — see the module docstring.
@@ -346,7 +444,7 @@ def evaluate_setup(inputs: SetupInputs) -> SetupAssessment:
         if matching_break is None
         else inputs.execution_closed_count - 1 - matching_break.index
     )
-    break_is_stale = break_age is not None and break_age > CONFIRMATION_LOOKBACK_BARS
+    break_is_stale = break_age is not None and break_age > confirmation_max_age
     break_confirms = matching_break is not None and not break_is_stale
 
     agreeing = tuple(f for f in factors if f.lean.value == direction.value)
@@ -423,7 +521,7 @@ def evaluate_setup(inputs: SetupInputs) -> SetupAssessment:
             notes.append(
                 f"the most recent matching execution-timeframe break is "
                 f"{break_age} bar(s) old, beyond the "
-                f"{CONFIRMATION_LOOKBACK_BARS}-bar confirmation window"
+                f"{confirmation_max_age}-bar confirmation window"
             )
         elif matching_break is None and inputs.execution_breaks:
             notes.append(
@@ -456,7 +554,9 @@ def evaluate_setup(inputs: SetupInputs) -> SetupAssessment:
             bar_index=None,
         )
 
-    limitations = inputs.inherited_limitations + _extra_limitations(factors)
+    limitations = (
+        inputs.inherited_limitations + _extra_limitations(factors) + research_limitations
+    )
     if inputs.decision_context_state is ContextState.LIMITED:
         limitations = limitations + (
             "Decision context is LIMITED: " + "; ".join(inputs.decision_context_statements)
@@ -484,6 +584,6 @@ def evaluate_setup(inputs: SetupInputs) -> SetupAssessment:
         regime_context=_regime_context_lines(inputs),
         sufficiency=inputs.decision_context_state,
         limitations=limitations,
-        policy_id=SETUP_POLICY_ID,
+        policy_id=policy_id,
         source=inputs.source,
     )

@@ -45,8 +45,10 @@ from fmis.swing_setup.models import (
 from fmis.swing_setup.policy import (
     CONFIRMATION_LOOKBACK_BARS,
     MINIMUM_AGREEING_FAMILIES,
+    RESEARCH_POLICY_ID_PREFIX,
     SETUP_POLICY_ID,
     evaluate_setup,
+    research_policy_id,
 )
 from fmis.swing_setup.render import render_setup
 from fmis.swing_setup.scan import SCAN_UNIVERSE, render_scan, result_status, run_market_scan
@@ -70,6 +72,55 @@ from fmis.swing_setup.backtest_models import (
     SetupOutcome,
 )
 from fmis.swing_setup.backtest_render import render_backtest_report
+from fmis.swing_setup.research_compare import (
+    compare_variant,
+    post_filter_comparison,
+    post_filter_keep,
+)
+from fmis.swing_setup.research_harness import (
+    DEFAULT_IDENTITY_PRIMING_BARS,
+    DEFAULT_RESEARCH_SYMBOLS,
+    DEFAULT_VARIANT_MAX_AGES,
+    RESEARCH_LIMITATIONS,
+    ResearchDataset,
+    ResearchStudy,
+    build_segments,
+    fetch_research_dataset,
+    run_research_study,
+    run_research_variant,
+)
+from fmis.swing_setup.research_identity import OpportunityTracker, opportunity_key
+from fmis.swing_setup.research_metrics import (
+    ConcentrationReport,
+    ResearchMetrics,
+    compute_research_metrics,
+    confirmation_records,
+    first_confirmations,
+)
+from fmis.swing_setup.research_models import (
+    RESEARCH_SCHEMA_VERSION,
+    PRODUCTION_BASELINE_VARIANT,
+    AvailabilityReport,
+    ConfirmationRecord,
+    PostFilterComparison,
+    ResearchBacktestRun,
+    ResearchError,
+    ResearchObservation,
+    ResearchPolicyVariant,
+    ResearchWindow,
+    SeriesAvailability,
+    TemporalSegment,
+    VariantComparison,
+    WarmupComponent,
+    WarmupRequirement,
+    RoleWarmup,
+    interval_duration,
+)
+from fmis.swing_setup.research_render import (
+    render_availability_report,
+    render_research_report,
+)
+from fmis.swing_setup.research_warmup import derive_warmup, probe_availability
 
 __all__ = [
     # entry points
@@ -103,6 +154,48 @@ __all__ = [
     "DEFAULT_BACKTEST_DAYS",
     "DEFAULT_BACKTEST_LIMIT",
     "DEFAULT_EVALUATION_WINDOW_BARS",
+    # corrected research harness (Milestone BC)
+    "run_research_study",
+    "run_research_variant",
+    "fetch_research_dataset",
+    "build_segments",
+    "derive_warmup",
+    "probe_availability",
+    "compute_research_metrics",
+    "confirmation_records",
+    "first_confirmations",
+    "compare_variant",
+    "post_filter_keep",
+    "post_filter_comparison",
+    "render_research_report",
+    "render_availability_report",
+    "opportunity_key",
+    "OpportunityTracker",
+    "ResearchStudy",
+    "ResearchDataset",
+    "ResearchBacktestRun",
+    "ResearchObservation",
+    "ResearchMetrics",
+    "ConcentrationReport",
+    "ResearchWindow",
+    "ResearchPolicyVariant",
+    "PRODUCTION_BASELINE_VARIANT",
+    "TemporalSegment",
+    "WarmupRequirement",
+    "WarmupComponent",
+    "RoleWarmup",
+    "AvailabilityReport",
+    "SeriesAvailability",
+    "ConfirmationRecord",
+    "VariantComparison",
+    "PostFilterComparison",
+    "ResearchError",
+    "RESEARCH_SCHEMA_VERSION",
+    "RESEARCH_LIMITATIONS",
+    "DEFAULT_RESEARCH_SYMBOLS",
+    "DEFAULT_VARIANT_MAX_AGES",
+    "DEFAULT_IDENTITY_PRIMING_BARS",
+    "interval_duration",
     # the artifact
     "SetupAssessment",
     "SetupState",
@@ -128,6 +221,8 @@ __all__ = [
     "SETUP_POLICY_ID",
     "MINIMUM_AGREEING_FAMILIES",
     "CONFIRMATION_LOOKBACK_BARS",
+    "RESEARCH_POLICY_ID_PREFIX",
+    "research_policy_id",
     # errors
     "SwingSetupError",
 ]

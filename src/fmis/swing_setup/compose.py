@@ -297,6 +297,7 @@ def setup_inputs_and_assessment_for_sheet(
     *,
     policy: RegimePolicy | None = None,
     context_policy: ContextPolicy | None = None,
+    research_confirmation_max_age: int | None = None,
 ) -> tuple[SetupInputs, SetupAssessment]:
     """Compose the policy's own input alongside its assessment. Pure.
 
@@ -307,6 +308,15 @@ def setup_inputs_and_assessment_for_sheet(
     — regime state, evidence leans, decision-context state — without either
     recomputing them or parsing them back out of `SetupAssessment`'s rendered
     text fields.
+
+    ``research_confirmation_max_age`` is forwarded verbatim to
+    `fmis.swing_setup.policy.evaluate_setup`, and is the **only** way a research
+    override reaches the composition path. Omitted — which is what the live
+    product's own entry points (`setup_assessment_for_sheet`,
+    `setup_for_symbol`, `run_setup_for_symbols`, `fmis.swing_setup.scan`) always
+    do, none of them accepting or forwarding it — nothing about this function
+    changes. See `evaluate_setup`'s docstring for why the override exists and
+    why it is not a policy object.
     """
     if not isinstance(sheet, MultiTimeframeFactSheet):
         raise TypeError(
@@ -321,7 +331,9 @@ def setup_inputs_and_assessment_for_sheet(
         context_policy,
     )
     inputs = build_setup_inputs(sheet, regimes, evidence, context)
-    return inputs, evaluate_setup(inputs)
+    return inputs, evaluate_setup(
+        inputs, research_confirmation_max_age=research_confirmation_max_age
+    )
 
 
 def setup_assessment_for_sheet(

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import urllib.parse
+from bisect import bisect_left
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any, Final
@@ -52,6 +53,8 @@ from fmis.swing_setup.backtest_models import BacktestError, DataBoundary
 
 __all__ = [
     "RawKlineCache",
+    "ReplayIndex",
+    "prepare_replay_index",
     "fetch_raw_klines",
     "fetch_historical_dataset",
     "build_replay_transport",
@@ -254,7 +257,56 @@ def fetch_historical_dataset(
     return cache, tuple(boundaries)
 
 
-def build_replay_transport(cache: Mapping[tuple[str, str], Sequence[Sequence[Any]]], *, now: datetime) -> Transport:
+class ReplayIndex(dict):
+    """``(symbol, interval) -> (rows, ascending close times)``, prepared once.
+
+    A pure lookup accelerator for `build_replay_transport`, built by
+    `prepare_replay_index`. It changes no result: the transport still serves
+    exactly the rows whose ``close_time < now``, in the same order, trimmed the
+    same way. It only replaces a full scan of the cache with a binary search
+    for the boundary.
+
+    That matters solely because of scale. A research study replays several
+    policy variants over the same multi-year dataset, and a linear filter per
+    request makes the cost of one simulated instant grow with the *length of
+    history* rather than with the analysis window — so a longer, properly
+    warmed dataset would be punished for being longer, which is the opposite of
+    what this milestone is for.
+    """
+
+
+def prepare_replay_index(
+    cache: Mapping[tuple[str, str], Sequence[Sequence[Any]]],
+) -> ReplayIndex:
+    """Precompute the ascending close-time list `build_replay_transport` searches.
+
+    Requires each series to be in ascending ``close_time`` order — which is the
+    provider's own order, and the order `fetch_raw_klines` preserves. A series
+    that is not sorted is rejected rather than silently searched, because a
+    binary search over unsorted rows would answer a *different* question than
+    the linear filter it replaces.
+
+    Raises:
+        BacktestError: a cached series is not in ascending close-time order.
+    """
+    index = ReplayIndex()
+    for key, rows in cache.items():
+        close_times = [row[_CLOSE_TIME_INDEX] for row in rows]
+        if any(b < a for a, b in zip(close_times, close_times[1:])):
+            raise BacktestError(
+                f"{key!r}: cached klines are not in ascending close-time order; "
+                "a replay index cannot be prepared over them"
+            )
+        index[key] = (rows, close_times)
+    return index
+
+
+def build_replay_transport(
+    cache: Mapping[tuple[str, str], Sequence[Sequence[Any]]],
+    *,
+    now: datetime,
+    index: ReplayIndex | None = None,
+) -> Transport:
     """Bind a `Transport` to one simulated instant, over an already-fetched cache.
 
     Every call is answered entirely from ``cache`` — no network access is
@@ -264,6 +316,11 @@ def build_replay_transport(cache: Mapping[tuple[str, str], Sequence[Sequence[Any
     `fmis.providers.binance.map_kline` uses to derive ``is_closed``) and
     trimmed to the requested ``limit`` (or `DEFAULT_REPLAY_LIMIT` if the URL
     carried none) — the same two request parameters the real endpoint reads.
+
+    ``index`` is an optional `prepare_replay_index` result over the *same*
+    cache. Supplying it is a performance choice and nothing else: with or
+    without it this transport serves byte-identical responses, which
+    `tests/test_swing_setup_research.py` asserts directly.
 
     Raises:
         BacktestError: ``now`` is not timezone-aware.
@@ -278,6 +335,22 @@ def build_replay_transport(cache: Mapping[tuple[str, str], Sequence[Sequence[Any
         interval = query.get("interval", [""])[0]
         limit_values = query.get("limit")
         limit = int(limit_values[0]) if limit_values else DEFAULT_REPLAY_LIMIT
+
+        if index is not None:
+            entry = index.get((symbol, interval))
+            if entry is None:
+                return HttpResponse(
+                    status=400, body=json.dumps(_UNKNOWN_SERIES_PAYLOAD).encode("utf-8")
+                )
+            rows, close_times = entry
+            # bisect_left over close times: the first row whose close_time is
+            # >= now_ms is the first row NOT yet closed, so everything before
+            # it satisfies close_time < now_ms — the same set the linear
+            # filter below produces, and in the same order.
+            cutoff = bisect_left(close_times, now_ms)
+            start = max(0, cutoff - limit) if limit > 0 else cutoff
+            sliced = list(rows[start:cutoff]) if limit > 0 else []
+            return HttpResponse(status=200, body=json.dumps(sliced).encode("utf-8"))
 
         rows = cache.get((symbol, interval))
         if rows is None:

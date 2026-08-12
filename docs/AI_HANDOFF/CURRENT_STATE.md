@@ -7,7 +7,62 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone AV — Swing Setup Historical Backtest Harness v1 (2026-08-08), the first
+**Last updated for:** Milestone BH — Trade Domain Foundation (2026-08-12), the pure domain layer of
+the owner half of FMITS: thirteen new packages implementing `Trade`, `TradeStatus`, `OpportunityProposal`,
+the proposal lifecycle stream, `Position`, `MarketSnapshot`, `AnalysisRecord`, `JournalEntry`/`TradeJournal`,
+`RiskBudget`/`RiskBudgetState` and `PortfolioSnapshot`. **No user-visible capability**: there is no CLI
+surface and no composition root, so nothing the owner can do changed. Full record:
+[report 0014](../../reports/0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md) (implementation),
+[`TRADING_DOMAIN_DATA_MODEL_V1.md`](../design/TRADING_DOMAIN_DATA_MODEL_V1.md) (the model it implements),
+[`DIRECTIONAL_VOCABULARY_BOUNDARY_NOTE_BH.md`](../design/DIRECTIONAL_VOCABULARY_BOUNDARY_NOTE_BH.md)
+(the one architectural issue implementation revealed).
+**`BH` is committed locally as `64e82e9` (code) on top of `7ced9e2`** — per `CLAUDE.md`'s git safety rule, nothing is pushed
+without the owner's explicit authorization, and none was given for this task.
+
+> **Two gaps in this file, recorded rather than silently patched.** This document's own entries for
+> **`BC`** (Research Dataset & Counterfactual Replay Correction, `5c0bbb5`/`7ced9e2`) and for the AT/AU
+> milestones' `## Current milestone` sections were never written at the time. Both predate Milestone
+> `BH` and neither is corrected here, because reconstructing a milestone's state after the fact is
+> exactly what this file's own "if it disagrees with the code, the code is correct" rule warns about.
+> `FMITS_PRODUCT_BACKLOG.md` §8 and the reports directory carry the authoritative record for both.
+
+---
+
+## Milestone BH — Trade Domain Foundation
+
+- **BH — Trade Domain Foundation** (`64e82e9`, committed locally on top of `7ced9e2`, **not pushed**). Implements
+  the approved Trading Domain Data Model (`BG`) as production code. **Adds no capability the owner can
+  use today**, and no changelog entry was made for exactly that reason.
+
+  **What shipped.** Thirteen packages under `src/fmis`: `records` (the identity/audit/provenance/version
+  spine), `provenance`, `money`, `versioning`, `accounts`, `analysis_record`, `snapshotting`, `proposal`,
+  `ledger`, `positions`, `portfolio`, `risk`, `journal`. 10,285 production lines, 228 new public exports,
+  **0 export collisions**, **0 new runtime dependencies**, **0 existing source files modified**.
+
+  **What it enforces rather than documents.** One instant has one spelling; one amount has one spelling;
+  `float` never reaches an exact field; a digest never depends on the ambient decimal context; `event_id`
+  covers economic fields only, so a crash re-entry and a later exchange sync are one event; captured
+  artifacts refuse an advanced `updated_at`; absence always carries a reason; no quotient is stored;
+  correction chains extend and never branch; two events on one candle are reported as ambiguous rather
+  than ordered; one live proposal per `MEASURED` anchor; stated confidence rejects a numeric-looking
+  label; `calibrated_probability` is `Absent` forever; recollection is derived, never set; unconfirmed
+  model tags are never counted; conflicts carry no resolution field; no composite score exists anywhere;
+  the risk package contains no numeric literal beyond 0 and 1; and a model may author exactly one record
+  type.
+
+  **Tests.** 4,653 → **5,263** (+610), passing identically under `-W error`. **100 % statement and 99 %
+  branch coverage** of the new domain's 3,697 statements, measured with `coverage` run through
+  `uv run --with coverage` — not installed into `.venv`, not added to `pyproject.toml`.
+
+  **The one architectural issue implementation revealed.** ADR-0028 §5 confines directional vocabulary
+  to `fmis.swing_setup` and `fmis/pipeline/cli.py`; a ledger that cannot say a fill was a buy is not a
+  ledger. The repository-wide guard was **widened by name and strengthened** with a new market-half-only
+  scan, and the ADR was **not** amended — that decision belongs to the owner and is recorded as
+  backlog **D-16**.
+
+---
+
+**Previously last updated for:** Milestone AV — Swing Setup Historical Backtest Harness v1 (2026-08-08), the first
 deterministic historical backtest for the existing Swing Setup Engine. `fmits backtest` replays the
 exact, unmodified policy over real historical closed candles with no lookahead, one simulated instant
 at a time, and reports what it would have produced — never a portfolio backtest, never realized PnL.
@@ -1140,7 +1195,11 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**4,332 passing** (`uv run python -m pytest`, ~13 s), identically with `-W error`. Measured at `AS`
+**5,263 passing** (`.venv/bin/python -m pytest`, ~168 s including the network-touching backtest and
+research suites), identically with `-W error`. Measured at `BH` (2026-08-12); `BC` measured 4,653 and
+`BH` added 610.
+
+Previously **4,332 passing**, measured at `AS`
 (`aca2628`); AR measured 4,319 — `AS` migrated 11 pre-existing `RegimeInput` test references and added
 13 net new tests (regression fixtures, mutation-testing targets, boundary cases) for the time-reference
 fix, per [the review](../reviews/MARKET_REGIME_TIME_REFERENCE_FIX_REVIEW.md).

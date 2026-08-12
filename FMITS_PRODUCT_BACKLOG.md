@@ -78,14 +78,14 @@ before?"* An item that cannot answer it does not belong here.
 | **Milestone AS commit** | `aca2628` (production fix + tests + RCA + independent review — defect fix, not a new capability) |
 | **Milestone AR commit** | `1480766e57526d48266a4aa5ff48b3a945614656` (production code + tests + ADR-0028 + design + review) |
 | **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) |
-| **HEAD** | Milestone BC, committed locally on top of `f9ddc54` |
+| **HEAD** | Milestone BH — `64e82e9` (code) plus a docs reconciliation commit, both local, on top of `7ced9e2` |
 | **`origin/main`** | `f9ddc54` — **behind local `HEAD`; Milestone BC is committed locally, not pushed, per this milestone's own explicit instruction. Pushing requires separate, explicit authorization** |
 | **Working tree** | Clean apart from the 12 pre-existing untracked AP/AQ/BA/BB-era research documents under `docs/design/` and `docs/reviews/`, which predate this milestone and are unchanged by it |
-| **Test count** | **4,653 collected, 4,653 passing**, identically under `-W error`. The two long-standing `test_swing_setup_scan_report.py` failures previously recorded here as "a float-formatting flake" were neither a flake nor a source defect: a git-ignored `__pycache__` entry compiled from an older `scan_report.py` (`,.2g` where the source says `,.6g`), with a matching recorded mtime and size, which also made `fmits scan` print prices in scientific notation on this machine. Clearing the cache resolved both with no source change — see [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) F7 |
+| **Test count** | **5,263 collected, 5,263 passing**, identically under `-W error`. The two long-standing `test_swing_setup_scan_report.py` failures previously recorded here as "a float-formatting flake" were neither a flake nor a source defect: a git-ignored `__pycache__` entry compiled from an older `scan_report.py` (`,.2g` where the source says `,.6g`), with a matching recorded mtime and size, which also made `fmits scan` print prices in scientific notation on this machine. Clearing the cache resolved both with no source change — see [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) F7 |
 | **Public exports / collisions** | `fmis.swing_setup` 53 → **94** names (+41: the corrected research harness — `run_research_study`, `derive_warmup`, `compare_variant`, `post_filter_comparison`, the research models and their constants), **0 collisions** |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 added. No coverage package is installed; BC measured 92.4 % line coverage on its seven new modules using the stdlib `sys.monitoring`, and ran 14 mutation probes (14/14 detected) — see [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) §11 |
-| **Latest completed milestone** | **BC — Research Dataset & Counterfactual Replay Correction** (§8) — `fmits backtest --research` derives its warm-up prefix from the production dependencies, fetches it before the measurement window, and verifies per instant that nothing was still warming. Usable research period **41 → 380 days**; largest five-day outcome cluster **49.0 % → 11.4 %**; counterfactual confirmation-age bounds replayed rather than filtered. **No trading policy changed and no performance claim made.** See [the design](docs/design/RESEARCH_HARNESS_CORRECTION_V1.md), [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) and [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
+| **Latest completed milestone** | **BH — Trade Domain Foundation** (§8) — the pure domain layer of the owner half: thirteen packages, 608 new domain tests, 100 % statement coverage, **no user-visible capability yet**. See [report 0014](reports/0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md). Previously: **BC — Research Dataset & Counterfactual Replay Correction** (§8) — `fmits backtest --research` derives its warm-up prefix from the production dependencies, fetches it before the measurement window, and verifies per instant that nothing was still warming. Usable research period **41 → 380 days**; largest five-day outcome cluster **49.0 % → 11.4 %**; counterfactual confirmation-age bounds replayed rather than filtered. **No trading policy changed and no performance claim made.** See [the design](docs/design/RESEARCH_HARNESS_CORRECTION_V1.md), [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) and [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
 | **Product Value Level** | **Level 2 — usable swing-analysis assistant**, now with a first honest measurement of the swing-setup policy's own historical behaviour (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
 | **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT, AU and AV were all explicitly-scoped, owner-directed implementation tasks, not NOW selections, and this row is unchanged by any of them. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
@@ -222,6 +222,31 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `BH` — Trade Domain Foundation · **DONE** *(committed locally, not pushed)*
+
+| Field | Value |
+|---|---|
+| **Commit** | `64e82e9` (production code + tests + boundary note) — committed locally on top of `7ced9e2`; push requires separate, explicit authorization (`CLAUDE.md`) |
+| **ADR** | **none written.** One accepted ADR is crossed — ADR-0028 §5's directional-vocabulary rule — and amending an accepted ADR was not authorized by this milestone. The crossing, the guard change and the proposed amendment are recorded in [DIRECTIONAL_VOCABULARY_BOUNDARY_NOTE_BH.md](docs/design/DIRECTIONAL_VOCABULARY_BOUNDARY_NOTE_BH.md) and are **an open decision for the owner** (§10) |
+| **Design** | [TRADING_DOMAIN_DATA_MODEL_V1.md](docs/design/TRADING_DOMAIN_DATA_MODEL_V1.md) (`BG`, implemented) · [DIRECTIONAL_VOCABULARY_BOUNDARY_NOTE_BH.md](docs/design/DIRECTIONAL_VOCABULARY_BOUNDARY_NOTE_BH.md) (new, implementation-revealed) |
+| **Report** | [report 0014](reports/0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md) |
+| **Tests** | 4,653 → **5,263** (+610). **100 % statement and 99 % branch coverage** of the 3,697 statements in the new domain, measured with `coverage` run through `uv run --with coverage` (not installed into `.venv`, not added to `pyproject.toml`). No mutation sweep was run — stated as a weaker signal in report 0014 §8 |
+
+**Product value delivered — objects, not capability.** Thirteen new packages implement the pure domain
+layer of the owner half: `Trade` and `TradeStatus` with correction-by-supersession, `OpportunityProposal`
+with an append-only lifecycle stream whose fold *is* its state, `Position` as a pure fold over the
+resolved ledger, `MarketSnapshot` as the frozen bundle a decision rests on, `AnalysisRecord` as the
+citation edge to the archive, `JournalEntry`/`TradeJournal`, `RiskBudget`/`RiskBudgetState` and
+`PortfolioSnapshot`. Exact asset-tagged money, content-derived identity, `Absent(reason)` everywhere,
+no stored quotient, no composite score, no invented threshold, and a model may author exactly one
+record type. **10,285 production lines, 228 new public exports, 0 collisions, 0 new dependencies, 0
+existing source files modified.**
+
+**What the owner can do after it that was impossible before: nothing.** There is no CLI surface and no
+composition root; a later slice wires the engines into `MarketSnapshot` and the CLI into the ledger.
+That is why there is **no changelog entry** — `CLAUDE.md` reserves the changelog for user-visible
+capability, and recording this as a release would be exactly the failure that rule prevents.
 
 ### `BC` — Research Dataset & Counterfactual Replay Correction · **DONE** *(committed locally, not pushed)*
 
@@ -727,6 +752,7 @@ Carried, not solved, except D-01 — closed this milestone.
 | **D-08** | Telegram as a delivery transport | EP-19 | `reports/0004` §15.2 |
 | **D-09** | Excel / CSV export ecosystem — **direction set** by `AP` design §23: export is a versioned leaf projection, never a round trip; statement *import* is an L1-style adapter, not "Excel as source of truth". A full-dump export ships in `AP` step 1, not step 10 | EP-19, `AP` step 10 | `reports/0004` §15.2 — no longer blocked by D-01 · `AP` design §23 |
 | **D-10** | Tax Center scope — **owner-confirmed 2026-08-06: Swedish tax readiness is in project scope.** This supersedes `reports/0004` §15.2's "out of scope unless an obligation requires it"; `FMITS_WORKING_PROTOCOL_2026-08-06` states the obligation. **Answered in substance, not yet bound by an ADR.** `AP` design §22.1 separates the two halves: the tax *engine* is step 9, but the tax **capture contract** is in step 1 because FX rates and reward acquisition values are unrecoverable if not captured at the moment of the transaction | EP-19, `AP` step 9 (engine); capture in step 1 | `reports/0004` §15.2 (superseded) · owner decision 2026-08-06 · `AP` design §22 |
+| **D-16** | **Where directional vocabulary is permitted to live.** ADR-0028 §5 names `fmis.swing_setup` and `fmis/pipeline/cli.py`; Milestone `BH`'s ledger, position, proposal and snapshot types necessarily hold `LONG`/`SHORT`/`BUY`/`SELL` as **owner assertions about the owner's own money**, not as an engine's reading of a market. The repository-wide guard was widened by name and strengthened with a market-half-only scan; the ADR was **not** amended, because amending an accepted ADR was outside this milestone's authorization. `ADR_IMPLEMENTATION_GATE.md` Part 3 predicted this as *"the one genuinely required decision not on any list"* | Every further owner-half package | [DIRECTIONAL_VOCABULARY_BOUNDARY_NOTE_BH.md](docs/design/DIRECTIONAL_VOCABULARY_BOUNDARY_NOTE_BH.md) · [ADR-0028](docs/adr/ADR-0028-directional-interpretation-boundary.md) §5 · [report 0014](reports/0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md) §6 |
 | **D-11** | Voice interface | EP-19 | `reports/0004` §15.2 |
 | **D-12** | AI model routing and budget | EP-20 | `reports/0004` §15.3 |
 | **D-13** | Commercial / multi-user direction | — | `reports/0004` §3.2, §15.2 |

@@ -1,4 +1,35 @@
-"""ADR-0028 §5 — directional vocabulary exists only in `fmis.swing_setup`.
+"""ADR-0028 §5 — directional vocabulary exists only where direction is legitimate.
+
+**Widened for Milestone BH (Trade Domain Foundation), and the widening is the
+point rather than a concession.** ADR-0028 §5 was written when the only half of
+FMITS that existed was the *analysis* half, and the rule it protects is that an
+engine reading candles must never emit a side. The trading domain is the *owner*
+half: a ledger that cannot say a fill was a buy, and a position that cannot say
+it is long, cannot record what happened to real money. Direction there is an
+**owner assertion about their own money**, not an engine's opinion about a market.
+
+So the guard is no longer "one package"; it is now **two named halves**, and the
+market half's ban is unchanged and separately asserted below. Four trading-domain
+packages are exempt and no others:
+
+* `fmis.snapshotting` — `TradeDirection`, the side a *frozen reading* came down on
+* `fmis.proposal` — the side a suggestion came down on, with both cases kept apart
+* `fmis.ledger` — `TradeSide`, which way the base asset actually moved
+* `fmis.positions` — `PositionDirection`, which way exposure currently points
+
+**This crossing is an architectural decision and is recorded as one.** ADR-0028's
+own text scopes its rule to the analysis engines; extending that text to say so
+explicitly is an ADR amendment the owner has not authorized, so this test states
+the boundary and `docs/design/DIRECTIONAL_VOCABULARY_BOUNDARY_NOTE_BH.md` records
+what needs deciding. Every engine below L7 remains covered exactly as before —
+see `test_the_market_half_still_holds_no_directional_vocabulary_at_all`, which is
+the assertion that actually protects the original rule.
+
+---
+
+Original note, unchanged:
+
+ADR-0028 §5 — directional vocabulary exists only in `fmis.swing_setup`.
 
 The narrower guards already in the suite (`test_workspace_render.py`'s full-page
 scan, `test_daily_models.py`'s package-name scan, `test_workspace_build.py`'s
@@ -39,6 +70,45 @@ _BANNED = {"long", "short", "buy", "sell", "bullish", "bearish"}
 _PERMITTED_DIR = SRC / "swing_setup"
 _PERMITTED_FILE = SRC / "pipeline" / "cli.py"
 
+#: The trading-domain packages where direction is an owner assertion about their
+#: own money rather than an engine's reading of a market. Named one by one, so a
+#: fifth appearing anywhere fails this test and has to justify itself.
+_TRADE_DOMAIN_PERMITTED_DIRS = frozenset(
+    {
+        SRC / "snapshotting",
+        SRC / "proposal",
+        SRC / "ledger",
+        SRC / "positions",
+    }
+)
+
+#: Every package that reads candles. The original rule, still absolute.
+_MARKET_HALF_DIRS = frozenset(
+    SRC / name
+    for name in (
+        "data",
+        "ingest",
+        "providers",
+        "features",
+        "alignment",
+        "relative_value",
+        "series_context",
+        "market_structure",
+        "structural_trend",
+        "structure_break",
+        "change_of_character",
+        "level_crossing",
+        "market_regime",
+        "evidence",
+        "decision_support",
+        "decision_context",
+        "workspace",
+        "daily",
+        "archive",
+        "trading_context",
+    )
+)
+
 
 def _identifiers_and_string_values(tree: ast.AST):
     for node in ast.walk(tree):
@@ -60,6 +130,8 @@ def _covered_files():
             continue
         if path.parent == _PERMITTED_DIR or path == _PERMITTED_FILE:
             continue
+        if path.parent in _TRADE_DOMAIN_PERMITTED_DIRS:
+            continue
         yield path
 
 
@@ -71,6 +143,52 @@ def test_no_directional_identifier_or_literal_exists_outside_swing_setup() -> No
             if token.lower() in _BANNED:
                 offenders.append((str(path.relative_to(SRC.parent.parent)), token))
     assert offenders == []
+
+
+def test_the_market_half_still_holds_no_directional_vocabulary_at_all() -> None:
+    """The rule ADR-0028 actually protects, asserted directly.
+
+    The exemption above widened *which* packages are scanned; it did not weaken
+    what is being protected. Every package that reads a candle is checked here by
+    name, so a `LONG` appearing in the market-structure engine fails whatever the
+    trading domain is permitted to hold.
+    """
+    offenders = []
+    for directory in sorted(_MARKET_HALF_DIRS):
+        for path in sorted(directory.glob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for token in _identifiers_and_string_values(tree):
+                if token.lower() in _BANNED:
+                    offenders.append((str(path.relative_to(SRC.parent.parent)), token))
+    assert offenders == []
+
+
+def test_the_trade_domain_exemption_is_bounded_to_four_named_packages() -> None:
+    """Pins the widening, so a fifth exempt package is a deliberate edit here."""
+    assert {path.name for path in _TRADE_DOMAIN_PERMITTED_DIRS} == {
+        "snapshotting",
+        "proposal",
+        "ledger",
+        "positions",
+    }
+    for path in _TRADE_DOMAIN_PERMITTED_DIRS:
+        assert path.is_dir(), path
+
+
+def test_the_exempt_trade_domain_packages_do_use_the_vocabulary() -> None:
+    """Sanity check that each exemption is real rather than precautionary.
+
+    An exemption granted to a package that turns out not to need it is an
+    exemption nobody would notice becoming wrong.
+    """
+    for directory in _TRADE_DOMAIN_PERMITTED_DIRS:
+        found = set()
+        for path in directory.glob("*.py"):
+            tree = ast.parse(path.read_text())
+            for token in _identifiers_and_string_values(tree):
+                if token.lower() in _BANNED:
+                    found.add(token.lower())
+        assert found, directory.name
 
 
 def test_the_scan_actually_detects_a_planted_violation(tmp_path: pathlib.Path) -> None:

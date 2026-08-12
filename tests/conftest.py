@@ -32,3 +32,24 @@ def fresh_fmis_imports() -> Iterator[None]:
         for name in [n for n in sys.modules if n.startswith("fmis")]:
             del sys.modules[name]
         sys.modules.update(saved)
+
+
+@pytest.fixture
+def sample_records() -> tuple[object, ...]:
+    """One valid instance of every kind the durable store persists.
+
+    Shared across the persistence test modules so a new record type is added in one
+    place and every sweep — round-trip, verification, rebuild — picks it up without
+    anyone remembering to.
+    """
+    from persistence_helpers import sample_records as build
+
+    return build()
+
+
+@pytest.fixture
+def budget():
+    """The `RiskBudget` builder, as a fixture, with keyword overrides."""
+    from persistence_helpers import risk_budget
+
+    return risk_budget

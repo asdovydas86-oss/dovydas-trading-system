@@ -11,8 +11,8 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `HEAD` at `f9ddc54` (Milestone AV's product docs, committed and pushed) plus **Milestone BC — Research Dataset & Counterfactual Replay Correction**, committed locally on top of it and **not pushed** (§4) |
-| **Verified on** | 2026-08-11 |
+| **Last verified against** | `HEAD` at `c96c3e4` (Milestones BC and BH, committed locally and **not pushed**; `origin/main` is at `f9ddc54`) plus **Milestone BI — Trade Repository & Journal Engine**, in the working tree and **not committed** (§4, §8) |
+| **Verified on** | 2026-08-12 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -85,7 +85,7 @@ before?"* An item that cannot answer it does not belong here.
 | **Public exports / collisions** | `fmis.swing_setup` 53 → **94** names (+41: the corrected research harness — `run_research_study`, `derive_warmup`, `compare_variant`, `post_filter_comparison`, the research models and their constants), **0 collisions** |
 | **Import cycles** | 0 |
 | **Runtime dependencies** | 0 added. No coverage package is installed; BC measured 92.4 % line coverage on its seven new modules using the stdlib `sys.monitoring`, and ran 14 mutation probes (14/14 detected) — see [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) §11 |
-| **Latest completed milestone** | **BH — Trade Domain Foundation** (§8) — the pure domain layer of the owner half: thirteen packages, 608 new domain tests, 100 % statement coverage, **no user-visible capability yet**. See [report 0014](reports/0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md). Previously: **BC — Research Dataset & Counterfactual Replay Correction** (§8) — `fmits backtest --research` derives its warm-up prefix from the production dependencies, fetches it before the measurement window, and verifies per instant that nothing was still warming. Usable research period **41 → 380 days**; largest five-day outcome cluster **49.0 % → 11.4 %**; counterfactual confirmation-age bounds replayed rather than filtered. **No trading policy changed and no performance claim made.** See [the design](docs/design/RESEARCH_HARNESS_CORRECTION_V1.md), [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) and [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
+| **Latest completed milestone** | **BI — Trade Repository & Journal Engine** (§8) — the durable store for the owner half: nine repositories, a hash-chained write journal, a version engine, 366 new tests, 100 % statement **and** branch coverage, an 81.6 % mutation score, **no user-visible capability yet**. See [report 0015](reports/0015_2026-08-12_TRADE_REPOSITORY_AND_JOURNAL_ENGINE_IMPLEMENTATION.md). Previously: **BH — Trade Domain Foundation** (§8) — the pure domain layer of the owner half: thirteen packages, 608 new domain tests, 100 % statement coverage, **no user-visible capability yet**. See [report 0014](reports/0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md). Previously: **BC — Research Dataset & Counterfactual Replay Correction** (§8) — `fmits backtest --research` derives its warm-up prefix from the production dependencies, fetches it before the measurement window, and verifies per instant that nothing was still warming. Usable research period **41 → 380 days**; largest five-day outcome cluster **49.0 % → 11.4 %**; counterfactual confirmation-age bounds replayed rather than filtered. **No trading policy changed and no performance claim made.** See [the design](docs/design/RESEARCH_HARNESS_CORRECTION_V1.md), [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) and [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
 | **Product Value Level** | **Level 2 — usable swing-analysis assistant**, now with a first honest measurement of the swing-setup policy's own historical behaviour (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
 | **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT, AU and AV were all explicitly-scoped, owner-directed implementation tasks, not NOW selections, and this row is unchanged by any of them. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
@@ -222,6 +222,32 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `BI` — Trade Repository & Journal Engine · **DONE** *(not committed, not pushed)*
+
+| Field | Value |
+|---|---|
+| **Commit** | **none.** The work is in the working tree on top of `c96c3e4`; committing and pushing each require separate, explicit authorization (`CLAUDE.md`) |
+| **ADR** | **none written, none amended.** The store implements Architecture §24 as accepted; nothing in it required a new decision the ADRs do not already carry |
+| **Design** | [TRADE_REPOSITORY_AND_JOURNAL_ENGINE_V1.md](docs/design/TRADE_REPOSITORY_AND_JOURNAL_ENGINE_V1.md) (new — records what was built, not a proposal) |
+| **Report** | [report 0015](reports/0015_2026-08-12_TRADE_REPOSITORY_AND_JOURNAL_ENGINE_IMPLEMENTATION.md) |
+| **Tests** | 5,263 → **5,629** (+366). **100 % statement and 100 % branch coverage** of the 1,623 statements and 416 branches in the new package. Four `mutmut` 3.7.0 sweeps over 1,987 mutants took survivors 490 → 363, a **81.6 %** score. A verification pass re-audited the residue and found **eighteen behavioural survivors the first triage had misclassified**; all eighteen were closed and each test verified against its own mutant. Report 0015 §7 records that the first classification was wrong and why |
+
+**Product value delivered — the domain becomes keepable.** One new package, `fmis.persistence`: nine
+repositories over one durable store, an append-only **hash-chained write journal** carrying timestamp,
+source, author, reason, version and provenance for every write, a **version engine** answering *what
+does this say now*, *what did it say then* and *every version between*, and a **rebuildable index**
+proven rebuildable by a test that deletes it. `update` raises on all nine — the only ways a record's
+meaning changes are supersession and the next observation — and `PositionRepository` refuses every
+write, which is Architecture §24.3's durability classification enforced instead of documented.
+**4,700 production lines, 60 new public exports, 0 collisions, 0 new dependencies, 0 existing source
+files modified** (one test file gained two shared fixtures).
+
+**What the owner can do after it that was impossible before: nothing.** There is still no CLI surface
+and no composition root filling a `MarketSnapshot` from the engines. That is why there is **no
+changelog entry**. The one thing report 0015 §8 names as blocking real use is the **full-dump export**
+Architecture §5.7 item 4 requires *before the first real record is written* — it is not built, and it
+is the natural next slice.
 
 ### `BH` — Trade Domain Foundation · **DONE** *(committed locally, not pushed)*
 

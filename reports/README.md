@@ -47,7 +47,7 @@ Examples:
 - Reports are **never deleted** unless the user explicitly authorizes deletion.
 - Do **not** create generic `REPORT.md` files in the repository root.
 
-**Next available report number: `0015`**
+**Next available report number: `0016`**
 
 ## Metadata header
 
@@ -71,6 +71,7 @@ Each report should open with a short metadata table:
 | # | Date | Type | Title | Status | Branch / Commit | File |
 |---|---|---|---|---|---|---|
 | 0014 | 2026-08-12 | Implementation | Trade Domain Foundation (Milestone BH) — Implementation Record | Final | `main` / uncommitted (base `7ced9e2`) | [0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md](0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md) |
+| 0015 | 2026-08-12 | Implementation | Trade Repository & Journal Engine (Milestone BI) — Implementation Record | Final | `main` / uncommitted (base `c96c3e4`) | [0015_2026-08-12_TRADE_REPOSITORY_AND_JOURNAL_ENGINE_IMPLEMENTATION.md](0015_2026-08-12_TRADE_REPOSITORY_AND_JOURNAL_ENGINE_IMPLEMENTATION.md) |
 | 0013 | 2026-08-11 | Review | Research Harness Correction V1 — Hostile Review | Final | `main` / uncommitted (base `f9ddc54`) | [0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md](0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
 | 0012 | 2026-08-11 | Implementation | Research Harness Correction V1 — Implementation Record | Final | `main` / uncommitted (base `f9ddc54`) | [0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md](0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) |
 | 0011 | 2026-08-08 | Implementation | Swing Setup Historical Backtest Harness V1 — Implementation Record | Final | `main` / uncommitted (base `35bce7a`) | [0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md](0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md) |

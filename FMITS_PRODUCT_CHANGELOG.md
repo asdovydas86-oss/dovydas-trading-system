@@ -7,8 +7,8 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `f9ddc54` (Milestone AV's product docs, committed and pushed) plus **Milestone BC**, committed locally on top of it and **not pushed** |
-| **Verified on** | 2026-08-11 |
+| **Last verified against** | `dbc4765` (Milestone BI's product docs, committed locally, **not pushed**) plus **Milestones BJ, BK, BL and BM**, implemented on top of it and **not committed** |
+| **Verified on** | 2026-08-14 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -67,10 +67,22 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of `2000ba2` (`AV` — Swing Setup Historical Backtest Harness v1, committed locally, not pushed), on
-top of `35bce7a` (`AU`'s docs, released) — what the owner can do today.**
+**As of Milestone `BM` (Market Snapshot & Price Integration, implemented on top of `dbc4765`,
+uncommitted) — what the owner can do today.**
 
 ```
+fmits portfolio                                 # what the recorded positions are worth right now
+fmits portfolio --no-marks                      # the same page, no price fetched, every gap named
+fmits portfolio --mark-interval 4h              # price every holding from a coarser closed candle
+fmits trade record BTCUSDT …                    # record a swing trade: commitment, fill and thesis
+fmits trade show   TRADE_ID                     # one recorded trade, assembled and reconciled
+fmits trade list   --status open                # every recorded trade, filtered, never ranked
+fmits trade note   TRADE_ID --body "…"          # append a journal entry; nothing is ever edited
+fmits trade close  TRADE_ID --reason …          # append an exit and the reason for it
+fmits today                                     # the daily trading workspace: one page, seven sections
+fmits today BTCUSDT ETHUSDT --store-root PATH   # a chosen watchlist, against a chosen store
+fmits today --no-records                        # the same page, without reading the store
+fmits today --no-marks                          # read the store, fetch no price
 fmits setup  BTCUSDT                            # a deterministic swing-trade setup assessment
 fmits setup  BTCUSDT ETHUSDT SOLUSDT            # one per symbol, in the order requested
 fmits scan                                      # the fixed 20-symbol watchlist, a readable market report
@@ -91,6 +103,36 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 
 **Delivered:**
 
+- a **valued portfolio**: one command reports what the recorded positions are worth right now —
+  market value, cost basis, unrealized profit and loss, gross/net/long/short exposure, and equity
+  where cash has been observed — with **every figure traceable to a specific closed candle on a
+  stated timeframe**, and the price source, the selection rule and the age of every mark printed
+  beside it. A price is always the close of the **last closed candle**; a forming bar is never read,
+  so the same history always yields the same figure. A market with no price leaves its position
+  **listed and unmarked**, and every total that depended on it says *unavailable* with the market
+  that broke it named — never a smaller number that looks complete. A perpetual is never priced from
+  its spot pair, a price from after the instant being valued is refused, and a holding quoted in
+  another currency is reported unvalued rather than converted. **Nothing is stored**: a frozen
+  portfolio observation needs deposits and withdrawals this build records nowhere, so a valuation is
+  a reading that is recomputed rather than a record that could go stale. The same figures now appear
+  in `fmits today`'s capital section, which previously said no mark source existed. **Reads the
+  durable store and never writes to it; contacts no exchange for anything but public candles, places
+  no order and executes nothing**;
+- a **system of record for the owner's own trades**: one command records a complete swing trade —
+  the commitment (direction, stop, target ladder, stated confidence, the setup and the analysis it
+  came from), the entry fill under the full tax-capture contract, and the thesis behind it — as three
+  linked records in the durable store. `show` reassembles them with capital at risk and risk/reward
+  shown **beside the arithmetic that produced them**, `list` filters without ranking, `note` appends
+  and never edits, and `close` appends an exit with a reason from the owner's own vocabulary.
+  **Everything is append-only**: nothing already recorded is edited or deleted, the initial stop
+  cannot change by any code path, and re-running an identical command records nothing twice.
+  **FMITS places no order, contacts no exchange and executes nothing**; the owner remains the trader;
+- a **daily trading workspace**: one command assembling market overview, portfolio overview, today's
+  opportunities, a priority queue, the trade journal, recent analysis and every workspace warning onto
+  a single page — health, capital and existing exposure *before* opportunity, absence always rendered
+  with the inference it forbids, and nothing ranked by desirability. It reads the durable store and
+  never writes to it; it executes nothing, places no order, sizes no position and sends no
+  notification;
 - a **deterministic historical backtest harness**: `fmits backtest` replays the exact, unmodified
   swing-setup policy over real historical closed candles — no lookahead, by construction of a replay
   transport verified two independent ways — and reports what it would have produced: every
@@ -173,6 +215,243 @@ the automation ladder remains unstarted.
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-14 · `BM` — Market Snapshot & Price Integration
+
+**Status:** Implemented — pending commit. **A new user-visible capability**, and it is also the
+milestone that turns `BL` from a correct-but-silent engine into the number the owner reads.
+
+**What the owner can do that they could not before.**
+
+```
+fmits portfolio
+```
+
+What the recorded positions are worth right now: market value, cost basis, unrealized profit and
+loss, gross / net / long / short exposure, and equity where cash has been observed. Every figure is
+traceable — the page prints the price source, the timeframe, the selection rule and the age of every
+mark beside the figure it produced.
+
+**One price rule, stated and never varied.** A price is the close of the **last closed candle** on a
+stated interval (`1h` by default). A forming bar is never read, so two runs over the same history
+produce the same valuation forever, and a portfolio's value never moves because nothing traded.
+
+**A missing price is a sentence, never a zero.** A market that could not be priced leaves its
+position **listed and unmarked**, and every total that depended on it reports *unavailable* naming
+the market that broke it. `AP` §14.3's warning is the whole discipline: *"a zero makes the total
+look plausible and survives for years."* One unreachable symbol never costs the page the prices it
+already had, and never quietly shrinks a total.
+
+**Three refusals, each visible on the page.** A **perpetual** is never priced from its spot pair —
+they share a symbol and are two instruments with two prices. A price from **after** the instant being
+valued is refused, with both dates named, rather than used. A holding quoted in a currency other than
+the base is reported **unvalued** rather than converted, because this system holds no exchange rate.
+
+**`fmits today` now prints money where it printed an absence.** Its capital section previously said
+*"open risk needs a mark for every holding… no mark source exists."* Market value, unrealized P&L
+and exposure are now figures. **Open risk is still absent**, and the page says why: it needs a
+recorded stop, and a `TradePlan` is what states one. `--no-marks` keeps the store and skips only the
+prices.
+
+**Nothing is stored, deliberately.** A frozen portfolio observation requires deposits and withdrawals
+since the previous one — without them a deposit looks like a gain and every return figure is wrong
+— and this build records no transfer event. A valuation is therefore recomputed on demand rather
+than becoming a record that could go stale. Printed on every page as limitation `VA-1`.
+
+**FMITS still contacts no exchange for anything but public candles, places no order, sizes no
+position and executes nothing.** The store is read and never written.
+
+**Records:** [report 0020](reports/0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md)
+
+---
+
+### 2026-08-14 · `BL` — Portfolio Intelligence & Risk Engine
+
+**Status:** Implemented — pending commit. **Foundational — not directly user-visible.** No command
+was added and none changed, deliberately: the milestone was scoped to the deterministic backend and
+explicitly forbidden from becoming a dashboard. **This is not a product release**, and it is recorded
+here because it is load-bearing for the one that follows.
+
+**What shipped.** `fmis.portfolio_risk` — the boundary `TRADING_DOMAIN_ARCHITECTURE_V1` §15 specified
+and nothing had built. The system stops evaluating trades one at a time and can answer, as a library
+call:
+
+> What changes in the portfolio if the owner opens this proposed trade now?
+
+It answers with **two portfolio states and the differences between them** — exposure on eight axes,
+capital at risk per position and in total, each of the owner's own limits evaluated as `WITHIN`,
+`AT_LIMIT`, `EXCEEDED` or `INDETERMINATE(reason)`, duplicate and scale-in detection, and the
+classification groups the owner defines. **It returns no verdict, no score and no recommendation**, and
+there is no field on any type it exports that could hold one.
+
+**Why this is not yet a capability.** Open risk, duplicate detection and the constraint engine work
+today against real recorded trades. **Gross exposure, net exposure, leverage and every concentration
+share are `Absent`** — with a stated reason naming the market — because no price source reaches the
+owner half of FMITS. The engine is correct and mostly silent, and it becomes the daily number the
+owner reads on the day a mark source lands.
+
+**What it changes about risk.** The 2 % rule is enforced as a **ceiling**: reaching it exactly is a
+binding constraint rather than room left, and a limit stated with a lower default never has that
+default promoted to the comparison value. A limit that cannot be measured is reported in its own list
+and is never counted as within.
+
+**Venue-agnostic, and proved rather than claimed.** Portfolio and risk logic operates only on domain
+abstractions — account, venue, instrument, position, plan, budget, money. Five executable guards fail
+the build if any module imports an exchange provider, imports a market-half engine, or names a venue
+anywhere in its executable code. Binance, EVEDEX, a future DEX and a hand-kept account all reach the
+same arithmetic.
+
+**Risk-relevant defects found and fixed before release** ([report 0019](reports/0019_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_HOSTILE_REVIEW.md)):
+two BTC positions quoted in different currencies read as unrelated symbols — correlated exposure
+presented as diversification; a stale valuation was indistinguishable from a current one, so a
+percent-of-equity limit could be measured against a months-old equity; and one limit stated in the
+wrong currency took down the entire risk evaluation rather than producing one indeterminate result.
+
+**Records:** [report 0018](reports/0018_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_IMPLEMENTATION.md)
+· [report 0019](reports/0019_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_HOSTILE_REVIEW.md)
+
+---
+
+### 2026-08-13 · `BK` — Trade Capture & Decision Recording
+
+**Status:** Implemented — pending commit. **A new user-visible capability.** It is the first
+milestone in which FMITS **writes** to the durable store: `BI` built nine repositories that no
+command reached, `BJ` read them and wrote nothing, and this one closes that loop for the workflow the
+product exists for.
+
+**What shipped.** `fmits trade` — five subcommands over the owner's own trades:
+
+```
+fmits trade record BTCUSDT --direction long --account binance_spot --book swing \
+      --entry 60000 --stop 58400 --target 64000 --target 68000 --size 0.5 \
+      --fee 15 --fx-rate 10.5 --fx-source riksbank --confidence moderate \
+      --setup trend_continuation --thesis "weekly context up; the 4H retest held"
+fmits trade show  TRADE_ID                      # commitment, fills, position, journal, warnings
+fmits trade list  --status open --symbol BTCUSDT --since ISO8601
+fmits trade note  TRADE_ID --body "…" --title "…"
+fmits trade close TRADE_ID --price 63800 --fee 16 --reason target_reached --fx-rate 10.6 …
+```
+
+**A swing trade is recorded as three linked records, not one.** A `TradePlan` holds what the owner
+committed to — the stop, the target ladder, the stated confidence, the originating setup, proposal,
+market snapshot and archived analysis pages. A `Trade` holds each fill, under the full tax-capture
+contract from the first record. A `JournalEntry` holds the owner's own words. They stay three because
+they are three kinds of fact with three truth conditions — intent, money and opinion — and a single
+row would make *"did I honour my stop?"* unanswerable the first time a stop moved.
+
+**The initial stop cannot change, by construction rather than by rule.** There is no code path that
+edits it and a test pins the four callables the record exposes, so adding one fails there rather than
+three milestones after someone found it convenient.
+
+**Capital at risk is shown and never stored.** It is `|entry − stop| × quantity`, printed beside the
+subtraction and the multiplication that produced it, exactly as the risk/reward pair is printed
+beside its division and the average entry beside its own. `AP` §5.3's rule — *no quotient is ever a
+stored field* — applied to the one figure a trader most wants to see.
+
+**Everything is append-only and nothing is silently corrected.** Re-running an identical command
+records nothing twice and says so. Closing appends an exit fill; the entry, the commitment and every
+note stay byte-identical. A refusal names the two values that disagree, exits non-zero and **writes
+nothing at all** — a stop on the wrong side of the entry, a target the trade would reach by going
+wrong, a size in the quote asset, a third-asset fee with no rate of its own, a numeric confidence
+label, a naive timestamp, a close larger than the position, an exit with no reason.
+
+**Eight warnings and five standing limitations print on every page**, including the one the journal
+package calls the cheapest discipline metric in the system: *nothing has been written about this
+trade*.
+
+**What it still does not do**, and says so on the page: it places no order, contacts no exchange and
+confirms nothing against a venue; it computes no position size from a risk allowance; it calibrates no
+probability; realized profit and loss is the fold's figure for review and is **not** a taxable gain;
+and the figures on a trade's page fold that commitment's own fills, which may differ from the
+book-wide position in the same market.
+
+**Quality.** 5,876 → **6,311 tests** (+435), passing under `-W error` with zero warnings. **100 %
+statement coverage** of the nine new modules (962 statements). **30 mutation probes, 30 detected, 0
+survivors.** 0 new runtime dependencies, 0 export collisions (697 → 764 public names), 0 import
+cycles, 5 existing production files modified, all additively, and **0 domain types changed**.
+
+**One design finding is recorded in full** in
+[report 0017](reports/0017_2026-08-13_TRADE_CAPTURE_AND_DECISION_RECORDING_IMPLEMENTATION.md) §2:
+eight of the fourteen fields this command captures had no home in the domain, because `TradePlan` —
+designed since Milestone `AP`, named as accepted debt by the MVP blueprint — had never been built.
+It was built here, to the card the data model already wrote. `PlanAmendment`, the other half of that
+debt and the thing that makes a *widened* stop visible, is still outstanding and is the next item.
+
+---
+
+### 2026-08-12 · `BJ` — Daily Trading Workspace MVP
+
+**Status:** Implemented — pending commit. **A new user-visible capability**, and the first since `AV`
+that changes what the owner can do. `BH` (Trade Domain Foundation) and `BI` (Trade Repository &
+Journal Engine) are deliberately absent from this changelog: both were foundational, neither added a
+command, and recording them here would have been the failure rule 1 exists to prevent. `BJ` is the
+milestone that gives their work a surface.
+
+**What shipped.** `fmits today` — one command that assembles a complete swing-trading cockpit from
+components that already existed:
+
+```
+fmits today                                  # the fixed watchlist, plus everything on record
+fmits today BTCUSDT ETHUSDT SOLUSDT          # a watchlist chosen at the command line
+fmits today --store-root PATH                # read a specific durable store (read-only, always)
+fmits today --no-records                     # skip the store; the page says that it did not look
+fmits today --reference-time ISO8601         # pin the page, so two runs are byte-identical
+```
+
+Seven sections in a fixed order: **market overview** (what the scan concluded, and how many symbols
+the engine could not read as distinct from how many it read and declined) · **portfolio overview**
+(open positions folded from the ledger, the risk budget in force and its configured limits) ·
+**today's opportunities** (`CONFIRMED` / `CANDIDATE` / `WAIT` / `ERROR`, grouped) · **priority
+queue** (what deserves attention, and separately what this system refuses to produce a number for) ·
+**trade journal** (recent entries, live proposals, recently closed positions) · **recent analysis**
+(archived pages, citations and market snapshots, metadata only) · **workspace warnings**.
+
+**Health, capital and existing exposure appear before opportunity**, deliberately. The
+highest-probability way this product loses real money is not a bad signal — it is a position taken
+while the owner is already committed, or three simultaneous same-direction setups on three correlated
+majors.
+
+**It reads the durable store and never writes to it.** Asserted by an AST guard over the whole
+package (no `create`, `update`, `replace`, `publish` or append verb appears anywhere in it) and
+observed in a live run: the store's file listing was byte-identical before and after.
+
+**Nothing is ranked by desirability, and the mechanism is absent rather than merely unused.** The
+priority queue orders by the engine's own readiness state and then by watchlist order; a guard test
+asserts the module contains no `sorted`, `.sort`, `min`, `max`, `key=` or `reverse=`, and a
+behavioural test plants a `CANDIDATE` with `R:R 49.00` against a `CONFIRMED` setup with `R:R 0.4` and
+asserts the order does not move.
+
+**Every absent value prints its reason, the slice that owns producing it, and the inference its
+absence forbids** — *"Do not read an absent balance as a zero balance"*, *"Do not read this as risk
+being within budget. Nothing was measured."* A blank capital section reads as no exposure; this one
+cannot.
+
+**Every measured number prints with its sample and what is wrong with it.** A displayed risk/reward
+above the measured p90, or at or above 5, is annotated with the direction of the association in
+words — R:R in `[5, 20)` resolved target-first 7.7 % of the time against 74.5 % for R:R in `[0, 1)` —
+its `n`, and the note that the sample it came from was later proved to cover 41–43 usable days with a
+setup identity that changed every bar.
+
+**What it still does not do**, and says so on every page: no position size, portfolio risk or leverage
+is computed; no probability is calibrated; no correlation between markets is measured; no single
+bull/bear/neutral regime label is produced (ADR-0025 refuses a directional regime, and the page states
+that refusal rather than leaving a gap); no macro, news, derivatives, on-chain or liquidity data is
+represented; and nothing held at an exchange but not recorded in the store is visible to it.
+
+**Quality.** 5,629 → **5,876 tests** (+247), passing under `-W error` with zero warnings. **100 %
+statement and 100 % branch coverage** of the new package's 975 statements and 340 branches. **15
+mutation probes, 15 detected, 0 survivors**, byte-identical source restoration verified by SHA-256.
+0 new runtime dependencies, 0 export collisions (646 → 697 public names), 0 import cycles, 1 existing
+production file modified (`pipeline/cli.py`, additively). Three real defects were found by the tests
+before release — a blank provider message that took the whole page down, a corrupt store that escaped
+as an unhandled traceback, and long identifiers overflowing the 78-column page in four places — and
+all three are recorded in [report 0016](reports/0016_2026-08-12_DAILY_TRADING_WORKSPACE_MVP_IMPLEMENTATION.md)
+rather than quietly fixed.
+
+**Live-verified against real Binance data** on 2026-08-12, four symbols, exit code 0 — against both an
+empty store and one populated through the real repositories.
 
 ---
 

@@ -7,7 +7,268 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone BH — Trade Domain Foundation (2026-08-12), the pure domain layer of
+**Last updated for:** Milestone BM — Market Snapshot & Price Integration (2026-08-14): the bridge
+between the Market half and the Owner half. Two new packages — `fmis.marks` (the deterministic price
+snapshot service) and `fmis.valuation` (the one place a price becomes a `MarkQuote`) — plus
+`fmis.pipeline.prices`, the single module in the repository that binds a provider to a mark. **One
+command was added, `fmits portfolio`, and `fmits today` gained the figures it previously reported as
+absent.** Full record:
+[report 0020](../../reports/0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md).
+**`BJ`, `BK`, `BL` and `BM` are all in the working tree and none is committed** — per `CLAUDE.md`'s
+git safety rule, committing and pushing each require the owner's explicit authorization, and none was
+given for any of them.
+
+---
+
+## Milestone BM — Market Snapshot & Price Integration
+
+- **BM — Market Snapshot & Price Integration** (**not committed**, working tree on top of `dbc4765`,
+  alongside `BJ`, `BK` and `BL`). `BL`'s own entry below names the gap this closes: *"Every exposure
+  figure is `Absent` — because **no mark source reaches the owner half**. This is the gap the next
+  milestone closes."*
+
+  **What shipped.** Two packages and one module, split exactly along the existing boundary:
+
+  - `fmis.marks` (2 modules, 232 statements) — the price snapshot service. **Imports `fmis.data` and
+    the standard library and nothing else**, asserted as a set. `PriceBasis` has **one member**,
+    `LAST_CLOSED_CANDLE_CLOSE`, because a basis is a *choice* and a second one must arrive as a
+    second member rather than as a silent change of meaning for prices already recorded.
+  - `fmis.pipeline.prices` (29 statements) — the **one** module in the repository that binds a
+    provider to a mark. `MARK_INTERVAL` is `1h`; per-symbol failure isolation; computes nothing.
+  - `fmis.valuation` (5 modules, 427 statements) — the bridge. `marking.py` holds the only function
+    in the repository that turns a price into a `MarkQuote`.
+
+  **`fmits portfolio`** — an eleventh command, registered between `today` and `trade`.
+
+  **`fmis.portfolio_risk` was not touched.** Its dependency surface is byte-for-byte what `BL`
+  shipped and its five venue-agnostic guards pass unchanged — the adapter is outside the owner
+  domain, which is what the milestone brief required and what a guard test now asserts.
+
+  **Four properties worth carrying forward.** (1) **A mark's age is overstated, never understated**:
+  the canonical `Candle` carries no close time, so a price is timestamped with its bar's *open*, and
+  the direction of that error is the safe one and is printed on the page. (2) **A perpetual is
+  refused a spot price** rather than approximated — two instruments, two prices. (3) **Two folds
+  meet here and the difference is named**: `PositionRepository` folds book-wide, `read_portfolio`
+  folds one account at a time, and `fold_disagreement` lists every market where they answer
+  different questions. (4) **Nothing is stored**, because a frozen `PortfolioSnapshot` requires flows
+  no transfer event records — so a fabricated `FlowSummary` was the alternative.
+
+  **No pricing logic is duplicated.** Market value delegates to `PortfolioState.net_exposure`,
+  unrealized P&L to `Position.unrealized_pnl`, the float→exact crossing to
+  `fmis.money.exact_from_market_price`, and the partial-total rule to `sum_or_absent` — each
+  delegation asserted by its own test.
+
+  **What is still `Absent`, and why.** Open risk, for any position no `TradePlan` records a stop for.
+  This milestone closed the *mark* half of `BJ`'s `TD-3` and left the *plan* half untouched; that
+  limitation now says so in those words.
+
+  **No ADR was written and no design document was written.** `AP` §14 specified the mark and its
+  provenance and `IMPLEMENTATION_ROADMAP_V1` §C6 named the selection basis; this is the wiring.
+  Two exposure labels and one docstring were **reworded** rather than widening a guard, following
+  `BJ`'s own precedent that widening a guard for a mention weakens it for an import.
+
+  **Quality.** 6,679 → **6,964 tests** (+285), identically under `-W error`. **100 % statement and
+  100 % branch coverage** of the ten new/modified modules (692 statements, 196 branches). **26
+  mutation probes, 26 detected, 0 survivors.** 40 new public exports, **0 collisions** (851 total),
+  **0 import cycles**, **0 new runtime dependencies**, **0 record kinds added**, **0 domain types
+  changed**, 5 existing production files modified — all additively.
+
+  **Live-verified against real Binance data** on 2026-08-14: a store holding 0.25 BTC and 4 ETH
+  valued at 23,325.01 USDT against a cost basis of 26,100 USDT, both markets priced from real closed
+  1h bars, exit code 0 — and `fmits today` against the same store rendered all seven sections with
+  the capital section populated.
+
+  **Three real defects found before release, and one methodological finding**, all in report 0020
+  §§5–6. The methodological one is worth carrying: **byte-identical source restoration is necessary
+  and not sufficient** when mutation-testing. A one-character probe leaves the file the same size,
+  and restoring it inside one filesystem mtime second reproduces the exact `(mtime, size)` pair a
+  `.pyc` header records — so the interpreter keeps serving bytecode compiled from the mutated source.
+  This is the second stale-`__pycache__` incident in this repository (report 0013 F7 was the first).
+
+---
+
+## Milestone BL — Portfolio Intelligence & Risk Engine
+
+- **BL — Portfolio Intelligence & Risk Engine** (**not committed**, working tree on top of `dbc4765`,
+  alongside `BJ` and `BK`). The system stops evaluating trades one at a time.
+
+  **What shipped.** One package, `fmis.portfolio_risk` (8 modules, 3,767 lines), answering *what
+  changes in the portfolio if the owner opens this proposed trade now* as **two portfolio states and
+  the differences between them**:
+
+  - `geometry.py` — the sign rule (`entry − stop` long, `stop − entry` short), capital at risk, the
+    equity fraction, and `maximum_quantity_for_risk` as a **primitive, not a sizing product**.
+  - `models.py` — `ExposureLine` (the unit: account, market, book, direction, quantity, entry, stop,
+    mark), `ExposureBreakdown`, `PendingCommitment`, `PortfolioState`.
+  - `classification.py` — `ClassificationMap`: the owner's groups, versioned, applied at read time,
+    written onto no holding. **This module names no group.**
+  - `exposure.py` — `build_state`, the pure aggregation over eight axes.
+  - `constraints.py` — `AP` §15.5's `PortfolioConstraintCheck`: per-limit facts, never a verdict.
+  - `impact.py` — `ProposedTrade`, `PortfolioImpact`, duplicate and scale-in detection.
+  - `reading.py` — **the only module that touches persistence, and it only reads.**
+
+  **Three properties worth carrying forward.** (1) A `PortfolioState` is a rebuildable projection and
+  is **never stored**; the frozen half stays `PortfolioSnapshot`. (2) Positions are folded **one
+  account at a time**, because a `Position` holds no account — and `accounts_share_a_market` names
+  every market where that differs from the book-wide fold. (3) A position's stop comes from the
+  `TradePlan` its fills name; two commitments with two different stops produce `Absent`, never a
+  chosen one.
+
+  **What is `Absent` today, and why.** Every exposure figure — gross, net, long, short, leverage,
+  every concentration share — because **no mark source reaches the owner half**. Open risk, duplicate
+  detection and the constraint engine all work. This is the gap the next milestone closes.
+
+  **The integration point for `fmits today`** (unchanged by BL) is
+  `fmis.today.sections.portfolio_overview`, whose `unmeasurable` note names three blockers; two are
+  now gone (plans are recorded, open risk is computed) and the third is the mark source.
+
+  **ADR-0028 §5** was widened inside its own extension point, from five exempt domain packages to
+  six, with the justification in the guard test and a new assertion holding every exempt package to
+  the no-engine rule.
+
+---
+
+## Milestone BK — Trade Capture & Decision Recording
+
+- **BK — Trade Capture & Decision Recording** (**not committed**, working tree on top of `dbc4765`,
+  alongside `BJ`). `fmits trade record / show / list / note / close` — the owner records what they
+  decided and what they did, and reads it back.
+
+  **What shipped.** Two packages. `fmis.plan` (3 modules, 736 lines): `TradePlan`, the data model's
+  entity 19 — a **captured artifact**, `ASSERTED` throughout, holding the stop, the target ladder, the
+  stated confidence and the originating setup, proposal, snapshot and analysis references — plus
+  `adherence.py`'s pure comparisons (`check_placement`, `risk_distance`, `capital_at_risk`,
+  `planned_risk_reward`, `nearest_planned_level`, `exit_divergence`). `fmis.trade_capture` (6 modules,
+  2,543 lines): the composition root, the read path, the text boundary and the renderer. Plus
+  `RecordKind.TRADE_PLAN`, a `PlanRepository`, and `TradingStore.plans` — **ten repositories now, not
+  nine**.
+
+  **The finding.** Eight of the fourteen fields the milestone brief asks `record` to capture — stop,
+  target(s), confidence, setup, snapshot reference, analysis reference, capital at risk, thesis — had
+  **no home in the domain**. `TRADING_DOMAIN_ARCHITECTURE_V1` §9 and `TRADING_DOMAIN_DATA_MODEL_V1`
+  §10.3 specify the missing entity in full, down to its package name, and §11.6 assigns *stop, target
+  and intended size* to it by name; `SWING_TRADING_MVP_BLUEPRINT_V1` §12.3 records the omission as
+  accepted debt. `fmis.plan` builds it to that card. **No existing domain type changed shape** —
+  `Trade.plan_id` has been the link since `BH`.
+
+  **A swing trade is three records.** A `TradePlan` (intent), one or more `Trade` fills (money), and
+  `JournalEntry` entries (opinion). `TradeView` assembles them at read time and is stored nowhere.
+  `CaptureStatus` — `PLANNED` / `OPEN` / `CLOSED` — is derived from the fold, never stored.
+
+  **Capital at risk is shown and never stored.** `|entry − stop| × max exposure`, printed beside the
+  subtraction and the multiplication. `AP` §5.3's *no quotient is ever a stored field*, applied — and
+  the same reason `RiskRewardReading` stores the pair and `AverageCost` divides at read time. This is
+  a stated departure from §10.3's risk-first sizing rule, because `BK` records trades **already
+  entered**; report 0017 §4.2 records it.
+
+  **Everything is append-only.** `PlanRepository` refuses `update` and `replace`; `close` appends an
+  exit fill and changes nothing already stored; `note` appends and never supersedes; an identical
+  re-run publishes nothing and says so. Validation precedes publication, so a refused capture leaves
+  the store completely empty — asserted by test.
+
+  **The CLI reaches neither the domain nor the store.** `BJ` established that `fmis.pipeline` is a
+  market-half package; `inputs.py` exists so it stays true. The first draft imported `AccountId`,
+  `Money` and `TradingStore` directly and the existing guard tests caught it.
+
+  **Two guard tests were widened, inside their own stated extension points.** ADR-0028 §5's
+  directional-vocabulary exemption now covers five domain packages (`+ fmis.plan`) and one surface
+  (`+ fmis/trade_capture/`), each pinned and justified in the test itself. A new test asserts the
+  widening widened *who may spell a side*, not *who may read a candle*.
+
+  **Quality.** 5,876 → **6,311 tests** (+435), identically under `-W error`. **100 % statement
+  coverage** of the nine new modules (962 statements, `sys.monitoring`). **30 mutation probes, 30
+  detected, 0 survivors.** 66 new public exports, **0 collisions** (764 total), **0 import cycles**
+  across 197 modules, **0 new runtime dependencies**, 5 existing production files modified — all
+  additively — and **0 domain types changed**.
+
+  **What it still does not do.** No `PlanAmendment`, so a *widened* stop is still invisible — the
+  largest remaining piece of C4. No risk-first sizing. No `fmits trade correct`. `fmits today` does not
+  yet read a `TradePlan`. All eight limitations are in report 0017 §8.
+
+---
+
+## Milestone BJ — Daily Trading Workspace MVP
+
+- **BJ — Daily Trading Workspace MVP** (**not committed**, working tree on top of `dbc4765`).
+  `fmits today` — one command, one page, seven sections, assembled entirely from components that
+  already existed.
+
+  **What shipped.** `fmis.today`: eight modules (`evidence`, `models`, `warnings`, `attention`,
+  `sections`, `render`, `builder`, `__init__`), 2,603 production lines, 51 new public exports, **0
+  export collisions**, **0 new runtime dependencies**, **0 import cycles**, and **one** existing
+  production file modified — `pipeline/cli.py`, additively, to register a tenth command.
+
+  **The seven sections.** Market overview (what the scan concluded, plus the count of symbols the
+  engine could not classify kept separate from the count it read and declined) · portfolio overview
+  (positions folded from the ledger, the risk budget in force and its configured limits) · today's
+  opportunities (`CONFIRMED`/`CANDIDATE`/`WAIT`/`ERROR`, grouped) · priority queue (what deserves
+  attention, and separately what this system refuses to produce a number for) · trade journal ·
+  recent analysis · workspace warnings. Health, capital and existing exposure come **before**
+  opportunity, deliberately.
+
+  **It is the first package that reads both halves, and the crossing is exactly one package wide.**
+  Guard tests assert, in both directions: no engine, domain package or store module imports
+  `fmis.today`; only `pipeline/cli.py` imports it from the pipeline; `fmis.pipeline` still cannot
+  reach `fmis.persistence` (which is why `StoreUnreadableError` exists — the CLI reports a corrupt
+  store without importing the store); and a cold `import fmis.pipeline` in a subprocess loads none of
+  it. **Eight existing guard tests were widened**, each with its own recorded justification, and one
+  was deliberately *not* widened: a warning's evidence string naming `fmis.daily` was reworded
+  instead, because widening a guard for a mention would weaken it for an import.
+
+  **Nothing is ranked, and the mechanism is absent rather than merely unused.** The priority queue
+  orders by the engine's own readiness state, then by watchlist order. An AST guard asserts
+  `attention.py` contains no `sorted`, `.sort`, `min`, `max`, `key=` or `reverse=`; a behavioural test
+  plants a `CANDIDATE` with `R:R 49.00` against a `CONFIRMED` setup with `R:R 0.4` and asserts the
+  order does not move. Refusals leave the queue into their own list rather than sinking in it, and the
+  model refuses to put a block in the warnings list or a blocked entry in the attention list.
+
+  **It writes nothing**, asserted by an AST guard over the whole package and observed against a real
+  store on disk whose file listing was byte-identical before and after.
+
+  **Every measured number prints with its `n` and what is wrong with its sample.** The two figures
+  this package cites live in one module as `MeasuredFigure` records whose `rendered()` has no short
+  form, so a renderer cannot drop the caveat. A guard asserts no other module contains a numeric
+  literal beyond `0`, `1` and two named counts.
+
+  **The one deviation from the brief, recorded rather than substituted.** The brief asked for a
+  Bull/Bear/Neutral regime label; ADR-0025 forbids collapsing a regime into a direction, and the brief
+  also said to follow the ADRs. What ships is a **breadth** distribution over the engine's own final
+  verdicts, plus a sentence on the page stating the refusal and citing ADR-0025. Report 0016 §2.1.
+
+  **Three real defects were found by the tests before release** — a blank provider message that
+  crashed the page, a corrupt store escaping as an unhandled traceback (the domain's decode errors are
+  a separate hierarchy from the store's), and long identifiers overflowing the 78-column page in four
+  places. All three are recorded in report 0016 §7 rather than quietly fixed.
+
+  **Quality.** 5,629 → **5,876 tests** (+247), passing under `-W error` with zero warnings. **100 %
+  statement and 100 % branch coverage** of the new package's 975 statements and 340 branches. **15
+  mutation probes, 15 detected, 0 survivors**, byte-identical restoration verified by SHA-256; the two
+  initial survivors each exposed a real gap in a test rather than in the code.
+
+  **Live-verified against real Binance data** on 2026-08-12, four symbols, exit code 0 — against both
+  an empty store and one populated through the real repositories.
+
+  **No ADR was written and no design document was written.** The milestone creates no new contract;
+  `BE`, `BF`, `BG` and `BI` had already designed everything it assembles.
+
+---
+
+## Milestone BI — Trade Repository & Journal Engine
+
+**This document's own entry for `BI` was never written at the time it landed** — a third gap of the
+kind the banner below already records for `BC`, and it is named here rather than left silent. `BI`
+shipped `fmis.persistence`: nine repositories over one durable store, a hash-chained append-only write
+journal, a version engine, a rebuildable index, 366 new tests, 100 % statement and branch coverage and
+an 81.6 % mutation score, with **no user-visible capability** — the store had no reader until `BJ`
+above. It is committed locally as `37b5afb` (code) and `dbc4765` (docs), **not pushed**. The
+authoritative record is [report 0015](../../reports/0015_2026-08-12_TRADE_REPOSITORY_AND_JOURNAL_ENGINE_IMPLEMENTATION.md)
+and `FMITS_PRODUCT_BACKLOG.md` §8; this paragraph does not attempt to reconstruct more than that,
+because reconstructing a milestone's state after the fact is exactly what this file's own *"if it
+disagrees with the code, the code is correct"* rule warns against.
+
+---
+
+**Previously last updated for:** Milestone BH — Trade Domain Foundation (2026-08-12), the pure domain layer of
 the owner half of FMITS: thirteen new packages implementing `Trade`, `TradeStatus`, `OpportunityProposal`,
 the proposal lifecycle stream, `Position`, `MarketSnapshot`, `AnalysisRecord`, `JournalEntry`/`TradeJournal`,
 `RiskBudget`/`RiskBudgetState` and `PortfolioSnapshot`. **No user-visible capability**: there is no CLI
@@ -1195,8 +1456,9 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**5,263 passing** (`.venv/bin/python -m pytest`, ~168 s including the network-touching backtest and
-research suites), identically with `-W error`. Measured at `BH` (2026-08-12); `BC` measured 4,653 and
+**6,679 passing** (`.venv/bin/python -m pytest`, ~181 s including the network-touching backtest and
+research suites), identically with `-W error`. Measured at `BL` (2026-08-14); `BK` measured 6,311 and
+`BL` added 368. Earlier: `BJ` measured 5,876 and `BK` added 435. Earlier: **5,263 passing** measured at `BH` (2026-08-12); `BC` measured 4,653 and
 `BH` added 610.
 
 Previously **4,332 passing**, measured at `AS`
@@ -1346,6 +1608,13 @@ R5 — relevant to future backtesting).
 - **Zero runtime dependencies.**
 
 ## Existing modules
+
+> **This tree covers the market half only and has not been extended since Milestone AG.** The owner
+> half — `records`, `provenance`, `money`, `versioning`, `accounts`, `analysis_record`,
+> `snapshotting`, `proposal`, `plan`, `ledger`, `positions`, `portfolio`, `risk`, `journal`
+> (Milestones BH and BK), `persistence` (BI), `today` (BJ) and `trade_capture` (BK) — is documented in
+> the milestone sections at the top of this file and in reports 0014 through 0017. Extending this tree
+> is a maintenance task nobody has claimed; the headline package list above is the maintained one.
 
 ```
 src/fmis/

@@ -47,7 +47,7 @@ Examples:
 - Reports are **never deleted** unless the user explicitly authorizes deletion.
 - Do **not** create generic `REPORT.md` files in the repository root.
 
-**Next available report number: `0016`**
+**Next available report number: `0021`**
 
 ## Metadata header
 
@@ -72,6 +72,11 @@ Each report should open with a short metadata table:
 |---|---|---|---|---|---|---|
 | 0014 | 2026-08-12 | Implementation | Trade Domain Foundation (Milestone BH) — Implementation Record | Final | `main` / uncommitted (base `7ced9e2`) | [0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md](0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md) |
 | 0015 | 2026-08-12 | Implementation | Trade Repository & Journal Engine (Milestone BI) — Implementation Record | Final | `main` / uncommitted (base `c96c3e4`) | [0015_2026-08-12_TRADE_REPOSITORY_AND_JOURNAL_ENGINE_IMPLEMENTATION.md](0015_2026-08-12_TRADE_REPOSITORY_AND_JOURNAL_ENGINE_IMPLEMENTATION.md) |
+| 0016 | 2026-08-12 | Implementation | Daily Trading Workspace MVP (Milestone BJ) — Implementation Record | Final | `main` / uncommitted (base `dbc4765`) | [0016_2026-08-12_DAILY_TRADING_WORKSPACE_MVP_IMPLEMENTATION.md](0016_2026-08-12_DAILY_TRADING_WORKSPACE_MVP_IMPLEMENTATION.md) |
+| 0017 | 2026-08-13 | Implementation | Trade Capture & Decision Recording (Milestone BK) — Implementation Record | Final | `main` / uncommitted (base `dbc4765`) | [0017_2026-08-13_TRADE_CAPTURE_AND_DECISION_RECORDING_IMPLEMENTATION.md](0017_2026-08-13_TRADE_CAPTURE_AND_DECISION_RECORDING_IMPLEMENTATION.md) |
+| 0018 | 2026-08-14 | Implementation | Portfolio Intelligence & Risk Engine (Milestone BL) — Implementation Record | Final | `main` / uncommitted (base `dbc4765`) | [0018_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_IMPLEMENTATION.md](0018_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_IMPLEMENTATION.md) |
+| 0019 | 2026-08-14 | Hostile Review | Portfolio Intelligence & Risk Engine (Milestone BL) — Hostile Review | Final | `main` / uncommitted (base `dbc4765`) | [0019_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_HOSTILE_REVIEW.md](0019_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_HOSTILE_REVIEW.md) |
+| 0020 | 2026-08-14 | Implementation | Market Snapshot & Price Integration (Milestone BM) — Implementation Record | Final | `main` / uncommitted (base `dbc4765`) | [0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md](0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md) |
 | 0013 | 2026-08-11 | Review | Research Harness Correction V1 — Hostile Review | Final | `main` / uncommitted (base `f9ddc54`) | [0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md](0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
 | 0012 | 2026-08-11 | Implementation | Research Harness Correction V1 — Implementation Record | Final | `main` / uncommitted (base `f9ddc54`) | [0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md](0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) |
 | 0011 | 2026-08-08 | Implementation | Swing Setup Historical Backtest Harness V1 — Implementation Record | Final | `main` / uncommitted (base `35bce7a`) | [0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md](0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md) |

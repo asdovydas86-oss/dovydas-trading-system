@@ -11,8 +11,8 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `HEAD` at `c96c3e4` (Milestones BC and BH, committed locally and **not pushed**; `origin/main` is at `f9ddc54`) plus **Milestone BI — Trade Repository & Journal Engine**, in the working tree and **not committed** (§4, §8) |
-| **Verified on** | 2026-08-12 |
+| **Last verified against** | `HEAD` at `dbc4765` (Milestones BC, BH and BI, committed locally and **not pushed**; `origin/main` is at `f9ddc54`) plus **Milestones BJ — Daily Trading Workspace MVP** and **BK — Trade Capture & Decision Recording**, both in the working tree and **not committed** (§4, §8) |
+| **Verified on** | 2026-08-13 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -78,21 +78,33 @@ before?"* An item that cannot answer it does not belong here.
 | **Milestone AS commit** | `aca2628` (production fix + tests + RCA + independent review — defect fix, not a new capability) |
 | **Milestone AR commit** | `1480766e57526d48266a4aa5ff48b3a945614656` (production code + tests + ADR-0028 + design + review) |
 | **Milestone AO commits** | A `b40663f178e612856d6420c966b8a71ca7966edc` (production+docs) · B `aa78695d172bb23d8b4ff22c0898ba7f0b21a226` (product docs) · C `c84b2a1c0e6a7d13b0bbd586e7a60d2fa027a40d` (record-ID correction) |
-| **HEAD** | Milestone BH — `64e82e9` (code) plus a docs reconciliation commit, both local, on top of `7ced9e2` |
+| **HEAD** | `dbc4765` — Milestone BI's product docs. Milestones **BJ, BK, BL and BM** sit uncommitted on top of it |
 | **`origin/main`** | `f9ddc54` — **behind local `HEAD`; Milestone BC is committed locally, not pushed, per this milestone's own explicit instruction. Pushing requires separate, explicit authorization** |
 | **Working tree** | Clean apart from the 12 pre-existing untracked AP/AQ/BA/BB-era research documents under `docs/design/` and `docs/reviews/`, which predate this milestone and are unchanged by it |
-| **Test count** | **5,263 collected, 5,263 passing**, identically under `-W error`. The two long-standing `test_swing_setup_scan_report.py` failures previously recorded here as "a float-formatting flake" were neither a flake nor a source defect: a git-ignored `__pycache__` entry compiled from an older `scan_report.py` (`,.2g` where the source says `,.6g`), with a matching recorded mtime and size, which also made `fmits scan` print prices in scientific notation on this machine. Clearing the cache resolved both with no source change — see [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) F7 |
-| **Public exports / collisions** | `fmis.swing_setup` 53 → **94** names (+41: the corrected research harness — `run_research_study`, `derive_warmup`, `compare_variant`, `post_filter_comparison`, the research models and their constants), **0 collisions** |
-| **Import cycles** | 0 |
-| **Runtime dependencies** | 0 added. No coverage package is installed; BC measured 92.4 % line coverage on its seven new modules using the stdlib `sys.monitoring`, and ran 14 mutation probes (14/14 detected) — see [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) §11 |
-| **Latest completed milestone** | **BI — Trade Repository & Journal Engine** (§8) — the durable store for the owner half: nine repositories, a hash-chained write journal, a version engine, 366 new tests, 100 % statement **and** branch coverage, an 81.6 % mutation score, **no user-visible capability yet**. See [report 0015](reports/0015_2026-08-12_TRADE_REPOSITORY_AND_JOURNAL_ENGINE_IMPLEMENTATION.md). Previously: **BH — Trade Domain Foundation** (§8) — the pure domain layer of the owner half: thirteen packages, 608 new domain tests, 100 % statement coverage, **no user-visible capability yet**. See [report 0014](reports/0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md). Previously: **BC — Research Dataset & Counterfactual Replay Correction** (§8) — `fmits backtest --research` derives its warm-up prefix from the production dependencies, fetches it before the measurement window, and verifies per instant that nothing was still warming. Usable research period **41 → 380 days**; largest five-day outcome cluster **49.0 % → 11.4 %**; counterfactual confirmation-age bounds replayed rather than filtered. **No trading policy changed and no performance claim made.** See [the design](docs/design/RESEARCH_HARNESS_CORRECTION_V1.md), [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) and [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
-| **Product Value Level** | **Level 2 — usable swing-analysis assistant**, now with a first honest measurement of the swing-setup policy's own historical behaviour (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12) |
+| **Test count** | **6,964 collected, 6,964 passing**, identically under `-W error` (6,679 before Milestone BM; +285). **A second stale-`__pycache__` incident occurred during BM and is recorded rather than absorbed:** BM's mutation harness restores each probed file byte-identically, which inside one filesystem mtime second reproduces the exact `(mtime, size)` pair a `.pyc` header records — so the interpreter kept serving bytecode compiled from the *mutated* source and a passing test failed as a phantom. SHA-256 restoration is necessary and not sufficient; the harness now clears every `__pycache__` on both sides of every probe. See [report 0020](reports/0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md) §6. Earlier note, retained: Earlier note, retained: The two long-standing `test_swing_setup_scan_report.py` failures previously recorded here as "a float-formatting flake" were neither a flake nor a source defect: a git-ignored `__pycache__` entry compiled from an older `scan_report.py` (`,.2g` where the source says `,.6g`), with a matching recorded mtime and size, which also made `fmits scan` print prices in scientific notation on this machine. Clearing the cache resolved both with no source change — see [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) F7 |
+| **Public exports / collisions** | **851 public names, 0 collisions** across the repository after Milestone BM (`fmis.marks` 12 new, `fmis.valuation` 23 new, `fmis.pipeline` 35 → 40). Previously **811 public names, 0 collisions** after Milestone BL (`fmis.portfolio_risk` 47 new; two names were renamed during BL — `stop_distance` and `read_exposure_lines` — precisely because the zero-collision guard caught them against `fmis.plan.risk_distance` and `fmis.persistence.read_lines`). Previously **764 public names, 0 collisions** after Milestone BK (`fmis.plan` 14 new, `fmis.trade_capture` 52 new, `fmis.persistence` 60 → 61). Earlier note, retained: `fmis.swing_setup` 53 → **94** names (+41: the corrected research harness — `run_research_study`, `derive_warmup`, `compare_variant`, `post_filter_comparison`, the research models and their constants), **0 collisions** |
+| **Import cycles** | 0 — measured at module granularity across 212 modules |
+| **Runtime dependencies** | 0 added, and `pyproject.toml` / `uv.lock` are unchanged. Milestone BM measured **100 % statement and 100 % branch coverage** of its 692 new statements and 196 new branches the same way. Earlier note, retained: Milestone BL measured coverage with `coverage.py` run through `uv run --no-project`, which builds an **ephemeral** environment and installs nothing into the project venv — 95 % of its eight new modules, with every uncovered line inspected and reported as a defensive type guard. Earlier note, retained: no coverage package is installed; BC measured 92.4 % line coverage on its seven new modules using the stdlib `sys.monitoring`, and ran 14 mutation probes (14/14 detected) — see [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) §11 |
+| **Latest completed milestone** | **BM — Market Snapshot & Price Integration** (§8) — the bridge between the Market half and the Owner half. Two new packages (`fmis.marks`, the deterministic price snapshot service, and `fmis.valuation`, the one place a price becomes a `MarkQuote`) plus `fmis.pipeline.prices`, the single module in the repository that binds a provider to a mark. **`fmits portfolio`** — what the recorded positions are worth right now, what they cost, what is unrealized and what is exposed, every figure traceable to a named closed candle. `fmits today`'s capital section prints money where it used to print *"no mark source exists"*. 285 new tests, **100 % statement and branch coverage**, 26/26 mutation probes detected, 0 record kinds added, 0 domain types changed, live-verified against real Binance data. See [report 0020](reports/0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md). Previously: **BL — Portfolio Intelligence & Risk Engine** (§8) — `fmis.portfolio_risk`: `AP` §15's boundary, built. Portfolio state, exposure on eight axes, the owner's risk budget evaluated as per-limit facts, and the proposed-trade impact that answers *what changes if I open this now* — with **no verdict, no score and no CLI**, by design. 368 new tests, 96 % coverage reported honestly, 62/64 mutation probes killed with both survivors proven equivalent, venue-agnosticism proved by five executable guards. **Foundational: no user-visible capability yet, and every exposure figure is `Absent` until a mark source exists.** See [report 0018](reports/0018_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_IMPLEMENTATION.md) and [report 0019](reports/0019_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_HOSTILE_REVIEW.md). Previously: **BK — Trade Capture & Decision Recording** (§8) — `fmits trade record / show / list / note / close`: the first milestone in which FMITS **writes** to the durable store. Two new packages (`fmis.plan`, holding the `TradePlan` the data model specified and Milestone BH did not build, and `fmis.trade_capture`), a tenth repository, 435 new tests, 100 % statement coverage of the nine new modules, 30/30 mutation probes detected, 0 domain types changed. See [report 0017](reports/0017_2026-08-13_TRADE_CAPTURE_AND_DECISION_RECORDING_IMPLEMENTATION.md). Previously: **BJ — Daily Trading Workspace MVP** (§8) — `fmits today`: one command, seven sections, assembled from the scan and the durable store. The first package reading both halves of FMITS, and the first milestone since AV to change what the owner can do. 247 new tests, 100 % statement **and** branch coverage, 15/15 mutation probes detected, reads the store and writes nothing. See [report 0016](reports/0016_2026-08-12_DAILY_TRADING_WORKSPACE_MVP_IMPLEMENTATION.md). Previously: **BI — Trade Repository & Journal Engine** (§8) — the durable store for the owner half: nine repositories, a hash-chained write journal, a version engine, 366 new tests, 100 % statement **and** branch coverage, an 81.6 % mutation score, **no user-visible capability yet**. See [report 0015](reports/0015_2026-08-12_TRADE_REPOSITORY_AND_JOURNAL_ENGINE_IMPLEMENTATION.md). Previously: **BH — Trade Domain Foundation** (§8) — the pure domain layer of the owner half: thirteen packages, 608 new domain tests, 100 % statement coverage, **no user-visible capability yet**. See [report 0014](reports/0014_2026-08-12_TRADE_DOMAIN_FOUNDATION_IMPLEMENTATION.md). Previously: **BC — Research Dataset & Counterfactual Replay Correction** (§8) — `fmits backtest --research` derives its warm-up prefix from the production dependencies, fetches it before the measurement window, and verifies per instant that nothing was still warming. Usable research period **41 → 380 days**; largest five-day outcome cluster **49.0 % → 11.4 %**; counterfactual confirmation-age bounds replayed rather than filtered. **No trading policy changed and no performance claim made.** See [the design](docs/design/RESEARCH_HARNESS_CORRECTION_V1.md), [report 0012](reports/0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) and [report 0013](reports/0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
+| **Product Value Level** | **Level 2 — usable swing-analysis assistant**, now with a daily workspace command, a system of record for the owner's own trades, *and* a valued portfolio (ladder in [`reports/0004`](reports/0004_2026-08-01_FMITS_BUSINESS_AND_CAPABILITY_ARCHITECTURE_V1.md) §12). **Not Level 3**: no position size and no calibrated probability is produced, and open risk is still `Absent` for any position no `TradePlan` records a stop for |
 | **Architecture maturity** | **M2 — Connected** ([`reports/0003`](reports/0003_2026-08-01_FMITS_ARCHITECTURE_BLUEPRINT_V1.md) §11) |
-| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT, AU and AV were all explicitly-scoped, owner-directed implementation tasks, not NOW selections, and this row is unchanged by any of them. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
+| **Immediate next milestone** | **Awaiting the owner's decision** (§5) — the exactly-one-NOW rule remains temporarily unsatisfied; AT, AU, AV, BH, BI, BJ, BK, BL and BM were all explicitly-scoped, owner-directed implementation tasks, not NOW selections, and this row is unchanged by any of them. §6 holds the sequenced work that follows; §7 holds the unsequenced epics |
 
 ### Current user-visible capability
 
 ```
+fmits trade record BTCUSDT …               # record a swing trade: commitment, fill and thesis
+fmits trade show   TRADE_ID                # one recorded trade, assembled and reconciled
+fmits trade list   --status open           # every recorded trade, filtered, never ranked
+fmits trade note   TRADE_ID --body "..."   # append a journal entry; nothing is ever edited
+fmits trade close  TRADE_ID --reason ...   # append an exit and the reason for it
+fmits portfolio                            # what the recorded positions are worth right now
+fmits portfolio --no-marks                 # the same page, with no price fetched and every gap named
+fmits portfolio --mark-interval 4h         # price every holding from a coarser closed candle
+fmits today                                # the daily trading workspace: one page, seven sections
+fmits today BTCUSDT --store-root PATH      # a chosen watchlist, against a chosen store (read-only)
+fmits today --no-records                   # the same page, without reading the store at all
+fmits today --no-marks                     # read the store, fetch no price
 fmits setup  BTCUSDT                       # a deterministic swing-trade setup assessment
 fmits setup  BTCUSDT ETHUSDT SOLUSDT       # one per symbol, in the order requested
 fmits scan                                 # the fixed 20-symbol watchlist, a readable market report
@@ -111,6 +123,23 @@ fmits archive show RECORD_ID               # render a stored record, no network 
 fmits archive verify RECORD_ID             # integrity check; omit the id to verify the whole archive
 python -m fmis.pipeline daily BTCUSDT      # works without reinstalling
 ```
+
+`trade` is the **system of record for what the owner decided and did**. `record` writes three linked
+records — a `TradePlan` holding the commitment (stop, target ladder, stated confidence, originating
+setup, proposal, market snapshot and archived analyses), a `Trade` holding the entry fill under the
+full tax-capture contract, and a `JournalEntry` holding the thesis. `show` reassembles them and
+prints capital at risk and risk/reward **beside the arithmetic that produced them**; `list` filters
+and states what it excluded; `note` appends; `close` appends an exit with a reason from the owner's
+own vocabulary. **Everything is append-only** — nothing recorded is edited or deleted, the initial
+stop cannot change by any code path, and an identical re-run records nothing twice. Every refusal
+names the two values that disagree and writes nothing at all. **FMITS places no order, contacts no
+exchange and executes nothing.**
+
+`today` assembles one page from what already exists: the market overview and opportunities come from
+the same scan `fmits scan` runs, and the portfolio, journal and analysis sections come from the
+durable store. It **reads the store and never writes to it**, computes no position size and no open
+risk, ranks nothing by desirability, and prints every value it cannot produce with the reason, the
+slice that owns it, and the inference its absence forbids.
 
 `scan` runs the **same** deterministic swing-setup assessment `setup` produces across a **fixed,
 hardcoded** twenty-symbol watchlist of major pairs — not a caller-supplied universe — and prints one
@@ -222,6 +251,165 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `BM` — Market Snapshot & Price Integration · **DONE** *(not committed, not pushed)*
+
+| Field | Value |
+|---|---|
+| **Commit** | **none.** The work is in the working tree on top of `dbc4765`, alongside `BJ`, `BK` and `BL`; committing and pushing each require separate, explicit authorization (`CLAUDE.md`) |
+| **ADR** | **none written, none amended.** The milestone creates no new contract: `AP` §14 specifies the mark and its provenance, `IMPLEMENTATION_ROADMAP_V1` §C6 names the selection basis by name — *"the last available closed-candle close"* — and `BH`/`BI`/`BL` built every type this assembles. Two exposure labels were reworded rather than exempting a package from ADR-0028's guard, and one docstring was reworded rather than widening `fmis.daily`'s raw-text import guard. See [report 0020](reports/0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md) §7 |
+| **Design** | **none written.** Wiring that needs an ADR is wiring that crossed a boundary it should not have |
+| **Report** | [report 0020](reports/0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md) |
+| **Tests** | 6,679 → **6,964** (+285, in eleven new files), identically under `-W error`. **100 % statement and 100 % branch coverage** of the ten new/modified modules (692 statements, 196 branches). **26 mutation probes, 26 detected, 0 survivors**, byte-identical restoration verified by SHA-256 *and* by a cleared bytecode cache |
+
+**Product value delivered — the market half and the owner half finally meet.** `BL`'s own record
+named the gap: *"every exposure figure is `Absent`, because no mark source reaches the owner half."*
+This milestone closes it. **`fmits portfolio`** answers *what are my positions worth right now* —
+market value, cost basis, unrealized P&L, gross/net/long/short exposure — with every figure traceable
+to a specific closed candle on a stated timeframe, and every figure that cannot be computed printed
+with the market that broke it.
+
+**Two packages and one module, split exactly along the existing boundary.** `fmis.marks` (market
+half) imports `fmis.data` and nothing else; `fmis.valuation` (the bridge) holds the one function in
+the repository that turns a price into a `MarkQuote`; `fmis.pipeline.prices` is the one module that
+binds a provider to a mark. All three claims are executable guards, not prose.
+
+**`fmis.portfolio_risk` was not touched.** Its dependency surface is byte-for-byte what `BL` shipped
+and its venue-agnostic guards still pass unchanged — the adapter is outside the owner domain, which
+is what the brief required.
+
+**No pricing logic is duplicated, and each delegation is named.** Market value delegates to
+`PortfolioState.net_exposure`, unrealized P&L to `Position.unrealized_pnl`, the float→exact crossing
+to `fmis.money.exact_from_market_price` (*"the one `float` → exact crossing in the whole domain"*),
+and the partial-total rule to `sum_or_absent`.
+
+**Three refusals, each stated rather than approximated.** A **perpetual** is never priced from its
+spot pair — two instruments, two prices. A price from **after** the instant being valued is refused
+per market with both dates named. A holding quoted in a currency other than the base is reported
+**unvalued** rather than converted, because this system holds no FX rate.
+
+**Nothing is stored, and that is a decision.** A frozen `PortfolioSnapshot` requires deposits and
+withdrawals since the previous one, and no transfer event kind exists in this build — so a snapshot
+written now would carry a fabricated `FlowSummary` and every return figure derived from it would be
+wrong. Recorded as limitation `VA-1` on every page. **No `RecordKind` was added.**
+
+**Three real defects were found before release and are recorded rather than quietly fixed** (report
+0020 §5): an invalid CLI flag reported as a corrupt store, a shadowed parameter, and a
+doubly-indented header the width tests could not see. A fourth finding is methodological: the
+mutation harness poisoned its own bytecode cache (§6).
+
+**What it still does not do.** Open risk is still `Absent` for any position no `TradePlan` records a
+stop for — this milestone closed the *mark* half of `BJ`'s `TD-3` and left the *plan* half untouched.
+No historical prices, so a past valuation refuses today's candles rather than reading the right ones.
+Equity needs a `PortfolioSnapshot` for its cash half. Non-spot markets are unpriceable by refusal.
+One mark interval for every market. Nothing is scheduled. All eight limitations are in report 0020 §9.
+
+### `BL` — Portfolio Intelligence & Risk Engine · **DONE** *(not committed, not pushed)*
+
+| Field | Value |
+|---|---|
+| **Commit** | **none.** The work is in the working tree on top of `dbc4765`, alongside `BJ` and `BK`; committing and pushing each require separate, explicit authorization (`CLAUDE.md`) |
+| **ADR** | **none written, none amended.** ADR-0028 §5's directional-vocabulary rule was widened **inside its own stated extension point**, from five domain packages to six — `fmis.portfolio_risk` computes long, short and directional exposure and carries the sign rule capital at risk depends on. The justification is written into the guard test itself, and a new assertion now holds every exempt domain package to the no-engine rule that the ban exists to protect. See [report 0018](reports/0018_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_IMPLEMENTATION.md) §10 |
+| **Design** | **none written.** The design already existed and had not been built: `TRADING_DOMAIN_ARCHITECTURE_V1` §15 specifies the Portfolio Intelligence boundary and the `PortfolioConstraintCheck` contract in full, and `TRADING_DOMAIN_DATA_MODEL_V1` §12.5–12.6 writes the entity cards. Report 0018 records what was built against them |
+| **Report** | [report 0018](reports/0018_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_IMPLEMENTATION.md) · hostile review [report 0019](reports/0019_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_HOSTILE_REVIEW.md) |
+| **Tests** | 6,311 → **6,679** (+368: 367 in seven new files, one added to the ADR-0028 boundary guard), identically under `-W error`. **96 % statement coverage** of the eight new modules (1,218 statements), reported honestly rather than rounded — 43 of the 47 uncovered lines are `raise` type/validation guards and the other 4 are defensive branches unreachable through the package's public entry points. **64 mutation probes, 62 killed, 2 survivors, both proven equivalent** |
+
+**Product value delivered — the system stops evaluating trades one at a time.** One new package,
+`fmis.portfolio_risk`, holding `AP` §15's boundary: the deterministic step between portfolio facts and
+the owner's own limits. It answers **what changes in the portfolio if the owner opens this proposed
+trade now** — as two portfolio states and the differences between them, never as a verdict. **3,767
+production lines, 47 new public exports, 0 collisions, 0 new dependencies, 0 import cycles, 0
+production files outside the new package modified, and 0 domain types changed.**
+
+**No CLI command was added, and that is deliberate** — the milestone was scoped to the deterministic
+backend and explicitly forbidden from becoming a dashboard. Its changelog entry is therefore
+**Foundational**, not a product release.
+
+**Venue-agnostic by construction, and proved rather than claimed.** Five executable guards assert that
+no module imports a provider, imports a market-half engine, or names a venue anywhere in its
+*executable* code — one of which found and rejected a real hit, a `venue:binance` example baked into a
+help string. Binance, EVEDEX, a future DEX and a hand-kept account all reach the same arithmetic
+through the same records.
+
+**What the hostile review found.** Three defects, all fixed. The one that mattered: two BTC longs
+quoted in USDT and USDC read as **unrelated symbols** — correlated exposure presented as
+diversification, the exact attack the brief named. Fixed with a base-asset exposure axis and
+cross-quote duplicate detection. Also fixed: a stale snapshot's equity was indistinguishable from a
+current one, and a limit stated in the wrong currency took down the entire constraint check instead of
+producing one indeterminate result.
+
+**What it still does not do.** **Every exposure figure is `Absent` until a mark source exists** — open
+risk, duplicate detection and the constraint engine work today; gross, net, leverage and every
+concentration share do not, because no price reaches the owner half. No position sizing product (the
+primitive exists; the equity contract it needs is a recorded decision gap). No `PortfolioConstraintCheck`
+is persisted. No statistical correlation. `fmits today` is unchanged and its integration point is
+documented. All limitations are enumerated in report 0018 §§11–14.
+
+### `BK` — Trade Capture & Decision Recording · **DONE** *(not committed, not pushed)*
+
+| Field | Value |
+|---|---|
+| **Commit** | **none.** The work is in the working tree on top of `dbc4765`, alongside `BJ`; committing and pushing each require separate, explicit authorization (`CLAUDE.md`) |
+| **ADR** | **none written, none amended.** The milestone crosses no boundary an existing ADR does not govern — ADR-0027 supplies identity and publication, ADR-0001 the timestamps, ADR-0005 reject-never-repair. ADR-0028 §5's directional-vocabulary rule was widened **inside its own stated extension point**, to five domain packages and one surface, each justified in the guard test itself and in report 0017 §9 |
+| **Design** | **none written.** The design already existed and had not been built: `TRADING_DOMAIN_ARCHITECTURE_V1` §9 and `TRADING_DOMAIN_DATA_MODEL_V1` §10.3 specify `TradePlan` in full, down to its package name, and `SWING_TRADING_MVP_BLUEPRINT_V1` §12.3 records the omission as accepted debt. Report 0017 §2 records the finding and the three rejected alternatives |
+| **Report** | [report 0017](reports/0017_2026-08-13_TRADE_CAPTURE_AND_DECISION_RECORDING_IMPLEMENTATION.md) |
+| **Tests** | 5,876 → **6,311** (+435), identically under `-W error`. **100 % statement coverage** of the nine new modules (962 statements). **30 mutation probes, 30 detected, 0 survivors**; two probes exposed real gaps in the tests during development and both were closed by adding a test rather than weakening the probe |
+
+**Product value delivered — FMITS becomes the system of record.** Two new packages (`fmis.plan`,
+`fmis.trade_capture`), a tenth repository, and one new command with five subcommands. **This is the
+first milestone in which FMITS writes to the durable store**: `BI` built nine repositories no command
+reached, `BJ` read them and wrote nothing. **3,279 production lines, 66 new public exports, 0
+collisions, 0 new dependencies, 0 import cycles, 5 existing production files modified — all
+additively — and 0 domain types changed.**
+
+**What the owner can do after it that was impossible before.** Record a complete swing trade in one
+command — the commitment (direction, stop, target ladder, size, stated confidence, the setup and the
+analysis it came from), the entry fill under the full tax-capture contract, and the thesis behind it —
+then read it back with capital at risk and risk/reward shown beside the arithmetic that produced them,
+append notes to it, and close it with a reason. Before this, the owner's stop existed on a chart and
+in their memory; after it, *"did I honour my stop?"* has an answer.
+
+**The finding that shaped it.** Eight of the fourteen fields the brief asks for had no home in the
+domain, because `TradePlan` — the data model's entity 19, designed since `AP` — had never been built.
+`fmis.plan` builds it to the card the data model already wrote. `Trade.plan_id`, an optional field
+present since `BH` precisely because the package did not exist, is the link.
+
+**What it still does not do.** No `PlanAmendment`, so a *widened* stop is still invisible — the
+largest remaining piece of C4 and the natural next item. No risk-first sizing (it records the size the
+owner filled and reports the risk it implies). No `fmits trade correct`, though the store's correction
+path exists and the read path already resolves and reports one. `fmits today` does not yet read a
+`TradePlan`. All eight limitations are enumerated in report 0017 §8.
+
+### `BJ` — Daily Trading Workspace MVP · **DONE** *(not committed, not pushed)*
+
+| Field | Value |
+|---|---|
+| **Commit** | **none.** The work is in the working tree on top of `dbc4765`; committing and pushing each require separate, explicit authorization (`CLAUDE.md`) |
+| **ADR** | **none written, none amended.** The milestone creates no new contract. It does occupy a boundary — the first package reading both halves of FMITS — which is asserted by test in both directions and recorded in report 0016 §3; whether that boundary deserves an ADR of its own is an open decision for the owner (§10) |
+| **Design** | **none written.** Implementation forced no design decision the existing records did not already contain: `BE` designed the page, `BF` the warning taxonomy, `BG` the domain, `BI` the store. The one place implementation departed from the brief — no single directional regime label, per ADR-0025 — is recorded in report 0016 §2.1 |
+| **Report** | [report 0016](reports/0016_2026-08-12_DAILY_TRADING_WORKSPACE_MVP_IMPLEMENTATION.md) |
+| **Tests** | 5,629 → **5,876** (+247). **100 % statement and 100 % branch coverage** of the 975 statements and 340 branches in the new package. **15 targeted mutation probes, 15 detected, 0 survivors**, byte-identical restoration verified by SHA-256; the two initial survivors each exposed a real gap in a test rather than in the code, and both are recorded in report 0016 §6.1 |
+
+**Product value delivered — the store, the domain and the engines get a surface.** One new package,
+`fmis.today`, and one new command, `fmits today`: seven sections on one page — market overview,
+portfolio overview, today's opportunities, a priority queue, the trade journal, recent analysis, and
+every workspace warning with its stated source. It is the **first package in this repository that
+reads both halves of FMITS**, and the crossing is exactly one package wide, asserted in both
+directions. **2,603 production lines, 51 new public exports, 0 collisions, 0 new dependencies, 0
+import cycles, 1 existing production file modified** (`pipeline/cli.py`, additively; eight existing
+guard tests were widened, each with its own recorded justification).
+
+**What the owner can do after it that was impossible before.** Open one command in the evening and
+see, in one place: what the market is doing, what positions and capital are recorded, what is
+actionable, what deserves attention and what this system refuses to size, what has been decided and
+written down, what has been durably archived, and what none of it can be trusted to say. `BI`'s store
+had no reader; it has one now.
+
+**What it still does not do**, stated on every page it prints: no position size, portfolio risk or
+leverage; no calibrated probability; no correlation between markets; no per-role freshness triple; no
+single bull/bear/neutral regime label (ADR-0025); no macro, news, derivatives, on-chain or liquidity
+data; and nothing about holdings that are not recorded in the store. It writes nothing — asserted by
+an AST guard over the whole package and observed against a real store on disk.
 
 ### `BI` — Trade Repository & Journal Engine · **DONE** *(not committed, not pushed)*
 

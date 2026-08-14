@@ -32,6 +32,7 @@ DOMAIN_PACKAGES = (
     "fmis.analysis_record",
     "fmis.snapshotting",
     "fmis.proposal",
+    "fmis.plan",
     "fmis.ledger",
     "fmis.positions",
     "fmis.portfolio",
@@ -220,6 +221,7 @@ def test_every_domain_error_derives_from_one_catchable_base() -> None:
         "fmis.analysis_record": "AnalysisRecordError",
         "fmis.snapshotting": "SnapshotError",
         "fmis.proposal": "ProposalError",
+        "fmis.plan": "PlanError",
         "fmis.ledger": "LedgerError",
         "fmis.positions": "PositionsError",
         "fmis.portfolio": "PortfolioError",
@@ -261,6 +263,7 @@ def test_a_model_may_author_exactly_one_record_type_in_this_milestone() -> None:
     """
     from fmis.journal import JournalEntry
     from fmis.ledger import Correction, Trade
+    from fmis.plan import TradePlan
     from fmis.portfolio import PortfolioSnapshot
     from fmis.proposal import OpportunityProposal, ProposalAuthor, ProposalLifecycleEvent
     from fmis.risk import RiskBudget
@@ -272,6 +275,7 @@ def test_a_model_may_author_exactly_one_record_type_in_this_milestone() -> None:
     for record in (
         Trade,
         Correction,
+        TradePlan,
         JournalEntry,
         RiskBudget,
         MarketSnapshot,
@@ -396,6 +400,7 @@ def test_every_serializable_record_round_trips_to_an_equal_value() -> None:
         market_snapshot,
         proposal,
         trade,
+        trade_plan,
         version_set,
     )
 
@@ -431,6 +436,7 @@ def test_every_serializable_record_round_trips_to_an_equal_value() -> None:
         decision_window(),
         subject,
         trade(),
+        trade_plan(),
         lifecycle_event(subject, LifecycleKind.ENTRY_TRIGGERED, 11),
         JournalEntry(
             kind=JournalKind.NOTE,
@@ -500,9 +506,21 @@ def test_every_serializable_record_round_trips_to_an_equal_value() -> None:
 def test_every_serialized_payload_is_canonically_encodable() -> None:
     """A record that cannot be written to disk is a record that cannot be kept."""
     from fmis.archive.json_safe import canonical_dumps, canonical_loads
-    from trade_domain_helpers import decision_window, market_snapshot, proposal, trade
+    from trade_domain_helpers import (
+        decision_window,
+        market_snapshot,
+        proposal,
+        trade,
+        trade_plan,
+    )
 
-    for subject in (market_snapshot(), decision_window(), proposal(), trade()):
+    for subject in (
+        market_snapshot(),
+        decision_window(),
+        proposal(),
+        trade(),
+        trade_plan(),
+    ):
         payload = subject.to_payload()
         assert canonical_loads(canonical_dumps(payload)) == payload
 
@@ -515,10 +533,18 @@ def test_every_domain_record_is_hashable_and_comparable() -> None:
         market_snapshot,
         proposal,
         trade,
+        trade_plan,
         version_set,
     )
 
-    for builder in (version_set, market_snapshot, decision_window, proposal, trade):
+    for builder in (
+        version_set,
+        market_snapshot,
+        decision_window,
+        proposal,
+        trade,
+        trade_plan,
+    ):
         left = builder()
         right = builder()
         assert left == right
@@ -527,9 +553,9 @@ def test_every_domain_record_is_hashable_and_comparable() -> None:
 
 
 def test_every_domain_record_refuses_attribute_assignment() -> None:
-    from trade_domain_helpers import market_snapshot, proposal, trade
+    from trade_domain_helpers import market_snapshot, proposal, trade, trade_plan
 
-    for subject in (market_snapshot(), proposal(), trade()):
+    for subject in (market_snapshot(), proposal(), trade(), trade_plan()):
         with pytest.raises((AttributeError, TypeError)):
             subject.schema_version = 99  # type: ignore[misc]
 
@@ -540,6 +566,7 @@ def test_every_record_type_pins_the_schema_versions_it_can_read() -> None:
         "fmis.analysis_record": "SUPPORTED_ANALYSIS_RECORD_VERSIONS",
         "fmis.snapshotting": "SUPPORTED_MARKET_SNAPSHOT_VERSIONS",
         "fmis.proposal": "SUPPORTED_PROPOSAL_VERSIONS",
+        "fmis.plan": "SUPPORTED_TRADE_PLAN_VERSIONS",
         "fmis.ledger": "SUPPORTED_TRADE_VERSIONS",
         "fmis.portfolio": "SUPPORTED_PORTFOLIO_SNAPSHOT_VERSIONS",
         "fmis.risk": "SUPPORTED_RISK_BUDGET_VERSIONS",
@@ -555,6 +582,7 @@ def test_every_record_type_pins_the_schema_versions_it_can_read() -> None:
 def test_every_record_type_slug_is_unique_across_the_domain() -> None:
     from fmis.journal import JOURNAL_ENTRY_TYPE_SLUG
     from fmis.ledger import CORRECTION_TYPE_SLUG, TRADE_TYPE_SLUG
+    from fmis.plan import TRADE_PLAN_TYPE_SLUG
     from fmis.portfolio import PORTFOLIO_SNAPSHOT_TYPE_SLUG
     from fmis.proposal import LIFECYCLE_EVENT_TYPE_SLUG, PROPOSAL_TYPE_SLUG
     from fmis.risk import RISK_BUDGET_TYPE_SLUG
@@ -564,6 +592,7 @@ def test_every_record_type_slug_is_unique_across_the_domain() -> None:
         JOURNAL_ENTRY_TYPE_SLUG,
         CORRECTION_TYPE_SLUG,
         TRADE_TYPE_SLUG,
+        TRADE_PLAN_TYPE_SLUG,
         PORTFOLIO_SNAPSHOT_TYPE_SLUG,
         LIFECYCLE_EVENT_TYPE_SLUG,
         PROPOSAL_TYPE_SLUG,
@@ -599,9 +628,9 @@ def test_no_domain_module_reads_a_clock_or_a_random_source() -> None:
 
 def test_building_the_same_record_twice_produces_the_same_bytes() -> None:
     from fmis.archive.json_safe import canonical_dumps
-    from trade_domain_helpers import market_snapshot, proposal, trade
+    from trade_domain_helpers import market_snapshot, proposal, trade, trade_plan
 
-    for builder in (market_snapshot, proposal, trade):
+    for builder in (market_snapshot, proposal, trade, trade_plan):
         assert canonical_dumps(builder().to_payload()) == canonical_dumps(
             builder().to_payload()
         )

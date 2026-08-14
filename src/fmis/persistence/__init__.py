@@ -19,11 +19,12 @@ Architecture §24, implemented rather than restated:
   observations accumulate; the write journal is hash-chained so a removed or
   altered event is detectable rather than merely unlikely.
 
-Nine repositories, one composition root:
+Ten repositories, one composition root:
 
 | Repository | Owns | Update path |
 |---|---|---|
 | `TradeRepository` | `Trade` | `replace` appends a `Correction` |
+| `PlanRepository` | `TradePlan` | frozen — a stop that can be edited is not a stop |
 | `LedgerRepository` | the whole event stream | read-only; resolves supersession |
 | `PositionRepository` | nothing | refuses every write |
 | `PortfolioRepository` | `PortfolioSnapshot` | frozen |
@@ -56,6 +57,7 @@ from fmis.persistence.criteria import SearchCriteria
 from fmis.persistence.decision_repositories import (
     AnalysisRecordRepository,
     OpportunityRepository,
+    PlanRepository,
     SnapshotRepository,
 )
 from fmis.persistence.envelope import (
@@ -183,6 +185,7 @@ __all__ = [
     # the repositories
     "Repository",
     "TradeRepository",
+    "PlanRepository",
     "LedgerRepository",
     "PositionRepository",
     "PortfolioRepository",

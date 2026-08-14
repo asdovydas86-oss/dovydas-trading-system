@@ -50,6 +50,7 @@ DOMAIN_PACKAGES = (
     "fmis.analysis_record",
     "fmis.snapshotting",
     "fmis.proposal",
+    "fmis.plan",
     "fmis.ledger",
     "fmis.positions",
     "fmis.portfolio",

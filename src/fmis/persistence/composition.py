@@ -1,9 +1,9 @@
-"""`TradingStore` — the nine repositories over one root, wired once.
+"""`TradingStore` — the ten repositories over one root, wired once.
 
 A composition root, and nothing more. It constructs; it does not decide. No method
 here computes a value, resolves a policy or interprets a record: every one of those
 lives in the repository that owns the kind, and a convenience method here would
-become the tenth place a question is answered.
+become the eleventh place a question is answered.
 
 **One store, one journal, one index.** The repositories share a single
 `RecordStore`, which is what makes the write journal a complete account of the
@@ -26,6 +26,7 @@ from fmis.persistence.capital_repositories import (
 from fmis.persistence.decision_repositories import (
     AnalysisRecordRepository,
     OpportunityRepository,
+    PlanRepository,
     SnapshotRepository,
 )
 from fmis.persistence.journal_engine import JournalEngine
@@ -55,6 +56,7 @@ class TradingStore:
         self._store = RecordStore(root)
         self._dust = dust
         self.trades = TradeRepository(self._store)
+        self.plans = PlanRepository(self._store)
         self.ledger = LedgerRepository(self._store)
         self.positions = PositionRepository(self._store, dust=dust)
         self.portfolios = PortfolioRepository(self._store)
@@ -90,9 +92,10 @@ class TradingStore:
         return self._store.verify()
 
     def repositories(self) -> tuple[object, ...]:
-        """All nine, in a stable order — for sweeps that must cover every one."""
+        """All ten, in a stable order — for sweeps that must cover every one."""
         return (
             self.trades,
+            self.plans,
             self.ledger,
             self.positions,
             self.portfolios,

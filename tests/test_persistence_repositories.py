@@ -1,8 +1,8 @@
-"""The nine repositories: what each one accepts, refuses, and answers.
+"""The ten repositories: what each one accepts, refuses, and answers.
 
 The refusals are tested as hard as the successes. A store whose first rule is
 *nothing is deleted and nothing is rewritten* is only as good as the verbs it turns
-down, and every `update` in this package raises — the test below sweeps all nine
+down, and every `update` in this package raises — the test below sweeps all ten
 rather than trusting that a base class covers them.
 """
 
@@ -68,9 +68,11 @@ def store(tmp_path: Path) -> TradingStore:
 # --------------------------------------------------------------------------
 
 
-def test_the_composition_root_wires_nine_repositories(store: TradingStore) -> None:
-    assert len(store.repositories()) == 9
-    assert len({id(repo) for repo in store.repositories()}) == 9
+def test_the_composition_root_wires_ten_repositories(store: TradingStore) -> None:
+    # Widened for Milestone BK to admit `PlanRepository`, wired right after
+    # `TradeRepository`: additive, and not a replacement for any existing one.
+    assert len(store.repositories()) == 10
+    assert len({id(repo) for repo in store.repositories()}) == 10
 
 
 def test_every_repository_shares_one_store(store: TradingStore) -> None:
@@ -95,7 +97,7 @@ def test_a_repository_owning_no_kind_is_refused(store: TradingStore) -> None:
 
 
 # --------------------------------------------------------------------------
-# `update` raises on all nine.
+# `update` raises on all ten.
 # --------------------------------------------------------------------------
 
 

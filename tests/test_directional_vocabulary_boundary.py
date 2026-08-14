@@ -14,8 +14,23 @@ packages are exempt and no others:
 
 * `fmis.snapshotting` — `TradeDirection`, the side a *frozen reading* came down on
 * `fmis.proposal` — the side a suggestion came down on, with both cases kept apart
+* `fmis.plan` — the side the owner **committed** to, and which side of the entry
+  their stop must therefore sit on. Added by Milestone BK. It is the same class
+  of value `fmis.proposal` already holds: a suggestion says which side it came
+  down on, and a plan says which side the owner acted on. Validating a stop's
+  placement is impossible without it — *"below the entry on a long"* has no
+  expression in a package that may not name the word
 * `fmis.ledger` — `TradeSide`, which way the base asset actually moved
 * `fmis.positions` — `PositionDirection`, which way exposure currently points
+
+**`fmis.trade_capture` is exempt as a surface, not as a domain package**, on the
+identical footing `fmis/pipeline/cli.py` has held since ADR-0028: it is where the
+owner states a side and where that statement is turned into a `TradeSide`, and a
+capture command that cannot spell the direction the owner is trading cannot
+capture the trade. It computes no market reading and imports no engine, which is
+what the original rule protects and what
+`test_the_market_half_still_holds_no_directional_vocabulary_at_all` still asserts
+directly.
 
 **This crossing is an architectural decision and is recorded as one.** ADR-0028's
 own text scopes its rule to the analysis engines; extending that text to say so
@@ -72,15 +87,24 @@ _PERMITTED_FILE = SRC / "pipeline" / "cli.py"
 
 #: The trading-domain packages where direction is an owner assertion about their
 #: own money rather than an engine's reading of a market. Named one by one, so a
-#: fifth appearing anywhere fails this test and has to justify itself.
+#: sixth appearing anywhere fails this test and has to justify itself.
 _TRADE_DOMAIN_PERMITTED_DIRS = frozenset(
     {
         SRC / "snapshotting",
         SRC / "proposal",
+        SRC / "plan",
         SRC / "ledger",
         SRC / "positions",
     }
 )
+
+#: The owner-half **surfaces**: where the owner states a side and where that
+#: statement becomes a record. `pipeline/cli.py` has held this exemption since
+#: ADR-0028; `trade_capture` is the composition root behind `fmits trade` and is
+#: the same case. Kept as its own set rather than folded into the domain one, so
+#: that "a package that stores direction" and "a package that asks the owner for
+#: it" stay two different justifications.
+_OWNER_SURFACE_DIRS = frozenset({SRC / "trade_capture"})
 
 #: Every package that reads candles. The original rule, still absolute.
 _MARKET_HALF_DIRS = frozenset(
@@ -132,6 +156,8 @@ def _covered_files():
             continue
         if path.parent in _TRADE_DOMAIN_PERMITTED_DIRS:
             continue
+        if path.parent in _OWNER_SURFACE_DIRS:
+            continue
         yield path
 
 
@@ -163,16 +189,53 @@ def test_the_market_half_still_holds_no_directional_vocabulary_at_all() -> None:
     assert offenders == []
 
 
-def test_the_trade_domain_exemption_is_bounded_to_four_named_packages() -> None:
-    """Pins the widening, so a fifth exempt package is a deliberate edit here."""
+def test_the_trade_domain_exemption_is_bounded_to_five_named_packages() -> None:
+    """Pins the widening, so a sixth exempt package is a deliberate edit here."""
     assert {path.name for path in _TRADE_DOMAIN_PERMITTED_DIRS} == {
         "snapshotting",
         "proposal",
+        "plan",
         "ledger",
         "positions",
     }
     for path in _TRADE_DOMAIN_PERMITTED_DIRS:
         assert path.is_dir(), path
+
+
+
+def test_the_owner_surface_exemption_is_bounded_to_one_named_package() -> None:
+    """`trade_capture` is the only directory exempt as a surface rather than a store.
+
+    Pinned separately from the domain set so the two justifications cannot be
+    confused: a domain package is exempt because it *holds* a side, and this one
+    is exempt because it *asks the owner for* one.
+    """
+    assert {path.name for path in _OWNER_SURFACE_DIRS} == {"trade_capture"}
+    for path in _OWNER_SURFACE_DIRS:
+        assert path.is_dir(), path
+
+
+def test_the_owner_surface_imports_no_engine() -> None:
+    """The exemption widens who may spell a side, never who may read a candle.
+
+    `fmis.trade_capture` is exempt from the vocabulary ban and must remain
+    subject to the rule that ban exists to protect: no package that records what
+    the owner did may reach a package that reads the market, or the record
+    becomes a function of the analysis.
+    """
+    offenders: dict[str, set[str]] = {}
+    for directory in sorted(_OWNER_SURFACE_DIRS):
+        for path in sorted(directory.glob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            reached = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    root = ".".join(node.module.split(".")[:2])
+                    if SRC / root.split(".")[-1] in _MARKET_HALF_DIRS:
+                        reached.add(node.module)
+            if reached:
+                offenders[str(path.name)] = reached
+    assert offenders == {}
 
 
 def test_the_exempt_trade_domain_packages_do_use_the_vocabulary() -> None:

@@ -272,12 +272,13 @@ def test_provenance_is_rendered_for_every_answered_section() -> None:
 
 def test_the_registry_carries_nine_commands() -> None:
     # Widened for Milestone AV to admit "backtest", registered right after
-    # "scan", and for BJ to admit "today", registered right after "daily" —
-    # both additive, neither a replacement for any existing command.
+    # "scan"; for BJ to admit "today", registered right after "daily"; and for
+    # BK to admit "trade", registered right after "today". All three additive,
+    # none a replacement for any existing command.
     names = [command.name for command in cli_module.COMMANDS]
     assert names == [
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "archive",
+        "today", "trade", "archive",
     ]
     assert len(set(names)) == len(names)
 

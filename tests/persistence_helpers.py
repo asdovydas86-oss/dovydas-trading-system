@@ -232,6 +232,7 @@ def sample_records() -> tuple[Any, ...]:
         market_snapshot,
         proposal,
         trade,
+        trade_plan,
     )
 
     from fmis.proposal import LifecycleKind
@@ -242,6 +243,7 @@ def sample_records() -> tuple[Any, ...]:
     return (
         original,
         correction(original, replacement),
+        trade_plan(),
         market_snapshot(),
         decision_window(),
         subject,

@@ -437,6 +437,32 @@ def proposal(**overrides: Any) -> "OpportunityProposal":
     return OpportunityProposal(**values)
 
 
+def trade_plan(**overrides: Any) -> "TradePlan":
+    """A committed LONG plan on the default market: stop 58400, one target."""
+    from fmis.plan import TradePlan
+    from fmis.proposal import StatedConfidence
+
+    committed = overrides.pop("committed_at", AT(10))
+    created = overrides.pop("created_at", committed)
+    values: dict[str, Any] = {
+        "created_at": created,
+        "committed_at": committed,
+        "market": MARKET,
+        "book": Book.SWING,
+        "direction": TradeDirection.LONG,
+        "initial_invalidation": Decimal("58400"),
+        "targets": (Decimal("64000"),),
+        "stated_confidence": StatedConfidence("moderate"),
+        "version_set": version_set(),
+        "audit": RecordAudit.frozen_at(created),
+    }
+    values.update(overrides)
+    return TradePlan(**values)
+
+
+__all__.append("trade_plan")
+
+
 def lifecycle_event(
     subject: "OpportunityProposal", kind: Any, hour: int, **overrides: Any
 ) -> "ProposalLifecycleEvent":

@@ -1,6 +1,6 @@
-"""The decision chain's storage: proposals and their events, snapshots, citations.
+"""The decision chain's storage: proposals, plans, their events, snapshots, citations.
 
-Three repositories, and all three hold captured artifacts — records frozen at a
+Four repositories, and all four hold captured artifacts — records frozen at a
 named moment with their inputs, which the store refuses to edit under any verb. The
 one exception inside them is `ProposalLifecycleEvent`, which is a source of truth:
 events are appended and a wrong one is superseded by a later one carrying
@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from fmis.plan import TradePlan
 from fmis.proposal import (
     OpportunityProposal,
     ProposalAdmission,
@@ -43,6 +44,7 @@ from fmis.persistence.store import WriteReceipt, WriteRequest
 
 __all__ = [
     "OpportunityRepository",
+    "PlanRepository",
     "SnapshotRepository",
     "AnalysisRecordRepository",
 ]
@@ -223,6 +225,65 @@ class OpportunityRepository(Repository):
         else:
             self.create(admission.proposal, request=request)
         return admission
+
+
+class PlanRepository(Repository):
+    """`TradePlan` — what the owner committed to, frozen at the moment of commitment.
+
+    A captured artifact with no edit path, and the refusal is the point rather than
+    a side effect of the classification: *"did I honour my stop?"* is answerable
+    only if the stop cannot be changed after the trade moved. `update` and
+    `replace` both raise, inherited from the base, and the amendment stream that
+    would legitimately move the *other* fields (§10.4) is not built.
+
+    **This repository does not know what filled a plan.** `Trade.plan_id` points
+    from the fill to the commitment, never the reverse, so a plan does not change
+    when a fill is recorded against it. Assembling the two is
+    `fmis.trade_capture`'s work, and keeping it out of here is what stops a
+    "plan" from quietly becoming a position.
+    """
+
+    kinds = (RecordKind.TRADE_PLAN,)
+
+    def plans(self, criteria: SearchCriteria | None = None) -> tuple[TradePlan, ...]:
+        """Every stored commitment, ordered by when it was committed to."""
+        return self.search(criteria)
+
+    def for_market(self, market: str) -> tuple[TradePlan, ...]:
+        """Every commitment in one market, oldest first."""
+        return self.search(
+            SearchCriteria(market=require_text(market, "market"))
+        )
+
+    def latest_for_market(self, market: str) -> TradePlan | None:
+        """The most recent commitment in one market, or `None` if there is none.
+
+        `None` rather than a raise: having never planned a trade in a market is an
+        ordinary state, not an error.
+        """
+        rows = self.entries(
+            criteria=SearchCriteria(market=require_text(market, "market"))
+        )
+        return None if not rows else self._store.load(rows[-1].record_id)
+
+    def plan_ids(self) -> tuple[str, ...]:
+        """Every stored plan id, in the same deterministic order `entries` uses."""
+        return tuple(entry.record_id for entry in self.entries())
+
+    def live_at(self, moment: datetime) -> tuple[TradePlan, ...]:
+        """Commitments already made and not yet expired at an instant.
+
+        A **filter over two stored instants**, not a state: whether a plan was ever
+        filled is the ledger's answer and this repository does not hold it. A plan
+        that expired unfilled and a plan that expired mid-position are both absent
+        from this result, and neither absence means the same thing.
+        """
+        when = require_utc(moment, "moment")
+        return tuple(
+            plan
+            for plan in self.search(SearchCriteria(until=when))
+            if not plan.is_expired_at(when)
+        )
 
 
 class SnapshotRepository(Repository):

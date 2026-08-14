@@ -1,6 +1,6 @@
 """The one table naming every persisted record type and how to handle it.
 
-Ten kinds, one row each. Every other module in this package reads this table and
+Eleven kinds, one row each. Every other module in this package reads this table and
 none of them special-cases a type by name: the store does not know what a trade
 is, the index does not know what a snapshot is, and the version engine does not
 know which records can be superseded. They ask the spec.
@@ -50,6 +50,12 @@ from fmis.ledger import (
     TRADE_TYPE_SLUG,
     Correction,
     Trade,
+)
+from fmis.plan import (
+    SUPPORTED_TRADE_PLAN_VERSIONS,
+    TRADE_PLAN_KIND,
+    TRADE_PLAN_TYPE_SLUG,
+    TradePlan,
 )
 from fmis.portfolio import (
     PORTFOLIO_SNAPSHOT_KIND,
@@ -145,6 +151,7 @@ class RecordKind(Enum):
     CORRECTION = CORRECTION_KIND
     LIFECYCLE_EVENT = LIFECYCLE_EVENT_KIND
     PROPOSAL = PROPOSAL_KIND
+    TRADE_PLAN = TRADE_PLAN_KIND
     MARKET_SNAPSHOT = MARKET_SNAPSHOT_KIND
     DECISION_WINDOW = DECISION_WINDOW_KIND
     PORTFOLIO_SNAPSHOT = PORTFOLIO_SNAPSHOT_KIND
@@ -335,6 +342,29 @@ _SPEC_LIST: tuple[RecordSpec, ...] = (
         ),
         encode=lambda record: record.to_payload(),
         decode=OpportunityProposal.from_payload,
+        validate_id=validate_domain_record_id,
+    ),
+    RecordSpec(
+        kind=RecordKind.TRADE_PLAN,
+        type_slug=TRADE_PLAN_TYPE_SLUG,
+        # A captured artifact, and §10.3's rule 8 is the reason: `initial_invalidation`
+        # never changes, by construction rather than by policy. The amendment stream
+        # that would move the other fields (§10.4) is not built, so in this build the
+        # whole record is frozen — stricter than the data model, never looser.
+        durability=DurabilityClass.CAPTURED_ARTIFACT,
+        shape=StorageShape.RECORD_FILE,
+        record_type=TradePlan,
+        supported_versions=SUPPORTED_TRADE_PLAN_VERSIONS,
+        identity=lambda record: record.plan_id,
+        moment=lambda record: record.committed_at,
+        lineage_key=lambda record: record.market.value,
+        digest=lambda record: record.content_digest,
+        supersedes=lambda _: None,
+        owner_scope=lambda record: OwnerScope(
+            book=record.book.value, market=record.market.value
+        ),
+        encode=lambda record: record.to_payload(),
+        decode=TradePlan.from_payload,
         validate_id=validate_domain_record_id,
     ),
     RecordSpec(

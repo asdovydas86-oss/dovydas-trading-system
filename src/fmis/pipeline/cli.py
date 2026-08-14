@@ -77,6 +77,31 @@ from fmis.swing_setup import (
     run_setup_for_symbols,
 )
 from fmis.today import TodayError, render_today, run_today
+from fmis.trade_capture import (
+    BOOK_CHOICES,
+    CAPTURE_DUST_POLICY,
+    CAPTURE_ERRORS,
+    DEFAULT_MARKET_MODE,
+    DEFAULT_QUOTE_ASSET,
+    DEFAULT_VENUE,
+    DIRECTION_CHOICES,
+    MARKET_MODE_CHOICES,
+    STATUS_CHOICES,
+    append_note,
+    capture_store_root,
+    close_request_from_text,
+    close_trade,
+    filters_from_text,
+    list_trades,
+    load_trade,
+    note_request_from_text,
+    open_store,
+    record_request_from_text,
+    record_trade,
+    render_listing,
+    render_outcome,
+    render_trade,
+)
 from fmis.workspace import Workspace, render_workspace, workspace_for_symbol
 from fmis.pipeline.regime import (
     REGIME_LIMITATIONS,
@@ -965,6 +990,454 @@ TODAY_COMMAND = Command(
 )
 
 
+def _add_store_arguments(parser: argparse.ArgumentParser) -> None:
+    """The store root and the filing instant — every `trade` subcommand takes both."""
+    parser.add_argument(
+        "--store-root",
+        default=None,
+        metavar="PATH",
+        help=f"the durable store to use (default: {capture_store_root()})",
+    )
+    parser.add_argument(
+        "--author",
+        default="owner",
+        metavar="NAME",
+        help=(
+            "who asserts this. FMITS has exactly one owner, so this defaults to "
+            "'owner'; a record with no author is unattributable"
+        ),
+    )
+    parser.add_argument(
+        "--reference-time",
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "the instant the write is filed at (default: now). Supply it to make "
+            "a capture reproducible."
+        ),
+    )
+
+
+def _add_fill_arguments(parser: argparse.ArgumentParser, *, price_flag: str) -> None:
+    """The fields a fill needs. Shared by `record` and `close`, defined once.
+
+    The FX arguments are **required** and that is not an oversight. `AP` §22.2
+    item 10 — the rate to the tax currency at the transaction instant — is
+    unrecoverable retroactively, so a trade recorded without it is permanently
+    untaxable. The domain refuses to build one; this asks for it up front rather
+    than failing after the owner has typed everything else.
+    """
+    parser.add_argument(price_flag, required=True, metavar="PRICE", help="the fill price")
+    parser.add_argument(
+        "--fee", required=True, metavar="AMOUNT", help="the fee paid on this fill"
+    )
+    parser.add_argument(
+        "--fee-asset",
+        default=None,
+        metavar="ASSET",
+        help="the asset the fee was paid in (default: the market's quote asset)",
+    )
+    parser.add_argument(
+        "--fee-fx-rate",
+        default=None,
+        metavar="RATE",
+        help=(
+            "rate to the tax currency for a fee paid in a third asset. Required "
+            "only then: such a fee is its own disposal"
+        ),
+    )
+    parser.add_argument(
+        "--fx-rate",
+        required=True,
+        metavar="RATE",
+        help=(
+            "rate from the quote asset to the tax currency at the fill instant. "
+            "Required, and unrecoverable later — a trade without it is "
+            "permanently untaxable"
+        ),
+    )
+    parser.add_argument(
+        "--fx-source", required=True, metavar="NAME", help="where the rate came from"
+    )
+    parser.add_argument(
+        "--fx-timestamp",
+        default=None,
+        metavar="ISO8601",
+        help="when the rate was read (default: the fill's own instant)",
+    )
+    parser.add_argument(
+        "--occurred-at",
+        default=None,
+        metavar="ISO8601",
+        help="when the fill happened (default: the reference time)",
+    )
+
+
+def _configure_trade(parser: argparse.ArgumentParser) -> None:
+    subcommands = parser.add_subparsers(dest="trade_command", required=True)
+
+    record = subcommands.add_parser(
+        "record",
+        help="record a swing trade: the commitment, the entry fill and the thesis",
+        description=(
+            "Record one swing trade the owner has already entered. Writes three "
+            "records through the durable store: a TradePlan holding the stop, the "
+            "targets and the stated confidence; a Trade holding the entry fill; "
+            "and, when a thesis is given, a JournalEntry holding it. Nothing is "
+            "executed, no order is placed and no exchange is contacted. Every "
+            "value is validated before anything is written, nothing is silently "
+            "corrected, and re-running the identical command records nothing "
+            "twice."
+        ),
+    )
+    record.add_argument("symbol", metavar="SYMBOL", help="the pair, e.g. BTCUSDT")
+    record.add_argument(
+        "--direction",
+        required=True,
+        choices=DIRECTION_CHOICES,
+        help="which side the commitment came down on",
+    )
+    record.add_argument(
+        "--account",
+        required=True,
+        metavar="ID",
+        help="the account the fill sits in. Never inferred",
+    )
+    record.add_argument(
+        "--book",
+        required=True,
+        choices=BOOK_CHOICES,
+        help=(
+            "which discipline this belongs to. Books never share capacity and a "
+            "book is never inferred, so there is no default"
+        ),
+    )
+    record.add_argument(
+        "--stop",
+        required=True,
+        metavar="PRICE",
+        help=(
+            "the initial invalidation. Required: a plan with no stop cannot be "
+            "sized, and this value can never change afterwards"
+        ),
+    )
+    record.add_argument(
+        "--target",
+        action="append",
+        default=None,
+        metavar="PRICE",
+        dest="targets",
+        help="repeatable, stated nearest first",
+    )
+    record.add_argument(
+        "--size", required=True, metavar="QUANTITY", help="the base-asset quantity filled"
+    )
+    record.add_argument(
+        "--confidence",
+        required=True,
+        metavar="LABEL",
+        help=(
+            "the owner's own word for how sure they are. A numeric-looking label "
+            "is refused: confidence is not a probability"
+        ),
+    )
+    _add_fill_arguments(record, price_flag="--entry")
+    record.add_argument(
+        "--setup", default=None, metavar="TERM", help="the originating setup type"
+    )
+    record.add_argument(
+        "--proposal", default=None, metavar="RECORD_ID", help="the proposal this came from"
+    )
+    record.add_argument(
+        "--snapshot", default=None, metavar="RECORD_ID", help="the MarketSnapshot it rests on"
+    )
+    record.add_argument(
+        "--analysis",
+        action="append",
+        default=None,
+        metavar="RECORD_ID",
+        help="repeatable: an archived analysis page this decision read",
+    )
+    record.add_argument(
+        "--committed-at",
+        default=None,
+        metavar="ISO8601",
+        help="when the commitment was made (default: the fill's instant)",
+    )
+    record.add_argument(
+        "--expires", default=None, metavar="ISO8601", help="when the commitment lapses"
+    )
+    record.add_argument("--thesis", default=None, metavar="TEXT", help="why this trade")
+    record.add_argument(
+        "--note", default=None, metavar="TEXT", help="an annotation on the commitment"
+    )
+    record.add_argument(
+        "--venue", default=DEFAULT_VENUE, metavar="NAME", help=f"(default: {DEFAULT_VENUE})"
+    )
+    record.add_argument(
+        "--quote",
+        default=DEFAULT_QUOTE_ASSET,
+        metavar="ASSET",
+        help=(
+            f"the quote asset of SYMBOL (default: {DEFAULT_QUOTE_ASSET}). FMITS "
+            "holds no asset registry and will not guess where the base ends"
+        ),
+    )
+    record.add_argument(
+        "--mode",
+        default=DEFAULT_MARKET_MODE,
+        choices=MARKET_MODE_CHOICES,
+        help=f"(default: {DEFAULT_MARKET_MODE})",
+    )
+    _add_store_arguments(record)
+
+    show = subcommands.add_parser(
+        "show",
+        help="show one recorded trade: commitment, fills, position, journal",
+        description=(
+            "Assemble one recorded swing trade from the commitment, the resolved "
+            "ledger and the journal, and print it. Reads the store and writes "
+            "nothing. Capital at risk and risk/reward are arithmetic over the "
+            "records and are shown with the arithmetic that produced them."
+        ),
+    )
+    show.add_argument("plan_id", metavar="TRADE_ID")
+    _add_store_arguments(show)
+
+    listing = subcommands.add_parser(
+        "list",
+        help="list recorded trades, with filters",
+        description=(
+            "One row per recorded commitment, ordered by when it was made. Not a "
+            "ranking: nothing is sorted by size, profit or quality. The filters "
+            "applied and the number of rows excluded by them are printed with the "
+            "listing, so a filtered page can never read as the whole store."
+        ),
+    )
+    listing.add_argument("--status", default=None, choices=STATUS_CHOICES)
+    listing.add_argument("--symbol", default=None, metavar="SYMBOL")
+    listing.add_argument("--account", default=None, metavar="ID")
+    listing.add_argument("--direction", default=None, choices=DIRECTION_CHOICES)
+    listing.add_argument(
+        "--since", default=None, metavar="ISO8601", help="commitments made at or after"
+    )
+    listing.add_argument(
+        "--until", default=None, metavar="ISO8601", help="commitments made at or before"
+    )
+    _add_store_arguments(listing)
+
+    note = subcommands.add_parser(
+        "note",
+        help="append a note to a recorded trade",
+        description=(
+            "Append one journal entry to a recorded trade. Append-only: there is "
+            "no edit path and there never will be. What the owner first wrote is "
+            "frequently the more interesting record, and a store that let a "
+            "second note overwrite the first would destroy the only evidence of "
+            "which it was."
+        ),
+    )
+    note.add_argument("plan_id", metavar="TRADE_ID")
+    note.add_argument("--body", required=True, metavar="TEXT")
+    note.add_argument("--title", default=None, metavar="TEXT")
+    note.add_argument(
+        "--recorded-at",
+        default=None,
+        metavar="ISO8601",
+        help="when the note was written (default: the reference time)",
+    )
+    _add_store_arguments(note)
+
+    close = subcommands.add_parser(
+        "close",
+        help="record an exit against a recorded trade",
+        description=(
+            "Append an exit fill and the reason for it. Nothing already stored "
+            "changes: the entry, the commitment and every note stay byte-"
+            "identical, and 'closing' is one more Trade in the other direction — "
+            "which is what actually happened, and why the realized profit or loss "
+            "printed afterwards is a fold rather than a figure anyone typed. A "
+            "reason from the owner's exit vocabulary is required."
+        ),
+    )
+    close.add_argument("plan_id", metavar="TRADE_ID")
+    close.add_argument(
+        "--reason",
+        required=True,
+        metavar="TERM",
+        help=(
+            "why the trade was exited, from the owner's own vocabulary. Required: "
+            "the reason is the field that makes exits analysable"
+        ),
+    )
+    close.add_argument(
+        "--size",
+        default=None,
+        metavar="QUANTITY",
+        help="how much was closed (default: the whole open position)",
+    )
+    close.add_argument(
+        "--account",
+        default=None,
+        metavar="ID",
+        help="required only when the fills sit in more than one account",
+    )
+    close.add_argument("--note", default=None, metavar="TEXT")
+    _add_fill_arguments(close, price_flag="--price")
+    _add_store_arguments(close)
+
+
+def _record_request(args: argparse.Namespace, *, filed_at: datetime) -> object:
+    """Hand every string straight to the capture layer, converting nothing here.
+
+    `fmis.pipeline` is a market-half package and may not reach the trading domain
+    or the store — Milestone BJ's rule, enforced by a guard test, and this
+    milestone keeps it. So the CLI never builds an `AccountId`, never parses an
+    amount and never opens a store: `fmis.trade_capture.inputs` does all three,
+    where they can be tested without a parser.
+    """
+    return record_request_from_text(
+        symbol=args.symbol,
+        direction=args.direction,
+        account=args.account,
+        book=args.book,
+        entry=args.entry,
+        stop=args.stop,
+        size=args.size,
+        fee=args.fee,
+        fx_rate=args.fx_rate,
+        fx_source=args.fx_source,
+        confidence=args.confidence,
+        author=args.author,
+        filed_at=filed_at,
+        targets=args.targets,
+        fee_asset=args.fee_asset,
+        fee_fx_rate=args.fee_fx_rate,
+        fx_timestamp=args.fx_timestamp,
+        occurred_at=args.occurred_at,
+        committed_at=args.committed_at,
+        expires=args.expires,
+        setup=args.setup,
+        proposal=args.proposal,
+        snapshot=args.snapshot,
+        analysis=args.analysis,
+        thesis=args.thesis,
+        note=args.note,
+        venue=args.venue,
+        quote=args.quote,
+        mode=args.mode,
+    )
+
+
+def _dispatch_trade(args: argparse.Namespace, *, filed_at: datetime) -> str:
+    """Run one `trade` subcommand and return the page it produced.
+
+    Returning the text rather than printing it keeps the failure boundary in one
+    place: every refusal below raises, and `_run_trade` is the only thing that
+    decides an exit code.
+    """
+    store = open_store(args.store_root)
+    if args.trade_command == "record":
+        return render_outcome(
+            record_trade(store, _record_request(args, filed_at=filed_at))
+        )
+    if args.trade_command == "show":
+        return render_trade(
+            load_trade(store, args.plan_id, dust=CAPTURE_DUST_POLICY, at=filed_at)
+        )
+    if args.trade_command == "list":
+        return render_listing(
+            list_trades(
+                store,
+                dust=CAPTURE_DUST_POLICY,
+                at=filed_at,
+                filters=filters_from_text(
+                    status=args.status,
+                    symbol=args.symbol,
+                    account=args.account,
+                    direction=args.direction,
+                    since=args.since,
+                    until=args.until,
+                ),
+            )
+        )
+    if args.trade_command == "note":
+        return render_outcome(
+            append_note(
+                store,
+                note_request_from_text(
+                    plan_id=args.plan_id,
+                    body=args.body,
+                    author=args.author,
+                    filed_at=filed_at,
+                    title=args.title,
+                    recorded_at=args.recorded_at,
+                ),
+            )
+        )
+    if args.trade_command == "close":
+        return render_outcome(
+            close_trade(
+                store,
+                close_request_from_text(
+                    store,
+                    plan_id=args.plan_id,
+                    price=args.price,
+                    fee=args.fee,
+                    fx_rate=args.fx_rate,
+                    fx_source=args.fx_source,
+                    reason=args.reason,
+                    author=args.author,
+                    filed_at=filed_at,
+                    size=args.size,
+                    account=args.account,
+                    fee_asset=args.fee_asset,
+                    fee_fx_rate=args.fee_fx_rate,
+                    fx_timestamp=args.fx_timestamp,
+                    occurred_at=args.occurred_at,
+                    note=args.note,
+                ),
+            )
+        )
+    raise AssertionError(f"unreachable trade_command {args.trade_command!r}")
+
+
+def _run_trade(args: argparse.Namespace) -> int:
+    """Capture or read one recorded trade.
+
+    A refusal is not a crash and is reported as neither: `CaptureRefusedError`
+    names the two values that disagree and exits non-zero, so a script can tell
+    "FMITS would not record that" from "FMITS broke".
+    """
+    filed_at = _reference_time(args.reference_time, omit=False)
+    assert filed_at is not None  # `omit=False` always yields an instant
+    try:
+        print(_dispatch_trade(args, filed_at=filed_at))
+    except CAPTURE_ERRORS as error:
+        print(f"fmits trade: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    return EXIT_OK
+
+
+TRADE_COMMAND = Command(
+    name="trade",
+    help="record, read and close the owner's own swing trades",
+    description=(
+        "The system of record for what the owner decided and did. `record` "
+        "captures a commitment — direction, stop, targets, size, confidence, the "
+        "setup and the analysis it came from — together with the entry fill and "
+        "the thesis behind it. `show` and `list` read them back. `note` appends "
+        "to a trade's journal and `close` appends an exit with its reason. "
+        "Everything is append-only: nothing already recorded is ever edited or "
+        "deleted, a mistake is corrected by a later record that supersedes the "
+        "first, and both stay readable forever. FMITS places no order, contacts "
+        "no exchange and executes nothing; the owner remains the trader."
+    ),
+    configure=_configure_trade,
+    run=_run_trade,
+)
+
+
 def _configure_archive(parser: argparse.ArgumentParser) -> None:
     # `--archive-root` is defined on every subcommand, not the shared parent:
     # argparse requires a parent optional to precede the subcommand token
@@ -1067,6 +1540,7 @@ COMMANDS: tuple[Command, ...] = (
     BACKTEST_COMMAND,
     DAILY_COMMAND,
     TODAY_COMMAND,
+    TRADE_COMMAND,
     ARCHIVE_COMMAND,
 )
 

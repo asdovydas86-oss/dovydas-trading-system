@@ -60,6 +60,7 @@ from fmis.swing_setup import (
     DEFAULT_BACKTEST_SYMBOLS,
     DEFAULT_EVALUATION_WINDOW_BARS,
     DEFAULT_VARIANT_MAX_AGES,
+    SCAN_UNIVERSE,
     SetupRunResult,
     compare_variant,
     compute_metrics,
@@ -75,6 +76,7 @@ from fmis.swing_setup import (
     run_research_study,
     run_setup_for_symbols,
 )
+from fmis.today import TodayError, render_today, run_today
 from fmis.workspace import Workspace, render_workspace, workspace_for_symbol
 from fmis.pipeline.regime import (
     REGIME_LIMITATIONS,
@@ -866,6 +868,103 @@ DAILY_COMMAND = Command(
 )
 
 
+def _configure_today(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "symbols",
+        nargs="*",
+        default=list(SCAN_UNIVERSE),
+        metavar="SYMBOL",
+        help=(
+            f"the watchlist to scan (default: the {len(SCAN_UNIVERSE)}-symbol "
+            "list `fmits scan` uses)"
+        ),
+    )
+    _add_setup_style_arguments(parser)
+    parser.add_argument(
+        "--store-root",
+        default=None,
+        metavar="PATH",
+        help=(
+            "the durable store to read positions, capital, decisions and "
+            "journal entries from (default: the owner's store). Read-only: this "
+            "command writes nothing"
+        ),
+    )
+    _add_archive_root_argument(parser)
+    parser.add_argument(
+        "--no-records",
+        action="store_true",
+        help=(
+            "do not read the durable store at all. The page still renders and "
+            "says that it did not look"
+        ),
+    )
+    parser.add_argument(
+        "--reference-time", default=None, metavar="ISO8601",
+        help=(
+            "instant the workspace is stamped with (default: now). Supply it to "
+            "make the rendered page reproducible."
+        ),
+    )
+
+
+def _run_today_command(args: argparse.Namespace) -> int:
+    """Assemble and print the daily trading workspace.
+
+    Reads the store; never writes to it. A symbol whose analysis failed appears
+    as an ERROR row and does not stop the run, exactly as it does in `scan` and
+    `daily`, and the command exits non-zero only when every symbol failed —
+    matching the "at least one result is a true report" contract those two
+    commands already hold.
+    """
+    reference = _reference_time(args.reference_time, omit=False)
+    assert reference is not None  # `omit=False` always yields an instant
+    try:
+        workspace = run_today(
+            args.symbols,
+            reference_time=reference,
+            store_root=args.store_root,
+            archive_root=args.archive_root,
+            read_records=not args.no_records,
+            timeframes={
+                TimeframeRole.CONTEXT: args.context,
+                TimeframeRole.SETUP: args.setup,
+                TimeframeRole.EXECUTION: args.execution,
+            },
+            limit=args.limit,
+            policy=_policy_from(args),
+            detection=_detection_from(args),
+        )
+    except TodayError as error:
+        print(f"fmits today: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_today(workspace))
+    return (
+        EXIT_FAILURE
+        if workspace.market.scanned == len(workspace.opportunities.failed)
+        else EXIT_OK
+    )
+
+
+TODAY_COMMAND = Command(
+    name="today",
+    help="the daily trading workspace: market, capital, opportunities, warnings",
+    description=(
+        "Assemble one page from everything FMITS already knows: what the market "
+        "is doing, what positions and capital are recorded, which setups are "
+        "actionable, which deserve attention and which this system refuses to "
+        "produce a number for, what has been decided and written down, and what "
+        "has been durably archived. Reads the durable store and never writes to "
+        "it. Nothing is ranked by desirability, no position size is computed, "
+        "no probability is calibrated, and every value the workspace cannot "
+        "produce is printed with its reason and the inference its absence "
+        "forbids. This command executes nothing and places no orders."
+    ),
+    configure=_configure_today,
+    run=_run_today_command,
+)
+
+
 def _configure_archive(parser: argparse.ArgumentParser) -> None:
     # `--archive-root` is defined on every subcommand, not the shared parent:
     # argparse requires a parent optional to precede the subcommand token
@@ -967,6 +1066,7 @@ COMMANDS: tuple[Command, ...] = (
     SCAN_COMMAND,
     BACKTEST_COMMAND,
     DAILY_COMMAND,
+    TODAY_COMMAND,
     ARCHIVE_COMMAND,
 )
 

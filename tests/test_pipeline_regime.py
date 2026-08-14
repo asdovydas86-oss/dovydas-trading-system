@@ -319,10 +319,12 @@ def test_rendering_is_deterministic() -> None:
 
 def test_the_registry_carries_nine_commands() -> None:
     # Widened for Milestone AV to admit "backtest", registered right after
-    # "scan" — additive, not a replacement for any existing command.
+    # "scan", and for BJ to admit "today", registered right after "daily" —
+    # both additive, neither a replacement for any existing command.
     names = [command.name for command in cli_module.COMMANDS]
     assert names == [
-        "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily", "archive",
+        "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
+        "today", "archive",
     ]
     assert len(set(names)) == len(names)
 

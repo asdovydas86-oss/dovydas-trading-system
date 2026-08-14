@@ -840,11 +840,13 @@ def test_new_limitation_texts_are_fact_only() -> None:
 
 
 def test_registry_names_are_unique() -> None:
-    # Widened for Milestone AV to admit "backtest".
+    # Widened for Milestone AV to admit "backtest", and for BJ to admit "today"
+    # — both additive, neither a replacement.
     names = [c.name for c in cli_module.COMMANDS]
     assert len(names) == len(set(names))
     assert set(names) == {
-        "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily", "archive",
+        "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
+        "today", "archive",
     }
 
 
@@ -967,9 +969,15 @@ def test_no_engine_imports_the_multi_timeframe_root() -> None:
     application-layer root, at the same tier as the workspace (ADR-0028),
     fetching the same multi-timeframe sheet through the identical composition
     root. The direction is still unchanged.
+
+    Widened again for Milestone BJ: `fmis.today` is a fourth application-layer
+    root, above all three of the others and the first to read the owner half as
+    well as the market half. It names `TimeframeRole` only to pass the caller's
+    role assignment through to the scan; it fetches nothing itself. The
+    direction is still unchanged, and every engine remains covered.
     """
     root = Path(mtf_module.__file__).parent.parent
-    above = {"pipeline", "workspace", "daily", "swing_setup"}
+    above = {"pipeline", "workspace", "daily", "swing_setup", "today"}
     for path in root.rglob("*.py"):
         if above & set(path.parts) or "__pycache__" in path.parts:
             continue

@@ -477,9 +477,23 @@ def test_no_engine_below_imports_this_package() -> None:
     composition root, at the same tier as `fmis.workspace`, that reads decision
     context sufficiency to gate a directional candidate (ADR-0028). The
     direction rule is unchanged.
+
+    Widened again for Milestone BJ to admit `fmis.today`: a fourth
+    composition root, above all three of the others, which passes a
+    `ContextPolicy` through to the scan it runs and reads the sufficiency state
+    an assessment already carries in order to tell *"read and declined"* from
+    *"could not classify"*. It re-decides nothing — ADR-0026 forbids adding a
+    threshold around this judgement, and `fmis.today` adds none. The direction
+    rule is unchanged.
     """
     root = PACKAGE_DIR.parent
-    permitted = {root / "workspace", root / "daily", root / "swing_setup", PACKAGE_DIR}
+    permitted = {
+        root / "workspace",
+        root / "daily",
+        root / "swing_setup",
+        root / "today",  # BJ: the fourth composition root, above the other three
+        PACKAGE_DIR,
+    }
     for py in root.rglob("*.py"):
         if py.parent in permitted:
             continue

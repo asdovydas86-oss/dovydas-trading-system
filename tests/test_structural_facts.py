@@ -723,9 +723,14 @@ def test_no_engine_imports_the_fact_sheet_root() -> None:
     Widened again for Milestone AR: `fmis.swing_setup` is a third
     application-layer root, at the same tier as the workspace (ADR-0028). The
     direction is still unchanged.
+
+    Widened again for Milestone BJ: `fmis.today` is a fourth application-layer
+    root, above all three of the others. It names `DetectionSettings` only to
+    pass the caller's swing-detection window through to the scan; it derives no
+    fact sheet of its own. The direction is still unchanged.
     """
     root = Path(sf_module.__file__).parent.parent
-    above = {"pipeline", "workspace", "daily", "swing_setup"}
+    above = {"pipeline", "workspace", "daily", "swing_setup", "today"}
     for path in root.rglob("*.py"):
         if above & set(path.parts) or "__pycache__" in path.parts:
             continue

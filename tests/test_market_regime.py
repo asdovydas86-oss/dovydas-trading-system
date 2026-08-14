@@ -661,6 +661,12 @@ def test_no_engine_below_imports_this_package() -> None:
     composition root (ADR-0028) that classifies each role's regime through the
     same `regime_for_sheet` adapter `fmis.workspace` already uses. The
     direction rule is unchanged.
+
+    Widened again for Milestone BJ to admit `fmis.today`, which names
+    `RegimePolicy` only to pass the caller's own policy through to the scan it
+    runs. It classifies nothing, reads no regime state and prints no regime
+    vocabulary — the workspace page states, in words, that no single directional
+    regime label is produced, citing ADR-0025 for why.
     """
     root = PACKAGE_DIR.parent
     permitted = {
@@ -669,6 +675,7 @@ def test_no_engine_below_imports_this_package() -> None:
         root / "decision_context",
         root / "daily",  # AN: a second application-layer root, above the workspace
         root / "swing_setup",  # AR: a third, at the same tier as the workspace
+        root / "today",  # BJ: a fourth, above all of them; passes the policy through
         PACKAGE_DIR,
     }
     for py in root.rglob("*.py"):

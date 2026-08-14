@@ -26,6 +26,7 @@ scan order because `sorted` is stable.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import timedelta
 from typing import Any
 
 from fmis.today.models import (
@@ -268,7 +269,58 @@ def market_overview_from_results(
     )
 
 
-def _position_line(position: Any) -> PositionLine:
+def _amount_text(value: Any) -> str:
+    """A money figure as text, or the reason there is none — never a blank.
+
+    Duck-typed, like every other value this module reads. An `Absent` carries a
+    `reason` and a `Money` does not, and that is the whole of the distinction —
+    reaching into `fmis.money` for an `isinstance` would give this package a
+    second place the domain's vocabulary lives, which the module docstring's own
+    rule about `SetupState` already rejects for the same reason.
+    """
+    reason = getattr(value, "reason", None)
+    if reason is not None:
+        return f"unavailable — {reason}"
+    return f"{value.text} {value.asset}"
+
+
+def _age_text(value: Any) -> str:
+    """A mark's age as text, or the reason there is none.
+
+    Printed to whole seconds. A microsecond on a staleness figure is noise a
+    reader has to look past, and it is the only thing on the line that changes
+    between two runs a second apart — which made the page look less reproducible
+    than it is. Truncating is a formatting decision; the figure itself is
+    untouched, and this page still states how stale a mark is without deciding
+    what "too stale" means, because a staleness threshold is a policy and this
+    package sets none.
+    """
+    reason = getattr(value, "reason", None)
+    if reason is not None:
+        return f"unavailable — {reason}"
+    seconds = int(value.total_seconds())
+    return str(timedelta(seconds=seconds))
+
+
+def _amount_or_absence(
+    value: Any, *, owned_by: str, forbidden: str
+) -> str | NotAvailable:
+    """The same figure, as the model's own two-shape absence."""
+    reason = getattr(value, "reason", None)
+    if reason is not None:
+        return NotAvailable(
+            reason=reason, owned_by=owned_by, forbidden_inference=forbidden
+        )
+    return f"{value.text} {value.asset}"
+
+
+def _position_line(position: Any, marked: Any | None = None) -> PositionLine:
+    """One open position, optionally paired with the price it was valued at.
+
+    ``marked`` is a `MarkedPosition` wrapping this same position. When it is
+    `None` no price source was consulted and the three price fields stay `None`,
+    which the model distinguishes from a price that was sought and not found.
+    """
     return PositionLine(
         market=position.market.value,
         book=position.book.value,
@@ -278,6 +330,23 @@ def _position_line(position: Any) -> PositionLine:
         opened_at=position.opened_at,
         trade_count=position.trade_count,
         event_ids=position.event_ids,
+        mark=(
+            None
+            if marked is None
+            else (
+                f"unavailable — {marked.mark.reason}"
+                if getattr(marked.mark, "reason", None) is not None
+                else (
+                    f"{marked.mark.price} {marked.mark.quote_asset} "
+                    f"as of {marked.mark.as_of.isoformat()} "
+                    f"({marked.mark.source})"
+                )
+            )
+        ),
+        market_value=None if marked is None else _amount_text(marked.market_value),
+        unrealized_pnl=(
+            None if marked is None else _amount_text(marked.unrealized_pnl)
+        ),
     )
 
 
@@ -307,18 +376,26 @@ def portfolio_overview(
     positions: Sequence[Any],
     budget: Any | None,
     snapshot: Any | None,
+    valuation: Any | None = None,
 ) -> PortfolioOverview:
-    """What is held and what is committed, from the store and nowhere else.
+    """What is held, what it is worth and what is committed.
 
     ``budget`` is the `RiskBudget` in force, or `None` when none is. ``snapshot``
-    is the latest `PortfolioSnapshot`, or `None` when none has been taken. Both
-    absences are rendered with their reason rather than collapsed into an empty
-    section.
+    is the latest `PortfolioSnapshot`, or `None` when none has been taken.
+    ``valuation`` is a `PortfolioValuation` when a price source was consulted,
+    and `None` when one was not. All three absences are rendered with their
+    reason rather than collapsed into an empty section.
+
+    **Every marked figure is read off the valuation, never recomputed.** Market
+    value, exposure and open risk are `PortfolioValuation` properties, which are
+    in turn `PortfolioState` properties; this function selects and formats.
     """
     unmeasurable = NotAvailable(
         reason=(
             "open risk needs a mark for every holding and a stop for every open "
-            "position; no mark source exists and no plan is recorded"
+            "position; no price source was consulted for this page"
+            if valuation is None
+            else "no figure was measured against this limit"
         ),
         owned_by="the risk layer (roadmap C4/C6)",
         forbidden_inference=(
@@ -345,7 +422,10 @@ def portfolio_overview(
         limits = tuple(_limit_line(limit, unmeasurable) for limit in budget.limits)
 
     if snapshot is None:
-        valuation: str | NotAvailable = NotAvailable(
+        # Named `unobserved` rather than `valuation`: the parameter above is a
+        # `PortfolioValuation`, and a local sharing its name would shadow it —
+        # which is exactly what happened the first time this section was widened.
+        unobserved: str | NotAvailable = NotAvailable(
             reason="no portfolio snapshot has been taken",
             owned_by="the portfolio layer (roadmap C6)",
             forbidden_inference=(
@@ -353,8 +433,8 @@ def portfolio_overview(
                 "balance this system has checked."
             ),
         )
-        cash: str | NotAvailable = valuation
-        exposure: str | NotAvailable = valuation
+        cash: str | NotAvailable = unobserved
+        exposure: str | NotAvailable = unobserved
         snapshot_as_of = None
     else:
         cash = " · ".join(
@@ -367,17 +447,69 @@ def portfolio_overview(
         )
         snapshot_as_of = snapshot.as_of
 
+    if valuation is None:
+        unpriced = NotAvailable(
+            reason="no price source was consulted for this page",
+            owned_by="the valuation layer",
+            forbidden_inference=(
+                "Do not read an unvalued portfolio as a worthless one, or an "
+                "unstated profit and loss as a flat one."
+            ),
+        )
+        lines = tuple(_position_line(position) for position in positions)
+        market_value: str | NotAvailable = unpriced
+        unrealized: str | NotAvailable = unpriced
+        marks_note: str | NotAvailable = unpriced
+        committed = unmeasurable
+        priced_exposure = exposure
+    else:
+        lines = tuple(
+            _position_line(marked.position, marked) for marked in valuation.positions
+        )
+        market_value = _amount_or_absence(
+            valuation.market_value,
+            owned_by="the valuation layer",
+            forbidden="Do not read an unvalued portfolio as a worthless one.",
+        )
+        unrealized = _amount_or_absence(
+            valuation.unrealized_pnl,
+            owned_by="the valuation layer",
+            forbidden="Do not read an unstated profit and loss as a flat one.",
+        )
+        committed = _amount_or_absence(
+            valuation.open_risk,
+            owned_by="the risk layer",
+            forbidden=(
+                "Do not read this as risk being within budget. Nothing was "
+                "measured."
+            ),
+        )
+        priced_exposure = _amount_or_absence(
+            valuation.gross_exposure,
+            owned_by="the valuation layer",
+            forbidden="Do not read an unstated exposure as no exposure.",
+        )
+        marks_note = (
+            f"{valuation.marks.marked_count} of "
+            f"{valuation.marks.requested_count} market(s) priced from "
+            f"{valuation.prices.source} · oldest mark age "
+            f"{_age_text(valuation.mark_age)}"
+        )
+
     return PortfolioOverview(
         store_root=store_root,
         store_present=store_present,
-        open_positions=tuple(_position_line(position) for position in positions),
+        open_positions=lines,
         limits=limits,
         budget_note=budget_note,
-        committed_risk=unmeasurable,
+        committed_risk=committed,
         available_risk=unmeasurable,
         cash=cash,
-        exposure=exposure,
+        exposure=priced_exposure,
         snapshot_as_of=snapshot_as_of,
+        market_value=market_value,
+        unrealized_pnl=unrealized,
+        marks_note=marks_note,
     )
 
 

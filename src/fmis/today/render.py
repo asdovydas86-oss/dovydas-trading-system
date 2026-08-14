@@ -269,16 +269,27 @@ def _portfolio_block(portfolio: PortfolioOverview) -> list[str]:
                 )
             )
             lines.append(f"{_DEEP}  opened {position.opened_at.isoformat()}")
+            for label, figure in (
+                ("mark", position.mark),
+                ("value", position.market_value),
+                ("unrealized", position.unrealized_pnl),
+            ):
+                if figure is None:
+                    continue
+                lines.extend(_token_line(f"{_DEEP}  ", f"{label} {figure}"))
     else:
         lines.append(f"{_DEEP}none recorded")
 
     lines.append("")
     for label, value in (
+        ("Market value", portfolio.market_value),
+        ("Unrealized P&L", portfolio.unrealized_pnl),
         ("Cash", portfolio.cash),
         ("Exposure", portfolio.exposure),
         ("Risk committed", portfolio.committed_risk),
         ("Risk available", portfolio.available_risk),
         ("Risk budget", portfolio.budget_note),
+        ("Marks", portfolio.marks_note),
     ):
         lines.extend(_value_or_absence(value, label=label))
 

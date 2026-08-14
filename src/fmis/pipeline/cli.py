@@ -76,7 +76,15 @@ from fmis.swing_setup import (
     run_research_study,
     run_setup_for_symbols,
 )
+from fmis.pipeline.prices import MARK_INTERVAL
 from fmis.today import TodayError, render_today, run_today
+from fmis.valuation import (
+    DEFAULT_BASE_CURRENCY,
+    DEFAULT_PORTFOLIO_ID,
+    ValuationError,
+    render_valuation,
+    run_valuation,
+)
 from fmis.trade_capture import (
     BOOK_CHOICES,
     CAPTURE_DUST_POLICY,
@@ -925,6 +933,23 @@ def _configure_today(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--no-marks",
+        action="store_true",
+        help=(
+            "read the store but fetch no price. Positions are still listed, "
+            "and every figure that needed a price says so with its reason"
+        ),
+    )
+    parser.add_argument(
+        "--mark-interval",
+        default=MARK_INTERVAL,
+        metavar="INTERVAL",
+        help=(
+            f"the timeframe a holding's price is read from (default: "
+            f"{MARK_INTERVAL}); the close of its last closed candle"
+        ),
+    )
+    parser.add_argument(
         "--reference-time", default=None, metavar="ISO8601",
         help=(
             "instant the workspace is stamped with (default: now). Supply it to "
@@ -959,6 +984,8 @@ def _run_today_command(args: argparse.Namespace) -> int:
             limit=args.limit,
             policy=_policy_from(args),
             detection=_detection_from(args),
+            read_marks=not args.no_marks,
+            mark_interval=args.mark_interval,
         )
     except TodayError as error:
         print(f"fmits today: {type(error).__name__}: {error}", file=sys.stderr)
@@ -987,6 +1014,111 @@ TODAY_COMMAND = Command(
     ),
     configure=_configure_today,
     run=_run_today_command,
+)
+
+
+def _configure_portfolio(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--store-root",
+        default=None,
+        metavar="PATH",
+        help=(
+            "the durable store to read positions, plans and capital from "
+            "(default: the owner's store). Read-only: this command writes "
+            "nothing"
+        ),
+    )
+    parser.add_argument(
+        "--portfolio-id",
+        default=DEFAULT_PORTFOLIO_ID,
+        metavar="ID",
+        help=(
+            f"which portfolio's snapshot supplies cash and equity "
+            f"(default: {DEFAULT_PORTFOLIO_ID})"
+        ),
+    )
+    parser.add_argument(
+        "--base-currency",
+        default=DEFAULT_BASE_CURRENCY,
+        metavar="ASSET",
+        help=(
+            f"what every figure is stated in (default: {DEFAULT_BASE_CURRENCY}). "
+            "A holding quoted in anything else is reported as unvalued rather "
+            "than converted, because this system holds no exchange rate"
+        ),
+    )
+    parser.add_argument(
+        "--mark-interval",
+        default=MARK_INTERVAL,
+        metavar="INTERVAL",
+        help=(
+            f"the timeframe a price is read from (default: {MARK_INTERVAL}). "
+            "Every price is the close of the last closed candle on it; a "
+            "forming bar is never read"
+        ),
+    )
+    parser.add_argument(
+        "--no-marks",
+        action="store_true",
+        help=(
+            "do not fetch any price. The page still renders, and every figure "
+            "that needed one says so with the reason"
+        ),
+    )
+    parser.add_argument(
+        "--reference-time",
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "the instant this reading describes (default: now). Supply it to "
+            "make a valuation reproducible."
+        ),
+    )
+
+
+def _run_portfolio_command(args: argparse.Namespace) -> int:
+    """Value the recorded portfolio at current marks and print it.
+
+    Reads the store; never writes to it. A market whose price could not be
+    fetched leaves its position unmarked and every total that depended on it
+    unavailable-with-a-reason — the run does not fail, because a portfolio page
+    that vanishes when one symbol is unreachable is a page the owner learns not
+    to rely on.
+    """
+    reference = _reference_time(args.reference_time, omit=False)
+    assert reference is not None  # `omit=False` always yields an instant
+    try:
+        valuation = run_valuation(
+            args.store_root,
+            as_of=reference,
+            portfolio_id=args.portfolio_id,
+            base_currency=args.base_currency,
+            read_marks=not args.no_marks,
+            interval=args.mark_interval,
+        )
+    except ValuationError as error:
+        print(f"fmits portfolio: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_valuation(valuation))
+    return EXIT_OK
+
+
+PORTFOLIO_COMMAND = Command(
+    name="portfolio",
+    help="value the recorded portfolio at current marks",
+    description=(
+        "What the recorded positions are worth right now, what they cost, what "
+        "is unrealized, what is exposed and what is at risk — each figure "
+        "computed from the close of the last closed candle on a stated "
+        "timeframe, with the price source, the selection rule and the age of "
+        "every mark printed beside it. A market with no price leaves its "
+        "position unmarked and every total that depended on it unavailable "
+        "with the reason, never a smaller number that looks complete. Reads "
+        "the durable store and never writes to it. Nothing is stored, nothing "
+        "is ranked, no position size is proposed and no order is placed."
+    ),
+    configure=_configure_portfolio,
+    run=_run_portfolio_command,
 )
 
 
@@ -1540,6 +1672,7 @@ COMMANDS: tuple[Command, ...] = (
     BACKTEST_COMMAND,
     DAILY_COMMAND,
     TODAY_COMMAND,
+    PORTFOLIO_COMMAND,
     TRADE_COMMAND,
     ARCHIVE_COMMAND,
 )

@@ -252,9 +252,16 @@ class MarketOverview:
 class PositionLine:
     """One open position, folded from the ledger and never stored.
 
-    Every value here is already on `fmis.positions.Position`. Nothing is
-    recomputed and no quotient is derived — in particular there is no unrealized
-    P&L, because that needs a mark and no mark source exists.
+    Every value here is already on `fmis.positions.Position` or on the
+    `MarkedPosition` that paired it with a price. Nothing is recomputed and no
+    quotient is derived.
+
+    ``mark``, ``market_value`` and ``unrealized_pnl`` are `None` when no price
+    source was consulted for this position, and carry a *reason* rather than a
+    figure when one was consulted and produced nothing. `None` and a reason are
+    different facts — *"this page did not look"* against *"this page looked and
+    could not price it"* — and the same distinction `store_present` already
+    makes one level up.
     """
 
     market: str
@@ -265,6 +272,9 @@ class PositionLine:
     opened_at: datetime
     trade_count: int
     event_ids: tuple[str, ...]
+    mark: str | None = None
+    market_value: str | None = None
+    unrealized_pnl: str | None = None
 
     def __post_init__(self) -> None:
         for name in ("market", "book", "direction", "quantity", "average_entry"):
@@ -273,6 +283,11 @@ class PositionLine:
             raise TypeError("opened_at must be a datetime")
         _count(self.trade_count, "trade_count")
         _strings(self.event_ids, "event_ids")
+        for name in ("mark", "market_value", "unrealized_pnl"):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            _text(value, name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,6 +337,38 @@ class PortfolioOverview:
     cash: str | NotAvailable
     exposure: str | NotAvailable
     snapshot_as_of: datetime | None = None
+    #: What the open positions are worth at this run's marks, or why that could
+    #: not be stated. Defaulted to the pre-mark answer so a caller that supplies
+    #: no valuation gets the honest one rather than a blank.
+    market_value: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no price source was consulted for this page",
+            owned_by="the valuation layer",
+            forbidden_inference=(
+                "Do not read an unvalued portfolio as a worthless one."
+            ),
+        )
+    )
+    unrealized_pnl: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no price source was consulted for this page",
+            owned_by="the valuation layer",
+            forbidden_inference=(
+                "Do not read an unstated profit or loss as a flat one."
+            ),
+        )
+    )
+    #: Where the prices came from, how they were chosen and how old the oldest
+    #: one is. Absent when nothing was priced.
+    marks_note: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no price source was consulted for this page",
+            owned_by="the valuation layer",
+            forbidden_inference=(
+                "Do not read the absence of a price source as a fresh one."
+            ),
+        )
+    )
 
     def __post_init__(self) -> None:
         _text(self.store_root, "store_root")
@@ -335,6 +382,9 @@ class PortfolioOverview:
             "available_risk",
             "cash",
             "exposure",
+            "market_value",
+            "unrealized_pnl",
+            "marks_note",
         ):
             value = getattr(self, name)
             if isinstance(value, NotAvailable):

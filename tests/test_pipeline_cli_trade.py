@@ -385,7 +385,12 @@ def test_the_command_help_states_that_nothing_is_executed() -> None:
     assert "executes nothing" in (trade.description or "")
 
 
-def test_the_registry_holds_the_trade_command_between_today_and_archive() -> None:
+def test_the_registry_holds_the_trade_command_between_portfolio_and_archive() -> None:
+    # Milestone BM inserted "portfolio" between "today" and "trade": the page
+    # that values what is held sits beside the page that summarizes it, and
+    # before the commands that change what is held. `trade` still immediately
+    # precedes `archive`, which is the ordering this test was written to pin.
     names = [command.name for command in cli_module.COMMANDS]
-    assert names[names.index("today") + 1] == "trade"
+    assert names[names.index("today") + 1] == "portfolio"
+    assert names[names.index("portfolio") + 1] == "trade"
     assert names[names.index("trade") + 1] == "archive"

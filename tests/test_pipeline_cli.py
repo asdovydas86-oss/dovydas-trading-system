@@ -237,12 +237,12 @@ def test_the_registry_still_has_every_original_command() -> None:
     # Widened for Milestone AV to admit "backtest": a ninth command, additive
     # to the registry rather than a replacement for any existing one. Widened
     # again for BJ to admit "today": a tenth, equally additive — every earlier
-    # command still parses and runs exactly as before. Widened again for BK to
-    # admit "trade": an eleventh, and the same claim holds.
+    # command still parses and runs exactly as before. Widened again for BM to
+    # admit "portfolio": an eleventh, and the same claim holds.
     names = {command.name for command in cli_module.COMMANDS}
     assert {
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "trade", "archive",
+        "today", "portfolio", "trade", "archive",
     } == names
 
 

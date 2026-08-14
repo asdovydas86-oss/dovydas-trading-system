@@ -63,6 +63,13 @@ from fmis.today.sections import (
     portfolio_overview,
 )
 from fmis.today.warnings import workspace_warnings
+from fmis.valuation import (
+    DEFAULT_BASE_CURRENCY,
+    DEFAULT_PORTFOLIO_ID,
+    ValuationError,
+    marks_for_store,
+    value_portfolio,
+)
 
 __all__ = [
     "DUST_POLICY",
@@ -101,9 +108,10 @@ TODAY_LIMITATIONS: tuple[tuple[str, str], ...] = (
     ),
     (
         "TD-3",
-        "No position size, portfolio risk or leverage is computed. Open risk "
-        "cannot be measured without a mark for every holding and a recorded "
-        "stop for every position, and neither exists.",
+        "No position size is computed and nothing is rebalanced. Market value "
+        "and exposure are measured from marks; open risk still cannot be, "
+        "because it needs a recorded stop for every open position and a "
+        "TradePlan is what states one.",
     ),
     (
         "TD-4",
@@ -157,6 +165,11 @@ class StoreReading:
     citations: tuple[Any, ...]
     market_snapshots: tuple[Any, ...]
     archived: tuple[Any, ...]
+    #: The `PortfolioValuation` for this run, or `None` when no price source was
+    #: consulted. `None` rather than an empty valuation, because *"this page did
+    #: not look"* and *"this page looked and priced nothing"* are different
+    #: facts and the second one is a problem.
+    valuation: Any | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.root, str) or not self.root.strip():
@@ -232,12 +245,18 @@ def read_store(
     *,
     at: datetime,
     archive_root: Path | str | None = None,
+    prices: Any | None = None,
 ) -> StoreReading:
     """Read everything the owner half contributes, in one pass.
 
     ``at`` is the instant a risk budget generation is resolved against — the
     outer boundary's reference time. Nothing in the store reads a clock, so it
     has to be supplied.
+
+    ``prices`` is a `PriceSnapshot` when the caller fetched one, and `None` when
+    it did not. Supplying one turns every marked figure on the page from an
+    absence into money; supplying none leaves the page exactly as `BJ` shipped
+    it, which is why this parameter defaults to `None` rather than to a fetch.
 
     Raises:
         StoreUnreadableError: the store exists and is corrupt. A *missing* store
@@ -267,6 +286,17 @@ def read_store(
             market_snapshots=store.snapshots.snapshots(),
             archived=_archived_entries(
                 default_archive_root() if archive_root is None else Path(archive_root)
+            ),
+            valuation=(
+                None
+                if prices is None
+                else value_portfolio(
+                    store,
+                    portfolio_id=DEFAULT_PORTFOLIO_ID,
+                    base_currency=DEFAULT_BASE_CURRENCY,
+                    as_of=at,
+                    prices=prices,
+                )
             ),
         )
     except (PersistenceError, TradeDomainError) as error:
@@ -302,7 +332,38 @@ def empty_reading(root: Path | str) -> StoreReading:
         citations=(),
         market_snapshots=(),
         archived=(),
+        valuation=None,
     )
+
+
+def _prices_for(
+    root: Path,
+    *,
+    at: datetime,
+    transport: Any | None,
+    interval: str | None,
+) -> Any:
+    """One price per market the store holds an open position in.
+
+    Wrapped so `run_today` reads as one line and so the store-unreadable
+    translation happens once. `fmis.valuation` raises its own
+    `PortfolioStoreError`; this package's own `StoreUnreadableError` is what the
+    CLI already catches, and having two names for one condition reach the same
+    surface is how one of them stops being handled.
+    """
+    try:
+        return (
+            marks_for_store(root, taken_at=at, transport=transport)
+            if interval is None
+            else marks_for_store(
+                root, taken_at=at, transport=transport, interval=interval
+            )
+        )
+    except ValuationError as error:
+        raise StoreUnreadableError(
+            f"the store at {root} could not be read for pricing: "
+            f"{type(error).__name__}: {error}"
+        ) from error
 
 
 def build_today(
@@ -335,6 +396,7 @@ def build_today(
         positions=reading.positions,
         budget=reading.budget,
         snapshot=reading.snapshot,
+        valuation=reading.valuation,
     )
     queue = build_queue(opportunities.confirmed, opportunities.candidates)
     journal = journal_summary(
@@ -383,6 +445,8 @@ def run_today(
     context_policy: ContextPolicy | None = None,
     detection: DetectionSettings | None = None,
     transport: Any | None = None,
+    read_marks: bool = True,
+    mark_interval: str | None = None,
 ) -> TodayWorkspace:
     """Run one evening's workspace end to end.
 
@@ -394,7 +458,14 @@ def run_today(
 
     ``read_records=False`` skips the store entirely, which is what
     ``--no-records`` is for — the page still renders, and says that it did not
-    look.
+    look. ``read_marks=False`` keeps the store and skips only the prices, which
+    is a different and equally legitimate answer: the positions are still
+    listed, and every figure that needed a price says so.
+
+    **Prices are fetched only for markets the store already holds a position
+    in.** The scan's watchlist is not priced, because a watchlist symbol has no
+    quantity and therefore no value; asking for one would spend a request to
+    produce a number nothing on this page may show.
 
     Raises:
         StoreUnreadableError: the store exists and cannot be read.
@@ -409,8 +480,20 @@ def run_today(
         detection=detection,
         transport=transport,
     )
+    prices = (
+        _prices_for(
+            root,
+            at=reference_time,
+            transport=transport,
+            interval=mark_interval,
+        )
+        if read_records and read_marks
+        else None
+    )
     reading = (
-        read_store(root, at=reference_time, archive_root=archive_root)
+        read_store(
+            root, at=reference_time, archive_root=archive_root, prices=prices
+        )
         if read_records
         else empty_reading(root)
     )

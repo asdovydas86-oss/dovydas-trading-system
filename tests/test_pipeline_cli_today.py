@@ -24,9 +24,25 @@ from tests.test_swing_setup_render import candidate_short_with_watched_level, co
 
 @pytest.fixture(autouse=True)
 def _offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No socket is opened by anything in this module.
+
+    Two doors, not one, since Milestone BM: the scan fetches candles for the
+    watchlist and the valuation fetches a price for every market the store
+    holds a position in. Both are stubbed here rather than in each test,
+    because a test that forgets one would pass while reaching the network.
+    """
+    from marks_helpers import snapshot as price_snapshot
+
     monkeypatch.setattr(
         compose_module, "multi_timeframe_facts_for_symbol",
         lambda symbol, **kw: multi(symbol=symbol),
+    )
+    monkeypatch.setattr(
+        builder_module,
+        "marks_for_store",
+        lambda root, *, taken_at, **kw: price_snapshot(
+            60000.0, 61000.0, taken_at=taken_at
+        ),
     )
 
 

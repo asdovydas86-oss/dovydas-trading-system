@@ -345,6 +345,14 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         "fmis.market_regime",
         "fmis.market_structure",
         "fmis.providers",
+        # Widened for Milestone BM. `fmis.valuation` is an application-layer
+        # package at the same tier as `fmis.today`, which this list already
+        # admits for the identical reason: the CLI is the outermost edge and
+        # composes rather than computes. The rule this guard actually protects —
+        # that `fmis.pipeline` never reaches `fmis.persistence` — is unaffected
+        # and is asserted directly by the test below and by
+        # `test_today_architecture.test_the_cli_does_not_import_the_store_directly`.
+        "fmis.valuation",
     )
     reached = {
         name

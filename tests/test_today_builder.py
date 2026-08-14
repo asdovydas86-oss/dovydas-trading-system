@@ -382,6 +382,7 @@ def test_run_today_reads_the_store_when_asked(
         reference_time=REFERENCE,
         store_root=root,
         archive_root=tmp_path / "archive",
+        read_marks=False,
     )
     assert space.portfolio.store_present is True
     assert space.portfolio.open_count
@@ -409,7 +410,7 @@ def test_run_today_defaults_to_the_owner_store_root_without_touching_it(
     machine."""
     seen: dict[str, object] = {}
 
-    def _fake_read(root, *, at, archive_root=None):
+    def _fake_read(root, *, at, archive_root=None, prices=None):
         seen["root"] = root
         return empty_reading(root)
 

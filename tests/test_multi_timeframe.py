@@ -840,13 +840,13 @@ def test_new_limitation_texts_are_fact_only() -> None:
 
 
 def test_registry_names_are_unique() -> None:
-    # Widened for Milestone AV to admit "backtest", for BJ to admit "today" and
-    # for BK to admit "trade" — each additive, none a replacement.
+    # Widened for Milestone AV to admit "backtest", for BJ to admit "today", and
+    # for BM to admit "portfolio" — each additive, none a replacement.
     names = [c.name for c in cli_module.COMMANDS]
     assert len(names) == len(set(names))
     assert set(names) == {
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "trade", "archive",
+        "today", "portfolio", "trade", "archive",
     }
 
 

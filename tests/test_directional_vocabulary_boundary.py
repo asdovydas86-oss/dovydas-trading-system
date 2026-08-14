@@ -9,7 +9,7 @@ it is long, cannot record what happened to real money. Direction there is an
 **owner assertion about their own money**, not an engine's opinion about a market.
 
 So the guard is no longer "one package"; it is now **two named halves**, and the
-market half's ban is unchanged and separately asserted below. Four trading-domain
+market half's ban is unchanged and separately asserted below. Five trading-domain
 packages are exempt and no others:
 
 * `fmis.snapshotting` — `TradeDirection`, the side a *frozen reading* came down on
@@ -22,6 +22,17 @@ packages are exempt and no others:
   expression in a package that may not name the word
 * `fmis.ledger` — `TradeSide`, which way the base asset actually moved
 * `fmis.positions` — `PositionDirection`, which way exposure currently points
+* `fmis.portfolio_risk` — which way the *portfolio* points. Added by Milestone
+  BL. It is the aggregate of the side `fmis.positions` already holds: long
+  exposure, short exposure, directional net and directional concentration are
+  four of the figures the milestone exists to produce, and none of them has any
+  expression in a package that may not name the word. It also carries the sign
+  rule capital at risk depends on — *"`entry − stop` on a long, `stop − entry`
+  on a short"* — which is the same value class `fmis.plan` was exempted for.
+  It reads no candle and imports no engine, asserted twice: by
+  `test_the_market_half_still_holds_no_directional_vocabulary_at_all` below and
+  by `tests/test_portfolio_risk_architecture.py`, which pins its entire
+  dependency surface as a set
 
 **`fmis.trade_capture` is exempt as a surface, not as a domain package**, on the
 identical footing `fmis/pipeline/cli.py` has held since ADR-0028: it is where the
@@ -87,7 +98,7 @@ _PERMITTED_FILE = SRC / "pipeline" / "cli.py"
 
 #: The trading-domain packages where direction is an owner assertion about their
 #: own money rather than an engine's reading of a market. Named one by one, so a
-#: sixth appearing anywhere fails this test and has to justify itself.
+#: seventh appearing anywhere fails this test and has to justify itself.
 _TRADE_DOMAIN_PERMITTED_DIRS = frozenset(
     {
         SRC / "snapshotting",
@@ -95,6 +106,7 @@ _TRADE_DOMAIN_PERMITTED_DIRS = frozenset(
         SRC / "plan",
         SRC / "ledger",
         SRC / "positions",
+        SRC / "portfolio_risk",
     }
 )
 
@@ -189,18 +201,55 @@ def test_the_market_half_still_holds_no_directional_vocabulary_at_all() -> None:
     assert offenders == []
 
 
-def test_the_trade_domain_exemption_is_bounded_to_five_named_packages() -> None:
-    """Pins the widening, so a sixth exempt package is a deliberate edit here."""
+def test_the_trade_domain_exemption_is_bounded_to_six_named_packages() -> None:
+    """Pins the widening, so a seventh exempt package is a deliberate edit here."""
     assert {path.name for path in _TRADE_DOMAIN_PERMITTED_DIRS} == {
         "snapshotting",
         "proposal",
         "plan",
         "ledger",
         "positions",
+        "portfolio_risk",
     }
     for path in _TRADE_DOMAIN_PERMITTED_DIRS:
         assert path.is_dir(), path
 
+
+def test_the_exempt_domain_packages_import_no_engine() -> None:
+    """The exemption widens who may spell a side, never who may read a candle.
+
+    The owner-surface exemption has carried this assertion since BK; BL applies
+    it to the domain set too, because `fmis.portfolio_risk` is the first exempt
+    domain package that reads the *store* rather than only holding values, and a
+    package that both names a side and reached an engine would be the exact
+    crossing ADR-0028 exists to prevent.
+    """
+    market_half = {f"fmis.{directory.name}" for directory in _MARKET_HALF_DIRS}
+    #: The two archive modules the whole trading domain legitimately reaches: the
+    #: canonical JSON encoder and the record-id validator. Both are pure
+    #: infrastructure that read no candle, and `fmis.plan`'s own guard has
+    #: permitted exactly this pair since BK.
+    permitted = {"fmis.archive.json_safe", "fmis.archive.identity"}
+    offenders: dict[str, set[str]] = {}
+    for directory in sorted(_TRADE_DOMAIN_PERMITTED_DIRS):
+        for path in sorted(directory.glob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            reached: set[str] = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    reached.update(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    reached.add(node.module)
+            crossing = {
+                name
+                for name in reached
+                if name.split(".")[0] == "fmis"
+                and ".".join(name.split(".")[:2]) in market_half
+                and name not in permitted
+            }
+            if crossing:
+                offenders[str(path.relative_to(SRC.parent.parent))] = crossing
+    assert offenders == {}
 
 
 def test_the_owner_surface_exemption_is_bounded_to_one_named_package() -> None:

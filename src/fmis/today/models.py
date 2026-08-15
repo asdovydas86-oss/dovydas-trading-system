@@ -60,7 +60,11 @@ __all__ = [
 ]
 
 #: Bumped when the serialized shape changes in a way a consumer must notice.
-TODAY_SCHEMA_VERSION = 1
+#: `2` for Milestone BN: `OpportunityLine` gained the five approval fields and
+#: `Opportunities` gained the note that says whether an approval was computed at
+#: all. A consumer reading a version-1 page would render every candidate as
+#: unapproved, which is a different claim from *"this page did not check"*.
+TODAY_SCHEMA_VERSION = 2
 
 
 class TodayError(Exception):
@@ -408,6 +412,21 @@ class OpportunityLine:
     untouched. This package never decides a side, never re-derives one, and
     contains no directional vocabulary of its own — ADR-0028's boundary, held by
     carrying the string the engine produced rather than naming a member.
+
+    **The five approval fields are `None` when no approval was computed, and that
+    is not the same as an approval that found nothing.** `--no-records` skips the
+    store, a store with no risk budget has no limits to check against, and a
+    watchlist symbol with no stop has no risk denominator — in all three cases
+    this page did not check, and `Opportunities.approval_note` says which. A
+    blank rendered as a clean bill of health is the single most expensive
+    misreading this page can produce, so `None` prints as a stated absence rather
+    than as nothing.
+
+    **Every approval value is a string this package did not compute.**
+    `approval_status` is `ApprovalStatus.value`, `recommended_size` and
+    `open_risk_after` are already-formatted figures, and the two reason tuples
+    are `ApprovalReason.statement` verbatim. `fmis.today` computes no monetary
+    quantity — `TD-1`, unchanged.
     """
 
     symbol: str
@@ -420,6 +439,11 @@ class OpportunityLine:
     thesis: tuple[str, ...] = ()
     confirmation: tuple[str, ...] = ()
     invalidation: tuple[str, ...] = ()
+    approval_status: str | None = None
+    recommended_size: str | None = None
+    open_risk_after: str | None = None
+    blocking_reasons: tuple[str, ...] = ()
+    approval_warnings: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for name in ("symbol", "state", "sufficiency"):
@@ -434,6 +458,32 @@ class OpportunityLine:
                 raise TypeError(f"{name} must be a number or None")
         for name in ("thesis", "confirmation", "invalidation"):
             _strings(getattr(self, name), name)
+        for name in ("approval_status", "recommended_size", "open_risk_after"):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            _text(value, name)
+        for name in ("blocking_reasons", "approval_warnings"):
+            _strings(getattr(self, name), name)
+        if self.approval_status is None and (
+            self.blocking_reasons or self.approval_warnings
+        ):
+            raise TodayError(
+                "an opportunity carries approval reasons with no approval "
+                "status; reasons produced by an evaluation that is not reported "
+                "would read as objections nobody could trace to a verdict"
+            )
+
+    @property
+    def was_approved_against_limits(self) -> bool:
+        """Whether an approval was computed at all. **Not whether it passed.**
+
+        Named at length on purpose. A shorter `is_approved` would be read as
+        *"this trade is fine"* by exactly the reader this page exists to protect,
+        and the status is a three-valued string precisely because a boolean
+        cannot carry `INDETERMINATE`.
+        """
+        return self.approval_status is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -481,12 +531,28 @@ class Opportunities:
     candidates: tuple[OpportunityLine, ...]
     waiting: tuple[WaitGroup, ...]
     failed: tuple[FailedSymbol, ...]
+    #: Whether an approval was computed for the actionable lines, and — when one
+    #: was not — which input was missing. Defaulted to the honest pre-approval
+    #: answer so a caller that supplies no approvals gets a stated absence rather
+    #: than a blank.
+    approval_note: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no approval was computed for this page",
+            owned_by="the position-sizing layer (fmits approve)",
+            forbidden_inference=(
+                "Do not read an unapproved candidate as one your limits permit. "
+                "Nothing was measured against them."
+            ),
+        )
+    )
 
     def __post_init__(self) -> None:
         _tuple_of(self.confirmed, OpportunityLine, "confirmed")
         _tuple_of(self.candidates, OpportunityLine, "candidates")
         _tuple_of(self.waiting, WaitGroup, "waiting")
         _tuple_of(self.failed, FailedSymbol, "failed")
+        if not isinstance(self.approval_note, NotAvailable):
+            _text(self.approval_note, "approval_note")
 
     @property
     def actionable_count(self) -> int:

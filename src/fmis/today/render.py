@@ -324,6 +324,29 @@ def _opportunity_header(line: OpportunityLine) -> list[str]:
     ]
 
 
+def _approval_block(line: OpportunityLine) -> list[str]:
+    """The five approval values for one candidate, or the fact that there are none.
+
+    **A candidate with no approval prints a sentence, never a blank.** A blank in
+    the column where a status belongs reads as a candidate nothing objected to,
+    which is the single most expensive misreading this page can produce — the
+    page-level note in the section header says why one was not computed, and this
+    line makes the absence visible on the row itself.
+    """
+    if not line.was_approved_against_limits:
+        return [f"{_DEEP}approval    {_ABSENT} — see the note above"]
+    lines = [f"{_DEEP}approval    {str(line.approval_status).upper()}"]
+    lines.extend(
+        _wrap(f"size        {line.recommended_size}", indent=f"{_DEEP}")
+    )
+    lines.extend(
+        _wrap(f"open risk after  {line.open_risk_after}", indent=f"{_DEEP}")
+    )
+    lines.extend(_reasons("blocking", line.blocking_reasons))
+    lines.extend(_reasons("approval warnings", line.approval_warnings))
+    return lines
+
+
 def _reasons(label: str, texts: tuple[str, ...]) -> list[str]:
     if not texts:
         return []
@@ -341,6 +364,7 @@ def _opportunities_block(opportunities: Opportunities) -> list[str]:
         f"· wait {opportunities.waiting_count} "
         f"· error {len(opportunities.failed)}"
     )
+    lines.extend(_value_or_absence(opportunities.approval_note, label="approval"))
 
     for group, texts in (
         (opportunities.confirmed, ("reason", "confirmation", "invalidation")),
@@ -349,6 +373,7 @@ def _opportunities_block(opportunities: Opportunities) -> list[str]:
         for line in group:
             lines.append("")
             lines.extend(_opportunity_header(line))
+            lines.extend(_approval_block(line))
             lines.extend(_reasons(texts[0], line.thesis))
             lines.extend(_reasons(texts[1], line.confirmation))
             lines.extend(_reasons(texts[2], line.invalidation))

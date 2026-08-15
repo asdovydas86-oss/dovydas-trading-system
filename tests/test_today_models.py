@@ -284,8 +284,15 @@ def test_warnings_of_rejects_a_non_member() -> None:
 
 
 def test_the_schema_version_is_pinned() -> None:
-    """A consumer reading a stored page needs this to move deliberately."""
-    assert TODAY_SCHEMA_VERSION == 1
+    """A consumer reading a stored page needs this to move deliberately.
+
+    Bumped to `2` by Milestone BN, which is the deliberate move this test exists
+    to force: `OpportunityLine` gained five approval fields and `Opportunities`
+    gained the note that says whether an approval was computed at all. A consumer
+    reading a version-1 page would render every candidate as unapproved, which is
+    a different claim from *"this page did not check"*.
+    """
+    assert TODAY_SCHEMA_VERSION == 2
     assert workspace((result(waiting()),)).schema_version == TODAY_SCHEMA_VERSION
 
 

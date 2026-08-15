@@ -46,11 +46,22 @@ from fmis.money import DustPolicy
 from fmis.persistence import PersistenceError, TradingStore, default_store_root
 from fmis.pipeline.multi_timeframe import TimeframeRole
 from fmis.pipeline.structural_facts import DetectionSettings
+from fmis.position_sizing import (
+    DEFAULT_BOOK,
+    DEFAULT_SIZING_POLICY_ID,
+    SizingPolicy,
+    approve_results,
+    budget_in_effect,
+    engine_for,
+    owner_context,
+    sole_account,
+)
 from fmis.provenance import Absent
 from fmis.records import TradeDomainError
 from fmis.swing_setup import SCAN_UNIVERSE, run_market_scan
 from fmis.today.attention import build_queue
 from fmis.today.models import (
+    NotAvailable,
     StoreUnreadableError,
     TodayError,
     TodayWorkspace,
@@ -76,6 +87,7 @@ __all__ = [
     "TODAY_LIMITATIONS",
     "OBJECTIVE",
     "StoreReading",
+    "approvals_for",
     "build_today",
     "empty_reading",
     "read_store",
@@ -170,6 +182,11 @@ class StoreReading:
     #: not look"* and *"this page looked and priced nothing"* are different
     #: facts and the second one is a problem.
     valuation: Any | None = None
+    #: The one account this store records fills in, or `Absent` naming why there
+    #: is no single answer. An approval is scoped to an account because books
+    #: never share capacity across accounts, and picking one of several would
+    #: produce a confident answer about the wrong capacity pool.
+    account: Any | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.root, str) or not self.root.strip():
@@ -298,6 +315,7 @@ def read_store(
                     prices=prices,
                 )
             ),
+            account=sole_account(store),
         )
     except (PersistenceError, TradeDomainError) as error:
         # Both families, and the second is not redundant: a hand-edited index
@@ -333,6 +351,7 @@ def empty_reading(root: Path | str) -> StoreReading:
         market_snapshots=(),
         archived=(),
         valuation=None,
+        account=None,
     )
 
 
@@ -366,14 +385,119 @@ def _prices_for(
         ) from error
 
 
+def approvals_for(
+    reading: StoreReading,
+    results: Sequence[Any],
+    *,
+    policy: SizingPolicy,
+    account: Any | None = None,
+    book: Any = DEFAULT_BOOK,
+    classification: Any | None = None,
+    timezone: str | None = None,
+) -> tuple[dict[str, Any], str | NotAvailable]:
+    """Approve every actionable candidate against one portfolio reading, or say why not.
+
+    **Pure.** Every input is already in the `StoreReading` or is a value the
+    caller configured; nothing here opens a store, reaches a venue or reads a
+    clock. That is what lets a test assemble a fully-approved page from
+    hand-built domain objects.
+
+    **One reading, one budget, one engine, for every candidate on the page.**
+    `fmis.position_sizing.approve_results` states the consequence: two candidates
+    that each fit the budget alone do not both fit it together, and this page
+    does not claim they do — each is evaluated against the portfolio *as it
+    stands*, independently.
+
+    Returns the mapping and the note that explains it. **Four inputs can be
+    missing and each produces a different sentence**, because *"you did not let
+    this page read the store"*, *"you have recorded no limits"*, *"you trade in
+    two accounts and must say which"* and *"nothing was priced"* have four
+    different remedies and one blank.
+    """
+    if not isinstance(policy, SizingPolicy):
+        raise TypeError(f"policy must be a SizingPolicy, got {type(policy).__name__}")
+    if reading.valuation is None:
+        return {}, NotAvailable(
+            reason=(
+                "no portfolio reading was produced for this page, so there is "
+                "nothing to size a candidate against"
+            ),
+            owned_by="the valuation layer (drop --no-records / --no-marks)",
+            forbidden_inference=(
+                "Do not read an unapproved candidate as one your limits permit."
+            ),
+        )
+    if reading.budget is None:
+        return {}, NotAvailable(
+            reason=(
+                "no single risk-budget lineage is in force, so there are no "
+                "limits to evaluate a candidate against"
+            ),
+            owned_by="the owner — every limit is a value the owner sets",
+            forbidden_inference=(
+                "Do not infer that no limit applies to you. It means no limit is "
+                "recorded here."
+            ),
+        )
+    scoped = account if account is not None else reading.account
+    if scoped is None or isinstance(scoped, Absent):
+        return {}, NotAvailable(
+            reason=(
+                "no account could be scoped for this page: "
+                + (
+                    "the store was not read"
+                    if scoped is None
+                    else scoped.reason
+                )
+            ),
+            owned_by="the owner — name one with --account",
+            forbidden_inference=(
+                "Do not read an unscoped candidate as one that fits an account's "
+                "capacity. Books never share capacity across accounts."
+            ),
+        )
+    state = reading.valuation.state
+    approvals = approve_results(
+        results,
+        engine=engine_for(policy, classification),
+        state=state,
+        budget=reading.budget,
+        owner=owner_context(
+            base_currency=state.base_currency,
+            **({} if timezone is None else {"timezone": timezone}),
+        ),
+        account=scoped,
+        book=book,
+        mark_age=reading.valuation.mark_age,
+    )
+    return approvals, (
+        f"{len(approvals)} candidate(s) sized and evaluated against budget "
+        f"{reading.budget.budget_id} (policy version "
+        f"{reading.budget.risk_policy_version}) in account {scoped.value}, book "
+        f"{book.value}, under sizing policy {policy.policy_id!r}. Each is "
+        "evaluated against the portfolio as it stands, independently of the "
+        "others: two candidates that each fit the budget alone do not both fit "
+        "it together."
+    )
+
+
 def build_today(
     results: Sequence[Any],
     reading: StoreReading,
     *,
     reference_time: datetime,
     source: str,
+    approvals: Any | None = None,
+    approval_note: Any = None,
 ) -> TodayWorkspace:
     """Assemble the workspace. Pure — no clock, no network, no filesystem.
+
+    ``approvals`` maps a requested symbol to the `ApprovalResult` computed for
+    it, and ``approval_note`` says whether one was computed at all. Both are
+    parameters rather than derivations because the approval is the one figure on
+    this page that reads *both* halves at once — the market half's candidate and
+    the owner half's limits — and computing it inside the assembly would put a
+    portfolio reading inside the function that must not have one.
 
     Raises:
         TypeError: an argument is of the wrong type.
@@ -388,7 +512,9 @@ def build_today(
             f"reference_time must be a datetime, got {type(reference_time).__name__}"
         )
 
-    opportunities = opportunities_from_results(results)
+    opportunities = opportunities_from_results(
+        results, approvals, approval_note=approval_note
+    )
     market = market_overview_from_results(results, opportunities)
     portfolio = portfolio_overview(
         store_root=reading.root,
@@ -447,6 +573,11 @@ def run_today(
     transport: Any | None = None,
     read_marks: bool = True,
     mark_interval: str | None = None,
+    sizing: SizingPolicy | None = None,
+    account: Any | None = None,
+    book: Any = DEFAULT_BOOK,
+    classification: Any | None = None,
+    timezone: str | None = None,
 ) -> TodayWorkspace:
     """Run one evening's workspace end to end.
 
@@ -497,9 +628,24 @@ def run_today(
         if read_records
         else empty_reading(root)
     )
+    approvals, note = approvals_for(
+        reading,
+        results,
+        policy=(
+            SizingPolicy(policy_id=DEFAULT_SIZING_POLICY_ID)
+            if sizing is None
+            else sizing
+        ),
+        account=account,
+        book=book,
+        classification=classification,
+        timezone=timezone,
+    )
     return build_today(
         results,
         reading,
         reference_time=reference_time,
         source=f"binance-public · store {root}",
+        approvals=approvals,
+        approval_note=note,
     )

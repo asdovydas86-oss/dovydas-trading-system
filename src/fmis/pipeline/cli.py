@@ -77,6 +77,20 @@ from fmis.swing_setup import (
     run_setup_for_symbols,
 )
 from fmis.pipeline.prices import MARK_INTERVAL
+from fmis.position_sizing import (
+    APPROVAL_ERRORS,
+    DEFAULT_BOOK,
+    DEFAULT_OWNER_TIMEZONE,
+    DEFAULT_SIZING_POLICY_ID,
+    price_from_text,
+    proposal_for_plan,
+    scope_from_text,
+    proposal_from_text,
+    render_approval,
+    resolve_account,
+    run_approval,
+    sizing_policy_from_text,
+)
 from fmis.today import TodayError, render_today, run_today
 from fmis.valuation import (
     DEFAULT_BASE_CURRENCY,
@@ -950,6 +964,64 @@ def _configure_today(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--account",
+        default=None,
+        metavar="ID",
+        help=(
+            "which account every candidate on this page is sized against "
+            "(default: the only account the store records fills in). With "
+            "several accounts and no flag, no approval is computed and the page "
+            "says so — books never share capacity across accounts"
+        ),
+    )
+    parser.add_argument(
+        "--book",
+        default=DEFAULT_BOOK.value,
+        choices=BOOK_CHOICES,
+        help=(
+            f"which capacity pool a candidate would consume (default: "
+            f"{DEFAULT_BOOK.value})"
+        ),
+    )
+    parser.add_argument(
+        "--risk-fraction",
+        default=None,
+        metavar="FRACTION",
+        help=(
+            "the fraction of equity to size each candidate at, e.g. 0.01 for "
+            "1 %%. Omit it and the default the owner set below their per-trade "
+            "ceiling is used; with neither, no size is produced and each row "
+            "says so — a ceiling is not a target"
+        ),
+    )
+    parser.add_argument(
+        "--min-risk-reward",
+        default=None,
+        metavar="RATIO",
+        help="warn when a candidate's planned reward-to-risk ratio is below this",
+    )
+    parser.add_argument(
+        "--max-equity-age",
+        default=None,
+        metavar="DURATION",
+        help="block sizing when the recorded equity is older than this, e.g. 7d",
+    )
+    parser.add_argument(
+        "--max-mark-age",
+        default=None,
+        metavar="DURATION",
+        help="block sizing when the oldest price is older than this, e.g. 36h",
+    )
+    parser.add_argument(
+        "--timezone",
+        default=DEFAULT_OWNER_TIMEZONE,
+        metavar="ZONE",
+        help=(
+            f"the owner's calendar, for periodic limit boundaries (default: "
+            f"{DEFAULT_OWNER_TIMEZONE}). A locale, never a threshold"
+        ),
+    )
+    parser.add_argument(
         "--reference-time", default=None, metavar="ISO8601",
         help=(
             "instant the workspace is stamped with (default: now). Supply it to "
@@ -969,6 +1041,7 @@ def _run_today_command(args: argparse.Namespace) -> int:
     """
     reference = _reference_time(args.reference_time, omit=False)
     assert reference is not None  # `omit=False` always yields an instant
+    scope = scope_from_text(account=args.account, book=args.book)
     try:
         workspace = run_today(
             args.symbols,
@@ -986,8 +1059,18 @@ def _run_today_command(args: argparse.Namespace) -> int:
             detection=_detection_from(args),
             read_marks=not args.no_marks,
             mark_interval=args.mark_interval,
+            sizing=sizing_policy_from_text(
+                policy_id=DEFAULT_SIZING_POLICY_ID,
+                risk_fraction=args.risk_fraction,
+                max_equity_age=args.max_equity_age,
+                max_mark_age=args.max_mark_age,
+                minimum_risk_reward=args.min_risk_reward,
+            ),
+            account=scope[0],
+            book=scope[1],
+            timezone=args.timezone,
         )
-    except TodayError as error:
+    except (TodayError, *APPROVAL_ERRORS) as error:
         print(f"fmits today: {type(error).__name__}: {error}", file=sys.stderr)
         return EXIT_FAILURE
     print(render_today(workspace))
@@ -1119,6 +1202,276 @@ PORTFOLIO_COMMAND = Command(
     ),
     configure=_configure_portfolio,
     run=_run_portfolio_command,
+)
+
+
+def _configure_approve(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "symbol",
+        nargs="?",
+        default=None,
+        metavar="SYMBOL",
+        help=(
+            "the market to evaluate, e.g. BTCUSDT. Omit it and pass --plan to "
+            "size a commitment already recorded with `fmits trade record`"
+        ),
+    )
+    parser.add_argument(
+        "--plan",
+        default=None,
+        metavar="PLAN_ID",
+        help=(
+            "size a recorded commitment instead of a typed one. The market, "
+            "book, side, stop and targets are read from it and cannot be "
+            "overridden — a plan's stop is the field it exists to keep immutable"
+        ),
+    )
+    parser.add_argument(
+        "--direction",
+        default=None,
+        choices=DIRECTION_CHOICES,
+        help="which side the candidate is on (required unless --plan is used)",
+    )
+    parser.add_argument(
+        "--entry",
+        required=True,
+        metavar="PRICE",
+        help=(
+            "the price the owner intends to transact at. Not an order: nothing "
+            "here is placed, and the setup engine fabricates no exact entry"
+        ),
+    )
+    parser.add_argument(
+        "--stop",
+        default=None,
+        metavar="PRICE",
+        help=(
+            "the level that ends the trade (required unless --plan is used). "
+            "There is no size without one: no stop means no risk denominator"
+        ),
+    )
+    parser.add_argument(
+        "--target",
+        action="append",
+        default=None,
+        metavar="PRICE",
+        dest="targets",
+        help="a target, nearest first. Repeat for a ladder. Optional",
+    )
+    parser.add_argument(
+        "--account",
+        default=None,
+        metavar="ID",
+        help=(
+            "which account this candidate consumes capacity in (default: the "
+            "only account the store records fills in, refused when there are "
+            "several — books never share capacity across accounts)"
+        ),
+    )
+    parser.add_argument(
+        "--book",
+        default=DEFAULT_BOOK.value,
+        choices=BOOK_CHOICES,
+        help=f"which capacity pool this candidate belongs to (default: {DEFAULT_BOOK.value})",
+    )
+    parser.add_argument(
+        "--risk-fraction",
+        default=None,
+        metavar="FRACTION",
+        help=(
+            "the fraction of equity to risk on this trade, e.g. 0.01 for 1 %%. "
+            "Omit it and the default the owner set below their per-trade ceiling "
+            "is used; with neither, no size is produced and the page says so — "
+            "a ceiling is not a target and is never used as one"
+        ),
+    )
+    parser.add_argument(
+        "--min-risk-reward",
+        default=None,
+        metavar="RATIO",
+        help=(
+            "warn when the planned reward-to-risk ratio is below this. A "
+            "warning and never a block: the size comes from the risk rule and "
+            "the stop distance, never from the quality of the idea"
+        ),
+    )
+    parser.add_argument(
+        "--max-equity-age",
+        default=None,
+        metavar="DURATION",
+        help=(
+            "block when the recorded equity is older than this, e.g. 7d. With "
+            "no bound the age is reported and not judged — a staleness bound is "
+            "a policy and this system sets none on the owner's behalf"
+        ),
+    )
+    parser.add_argument(
+        "--max-mark-age",
+        default=None,
+        metavar="DURATION",
+        help="block when the oldest price behind the exposure figures is older than this, e.g. 36h",
+    )
+    parser.add_argument(
+        "--venue", default=DEFAULT_VENUE, metavar="NAME",
+        help=f"which venue the market trades at (default: {DEFAULT_VENUE})",
+    )
+    parser.add_argument(
+        "--quote", default=DEFAULT_QUOTE_ASSET, metavar="ASSET",
+        help=(
+            f"the quote asset the symbol ends in (default: {DEFAULT_QUOTE_ASSET}). "
+            "FMITS holds no asset registry and will not guess the split"
+        ),
+    )
+    parser.add_argument(
+        "--mode", default=DEFAULT_MARKET_MODE, choices=MARKET_MODE_CHOICES,
+        help=f"the market's mode (default: {DEFAULT_MARKET_MODE})",
+    )
+    parser.add_argument(
+        "--store-root", default=None, metavar="PATH",
+        help=(
+            "the durable store to read positions, plans, capital and limits "
+            "from (default: the owner's store). Read-only: this command writes "
+            "nothing and places nothing"
+        ),
+    )
+    parser.add_argument(
+        "--portfolio-id", default=DEFAULT_PORTFOLIO_ID, metavar="ID",
+        help=f"which portfolio's snapshot supplies cash and equity (default: {DEFAULT_PORTFOLIO_ID})",
+    )
+    parser.add_argument(
+        "--base-currency", default=DEFAULT_BASE_CURRENCY, metavar="ASSET",
+        help=f"what every figure is stated in (default: {DEFAULT_BASE_CURRENCY})",
+    )
+    parser.add_argument(
+        "--timezone", default=DEFAULT_OWNER_TIMEZONE, metavar="ZONE",
+        help=(
+            f"the owner's calendar, for periodic limit boundaries (default: "
+            f"{DEFAULT_OWNER_TIMEZONE}). A locale, never a threshold"
+        ),
+    )
+    parser.add_argument(
+        "--mark-interval", default=MARK_INTERVAL, metavar="INTERVAL",
+        help=f"the timeframe a holding's price is read from (default: {MARK_INTERVAL})",
+    )
+    parser.add_argument(
+        "--no-marks", action="store_true",
+        help=(
+            "fetch no price. The evaluation still runs and comes back "
+            "INDETERMINATE, naming every position that could not be priced"
+        ),
+    )
+    parser.add_argument(
+        "--reference-time", default=None, metavar="ISO8601",
+        help=(
+            "the instant this evaluation describes (default: now). Supply it to "
+            "make an approval reproducible."
+        ),
+    )
+
+
+def _proposal_from(args: argparse.Namespace) -> object:
+    """The candidate, typed or read from a recorded commitment.
+
+    Every conversion happens behind `fmis.position_sizing.inputs`; this function
+    only decides which of the two doors to knock on, so the CLI still constructs
+    no domain value of its own.
+    """
+    account = resolve_account(args.store_root, stated=args.account)
+    if args.plan is not None:
+        if args.symbol is not None or args.direction is not None or args.stop is not None:
+            raise ValueError(
+                "--plan reads the market, the side and the stop from the recorded "
+                "commitment; passing them again would let a sizing call restate a "
+                "stop the plan exists to keep immutable"
+            )
+        return proposal_for_plan(
+            args.store_root,
+            plan_id=args.plan,
+            account=account,
+            entry=price_from_text(args.entry, "--entry"),
+        )
+    missing = [
+        name
+        for name, value in (
+            ("SYMBOL", args.symbol),
+            ("--direction", args.direction),
+            ("--stop", args.stop),
+        )
+        if value is None
+    ]
+    if missing:
+        raise ValueError(
+            f"{', '.join(missing)} is required unless --plan names a recorded "
+            "commitment to read them from"
+        )
+    return proposal_from_text(
+        symbol=args.symbol,
+        direction=args.direction,
+        account=account.value,
+        book=args.book,
+        entry=args.entry,
+        stop=args.stop,
+        targets=args.targets,
+        venue=args.venue,
+        quote=args.quote,
+        mode=args.mode,
+    )
+
+
+def _run_approve(args: argparse.Namespace) -> int:
+    """Size a candidate and check it against the owner's own limits.
+
+    Reads the store; never writes to it, and never places anything. A `BLOCKED`
+    result exits **0**: the evaluation succeeded and its answer was no, which is
+    a first-class successful outcome in this product exactly as `WAIT` is. A
+    non-zero code means the evaluation could not be produced at all.
+    """
+    reference = _reference_time(args.reference_time, omit=False)
+    assert reference is not None  # `omit=False` always yields an instant
+    try:
+        result = run_approval(
+            args.store_root,
+            proposal=_proposal_from(args),  # type: ignore[arg-type]
+            as_of=reference,
+            policy=sizing_policy_from_text(
+                policy_id=DEFAULT_SIZING_POLICY_ID,
+                risk_fraction=args.risk_fraction,
+                max_equity_age=args.max_equity_age,
+                max_mark_age=args.max_mark_age,
+                minimum_risk_reward=args.min_risk_reward,
+            ),
+            portfolio_id=args.portfolio_id,
+            base_currency=args.base_currency,
+            timezone=args.timezone,
+            read_marks=not args.no_marks,
+            interval=args.mark_interval,
+        )
+    except (*APPROVAL_ERRORS, ValuationError) as error:
+        print(f"fmits approve: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_approval(result))
+    return EXIT_OK
+
+
+APPROVE_COMMAND = Command(
+    name="approve",
+    help="how large this position may be, and whether your own limits permit it",
+    description=(
+        "Answers 'can I take this trade' — never 'is this setup good'. Computes "
+        "the largest position whose capital at risk stays inside the fraction of "
+        "equity the owner chose and every ceiling they set, then evaluates the "
+        "portfolio as it would be with that position open: total open risk, "
+        "instrument, asset, account and group concentration, leverage, "
+        "concurrent positions and reserve. Returns APPROVED, BLOCKED or "
+        "INDETERMINATE with every reason named, and never a recommendation to "
+        "take or skip anything — that is the owner's conclusion. Every threshold "
+        "is one the owner set; this command invents none. Reads the durable "
+        "store and never writes to it. Nothing is stored, nothing is ranked, no "
+        "probability is calibrated, no order is placed and no venue is reached "
+        "for execution. A BLOCKED answer exits 0: the evaluation succeeded."
+    ),
+    configure=_configure_approve,
+    run=_run_approve,
 )
 
 
@@ -1673,6 +2026,7 @@ COMMANDS: tuple[Command, ...] = (
     DAILY_COMMAND,
     TODAY_COMMAND,
     PORTFOLIO_COMMAND,
+    APPROVE_COMMAND,
     TRADE_COMMAND,
     ARCHIVE_COMMAND,
 )

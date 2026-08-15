@@ -25,7 +25,7 @@ scan order because `sorted` is stable.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import timedelta
 from typing import Any
 
@@ -92,18 +92,30 @@ _INSUFFICIENT = "insufficient"
 #: naming a side.
 _ABSENT_DIRECTION = "no direction"
 
+#: What a candidate the approval layer refused to build a proposal for shows as.
+#: A word rather than a blank: a row whose approval column is empty reads as a
+#: row nobody objected to, and this one had an objection so basic that no size
+#: could be computed at all.
+_NOT_SIZEABLE = "not sizeable"
+
 
 def _state_of(assessment: Any) -> str:
     return assessment.state.value
 
 
-def _line_from(assessment: Any) -> OpportunityLine:
+def _line_from(assessment: Any, approval: Any = None) -> OpportunityLine:
     """One `SetupAssessment`, reduced to what this workspace shows.
 
     Values are copied, never recomputed. `risk_reward` is the engine's own
     ratio; `stop` and `target` are the prices of real detected `PriceLevel`
     objects it selected, or `None` where it selected none.
+
+    ``approval`` is an `ApprovalResult` when one was computed for this symbol, an
+    `Absent` when the approval layer was asked and refused this candidate, and
+    `None` when it was never asked. All three are different facts and only the
+    first produces a status.
     """
+    status, size, open_risk, blocking, warnings = _approval_fields(approval)
     return OpportunityLine(
         symbol=assessment.symbol,
         state=_state_of(assessment),
@@ -117,7 +129,55 @@ def _line_from(assessment: Any) -> OpportunityLine:
         thesis=assessment.thesis,
         confirmation=assessment.confirmation,
         invalidation=assessment.invalidation,
+        approval_status=status,
+        recommended_size=size,
+        open_risk_after=open_risk,
+        blocking_reasons=blocking,
+        approval_warnings=warnings,
     )
+
+
+def _approval_fields(
+    approval: Any,
+) -> tuple[str | None, str | None, str | None, tuple[str, ...], tuple[str, ...]]:
+    """An `ApprovalResult` reduced to five printable values, or five absences.
+
+    Duck-typed like every other value this module reads. An `Absent` carries a
+    `reason` and an `ApprovalResult` does not, and that is the whole of the
+    distinction — reaching into `fmis.position_sizing` for an `isinstance` would
+    give this package a second place that vocabulary lives, which the module
+    docstring's own rule about `SetupState` already rejects for the same reason.
+
+    A refusal from the approval layer becomes a **blocking reason** rather than a
+    silent `None`: *"this candidate has no stop, so no size can be produced"* is
+    the most useful sentence on the row, and dropping it would leave a candidate
+    looking merely unchecked.
+    """
+    if approval is None:
+        return None, None, None, (), ()
+    reason = getattr(approval, "reason", None)
+    if reason is not None:
+        return (
+            _NOT_SIZEABLE,
+            f"unavailable — {reason}",
+            f"unavailable — {reason}",
+            (reason,),
+            (),
+        )
+    return (
+        approval.status.value,
+        _quantity_text(approval.recommended_quantity),
+        _amount_text(approval.open_risk_after),
+        tuple(entry.statement for entry in approval.blocking),
+        tuple(entry.statement for entry in approval.warnings),
+    )
+
+
+def _quantity_text(value: Any) -> str:
+    reason = getattr(value, "reason", None)
+    if reason is not None:
+        return f"unavailable — {reason}"
+    return f"{value.text} {value.asset}"
 
 
 def _assessed(results: Sequence[Any]) -> tuple[Any, ...]:
@@ -126,8 +186,18 @@ def _assessed(results: Sequence[Any]) -> tuple[Any, ...]:
     )
 
 
-def opportunities_from_results(results: Sequence[Any]) -> Opportunities:
+def opportunities_from_results(
+    results: Sequence[Any],
+    approvals: Mapping[str, Any] | None = None,
+    *,
+    approval_note: Any = None,
+) -> Opportunities:
     """Group one scan's results by the engine's own state.
+
+    ``approvals`` maps a requested symbol to the `ApprovalResult` computed for
+    it, or to an `Absent` naming why no candidate could be built from it. `None`
+    means no approval was computed at all — the third case, and the one
+    ``approval_note`` explains on the page.
 
     Raises:
         TodayError: ``results`` is empty. A workspace over no symbols is a
@@ -140,6 +210,7 @@ def opportunities_from_results(results: Sequence[Any]) -> Opportunities:
             "at least one scan result is required; an empty universe is a caller "
             "error, not a morning with nothing in it"
         )
+    found = {} if approvals is None else dict(approvals)
 
     confirmed: list[OpportunityLine] = []
     candidates: list[OpportunityLine] = []
@@ -166,10 +237,11 @@ def opportunities_from_results(results: Sequence[Any]) -> Opportunities:
             )
             continue
         state = _state_of(assessment)
+        approval = found.get(result.requested_symbol)
         if state == _CONFIRMED:
-            confirmed.append(_line_from(assessment))
+            confirmed.append(_line_from(assessment, approval))
         elif state == _CANDIDATE:
-            candidates.append(_line_from(assessment))
+            candidates.append(_line_from(assessment, approval))
         else:
             reason = (
                 assessment.thesis[0] if assessment.thesis else "no reason stated"
@@ -187,6 +259,11 @@ def opportunities_from_results(results: Sequence[Any]) -> Opportunities:
             for reason, symbols in ordered_groups
         ),
         failed=tuple(failed),
+        **(
+            {}
+            if approval_note is None
+            else {"approval_note": approval_note}
+        ),
     )
 
 

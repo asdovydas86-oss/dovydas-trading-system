@@ -353,6 +353,14 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # and is asserted directly by the test below and by
         # `test_today_architecture.test_the_cli_does_not_import_the_store_directly`.
         "fmis.valuation",
+        # Widened for Milestone BN, on the identical footing. `fmis.position_sizing`
+        # is an application-layer package at the same tier as `fmis.today` and
+        # `fmis.valuation`, and its own text boundary — `position_sizing.inputs`
+        # — exists for exactly the reason this guard does: so the CLI parses no
+        # price, constructs no `AccountId` and opens no `TradingStore` for
+        # `fmits approve`. The two assertions below are unaffected and still
+        # prove the store is never reached from here.
+        "fmis.position_sizing",
     )
     reached = {
         name

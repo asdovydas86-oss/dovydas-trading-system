@@ -274,12 +274,14 @@ def test_the_registry_carries_nine_commands() -> None:
     # Widened for Milestone AV to admit "backtest", registered right after
     # "scan"; for BJ to admit "today", registered right after "daily"; and for
     # BM to admit "portfolio", registered right after "today" because a
-    # valuation is read after the page that summarizes it. All three additive,
+    # valuation is read after the page that summarizes it; and for BN to admit
+    # "approve", registered right after "portfolio" because a candidate is sized
+    # against the portfolio the command before it values. All four additive,
     # none a replacement for any existing command.
     names = [command.name for command in cli_module.COMMANDS]
     assert names == [
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "portfolio", "trade", "archive",
+        "today", "portfolio", "approve", "trade", "archive",
     ]
     assert len(set(names)) == len(names)
 

@@ -238,11 +238,12 @@ def test_the_registry_still_has_every_original_command() -> None:
     # to the registry rather than a replacement for any existing one. Widened
     # again for BJ to admit "today": a tenth, equally additive — every earlier
     # command still parses and runs exactly as before. Widened again for BM to
-    # admit "portfolio": an eleventh, and the same claim holds.
+    # admit "portfolio": an eleventh, and for BN to admit "approve": a twelfth.
+    # The same claim holds for each.
     names = {command.name for command in cli_module.COMMANDS}
     assert {
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "portfolio", "trade", "archive",
+        "today", "portfolio", "approve", "trade", "archive",
     } == names
 
 

@@ -7,8 +7,8 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `dbc4765` (Milestone BI's product docs, committed locally, **not pushed**) plus **Milestones BJ, BK, BL and BM**, implemented on top of it and **not committed** |
-| **Verified on** | 2026-08-14 |
+| **Last verified against** | Milestone BN's product-docs commit, on top of `b66a88f` (BN's production code + tests) — **committed and pushed**. Milestones `BJ`–`BM`, recorded here as pending commit, are in fact in `origin/main` at `4519d0a`; those entries are point-in-time records and are not revised |
+| **Verified on** | 2026-08-15 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -67,10 +67,14 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of Milestone `BM` (Market Snapshot & Price Integration, implemented on top of `dbc4765`,
-uncommitted) — what the owner can do today.**
+**As of Milestone `BN` (Position Sizing & Trade Approval Engine, `b66a88f`) — what the owner can
+do today.**
 
 ```
+fmits approve BTCUSDT --direction long …        # how large this may be, and whether your limits permit it
+fmits approve --plan PLAN_ID --entry …          # size a commitment already recorded, without retyping it
+fmits approve … --risk-fraction 0.01            # size at a stated fraction, capped by your own ceiling
+fmits approve … --max-mark-age 36h              # block on data older than a bound you set
 fmits portfolio                                 # what the recorded positions are worth right now
 fmits portfolio --no-marks                      # the same page, no price fetched, every gap named
 fmits portfolio --mark-interval 4h              # price every holding from a coarser closed candle
@@ -83,6 +87,7 @@ fmits today                                     # the daily trading workspace: o
 fmits today BTCUSDT ETHUSDT --store-root PATH   # a chosen watchlist, against a chosen store
 fmits today --no-records                        # the same page, without reading the store
 fmits today --no-marks                          # read the store, fetch no price
+fmits today --risk-fraction 0.01                # every actionable candidate sized and approved inline
 fmits setup  BTCUSDT                            # a deterministic swing-trade setup assessment
 fmits setup  BTCUSDT ETHUSDT SOLUSDT            # one per symbol, in the order requested
 fmits scan                                      # the fixed 20-symbol watchlist, a readable market report
@@ -103,6 +108,20 @@ python -m fmis.pipeline daily BTCUSDT           # works without reinstalling
 
 **Delivered:**
 
+- a **deterministic answer to "can I take this trade"**: one command computes the largest position
+  whose capital at risk stays inside the fraction of equity the owner chose **and** every ceiling
+  they set, then evaluates the portfolio **as it would be with that position open** — total open
+  risk, instrument, asset, account and group concentration, leverage, concurrent positions and
+  reserve — and returns **APPROVED**, **BLOCKED** or **INDETERMINATE** with every reason named.
+  It answers *can I take this* and never *is this good*: no setup quality, confidence or probability
+  reaches the arithmetic, and there is no field on any type that could hold *take this trade* or
+  *skip this trade* — that conclusion is the owner's. **Every threshold is one the owner set**; the
+  system invents none, and where they have set none the answer is a stated absence rather than a
+  guess — a 2 % ceiling is never used as a 2 % target. **A ceiling that reduced the size is always
+  named beside it.** `INDETERMINATE` is never rendered, counted or reasoned about as approved.
+  The same answer now appears inline against every actionable candidate on the daily workspace page.
+  **Nothing is stored, nothing is ranked, no order is placed and no exchange is reached for
+  execution**;
 - a **valued portfolio**: one command reports what the recorded positions are worth right now —
   market value, cost basis, unrealized profit and loss, gross/net/long/short exposure, and equity
   where cash has been observed — with **every figure traceable to a specific closed candle on a
@@ -215,6 +234,75 @@ the automation ladder remains unstarted.
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked
 **Implemented — pending commit** and carries no SHA, per rule 4.
+
+---
+
+### 2026-08-15 · `BN` — Position Sizing & Trade Approval Engine
+
+**Status:** Released — `b66a88f` (production code + tests), with the product-docs commit recorded
+directly on top of it. **A new
+user-visible capability**, and the first one that answers a question about the *owner's* capacity
+rather than about the market.
+
+**What the owner can do that they could not before.**
+
+```
+fmits approve BTCUSDT --direction long --entry 60000 --stop 58400 --target 64000
+```
+
+**How large may this position be, and do my own limits permit it.** Every milestone before this one
+answered *"is there a setup here"* or *"what do I hold"*. This is the question that actually stands
+between an idea and an order, and until now the owner answered it by hand, from memory, with a
+balance retyped from an exchange screen.
+
+**It answers *can I take this*, never *is this good*.** The setup engine already produced a
+judgement about the idea and nothing here reads it: no confidence, no probability, no readiness state
+and no risk/reward threshold of this system's own invention reaches the arithmetic. There is no field
+on any type that could hold *take this trade* or *skip this trade*. `EXCEEDED` on the open-risk
+budget is a fact; what to do about it is the owner's conclusion.
+
+**Three answers, and the third is not a milder first.** `APPROVED` — every limit was measured and
+none is breached by a position of this size. `BLOCKED` — a hard limit is breached, or no size could
+be produced at all. `INDETERMINATE` — something could not be measured, which is *not* a quiet
+approval and is never rendered, counted or reasoned about as one.
+
+**Every threshold is one the owner set.** The fraction of equity, the per-trade ceiling, the
+open-risk budget, the concentration caps, the staleness bounds, the minimum risk/reward and the
+severity attached to each limit are all theirs. Where they have set none, the answer is a stated
+absence naming what to configure — never a number this system chose. **A 2 % ceiling is a ceiling and
+is never used as a target**: with no fraction stated and no default set below the ceiling, no size is
+produced and the page says why.
+
+**A ceiling that reduced the size is always named beside it.** A stated 10 % comes back as the
+owner's own 2 %, with the limit that reduced it printed. A spent open-risk budget refuses any size
+that increases open risk, and says so in those words — total portfolio risk outranks any single
+candidate's quality.
+
+**It reports the axes it was *not* asked to check.** A page showing every configured limit as
+*within* reads as a portfolio checked on every axis; it was checked on the axes the owner wrote down.
+So each unconstrained one — this candidate's instrument, its base asset, its account, its groups, the
+total open-risk budget — is named, because an unchecked axis is not an axis that was found
+acceptable.
+
+**A recorded commitment is sized without retyping it.** `--plan PLAN_ID` reads the market, the book,
+the side, the stop and the target ladder from a trade already recorded with `fmits trade record`, and
+refuses to let any of them be restated — the stop is the field that record exists to keep immutable.
+
+**`fmits today` now carries an approval on every actionable candidate**: the status, the recommended
+size, the resulting open risk, the blocking reasons and the warnings. A candidate with no approval
+prints a stated absence rather than a blank, and the page says which of the four possible missing
+inputs — the store, the price source, a risk budget, an account — is the reason.
+
+**A blocked answer exits 0.** The evaluation succeeded and its answer was no, which is a first-class
+successful outcome in this product exactly as `WAIT` is. A non-zero exit means the evaluation could
+not be produced at all.
+
+**What it deliberately does not do.** It never executes: no order is placed, no exchange is reached
+for anything but public candles, and no capital is reserved. It stores nothing. It measures no
+correlation — duplicated exposure is reported because it is a fact, and whether two markets move
+together is an inference this system has no data for. It ranks nothing and calibrates no probability.
+
+Full record: [report 0021](reports/0021_2026-08-15_POSITION_SIZING_AND_TRADE_APPROVAL_IMPLEMENTATION.md).
 
 ---
 

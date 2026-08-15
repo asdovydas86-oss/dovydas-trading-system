@@ -7,16 +7,99 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone BM — Market Snapshot & Price Integration (2026-08-14): the bridge
-between the Market half and the Owner half. Two new packages — `fmis.marks` (the deterministic price
-snapshot service) and `fmis.valuation` (the one place a price becomes a `MarkQuote`) — plus
-`fmis.pipeline.prices`, the single module in the repository that binds a provider to a mark. **One
-command was added, `fmits portfolio`, and `fmits today` gained the figures it previously reported as
-absent.** Full record:
-[report 0020](../../reports/0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md).
-**`BJ`, `BK`, `BL` and `BM` are all in the working tree and none is committed** — per `CLAUDE.md`'s
-git safety rule, committing and pushing each require the owner's explicit authorization, and none was
-given for any of them.
+**Last updated for:** Milestone BN — Position Sizing & Trade Approval Engine (2026-08-15): the first
+milestone that answers *"can I take this trade"* rather than *"is this setup good"*. One new package,
+`fmis.position_sizing`, and one new command, `fmits approve`; `fmits today` now carries an approval
+status, a recommended size, the resulting open risk, the blocking reasons and the warnings on every
+actionable candidate. Full record:
+[report 0021](../../reports/0021_2026-08-15_POSITION_SIZING_AND_TRADE_APPROVAL_IMPLEMENTATION.md).
+**A correction to this file's own previous banner:** it stated that `BJ`, `BK`, `BL` and `BM` were
+uncommitted. They were not — all four are in `origin/main` at `4519d0a`, verified with
+`git cat-file -e` against each package's own modules. The banner described the state at the moment
+each milestone was written and was never revised; it is corrected here rather than left silent.
+`BN` was committed and pushed on the owner's explicit authorization for this milestone.
+
+---
+
+## Milestone BN — Position Sizing & Trade Approval Engine
+
+- **BN — Position Sizing & Trade Approval Engine.** The question that stands between an idea and an
+  order, answered as arithmetic: **how large may this position be, and do my own limits permit it?**
+
+  **What shipped.** One package, `fmis.position_sizing` (9 modules, 3,737 lines), in three tiers that
+  are executable guards rather than prose: `models`/`policy`/`sizing`/`approval` **compute and reach
+  nothing** — no venue, no engine, no clock, no path, no numeric literal beyond `0` and `1`;
+  `reading` touches the store and only reads; `inputs`/`compose`/`render` are surfaces. Plus a
+  twelfth command, **`fmits approve`**, registered between `portfolio` and `trade`.
+
+  ```
+  PositionProposal      what the owner is considering — no size yet
+    → PositionSizer            the fraction, the ceilings, one division
+    → PositionRecommendation   a quantity, and every figure derived from it
+    → ApprovalEngine           the sized candidate against every limit
+    → ApprovalResult           APPROVED | BLOCKED | INDETERMINATE, with reasons
+  ```
+
+  **`ApprovalResult` is a deterministic fact, not an opinion.** No model is consulted anywhere in the
+  package, no probability is attached to anything, and there is no field on any type that could hold
+  *"take this trade"* or *"skip this trade"* — a guard asserts the package names neither.
+
+  **It duplicates no arithmetic.** The sign rule, the risk distance, the capital at risk, the maximum
+  quantity for a risk allowance, the exposure fold, the before/after impact and every limit
+  comparison are `fmis.portfolio_risk`'s, called rather than re-implemented. The one thing this
+  package adds is the step that engine deliberately left out — deciding what the risk allowance
+  should be. `PositionProposal.reward_distance` is `stop_distance(side, entry=target, stop=entry)`:
+  the *same* subtraction with entry and target exchanged, so the sign rule stays written once.
+
+  **Five properties worth carrying forward.** (1) **The fraction is resolved, never defaulted** —
+  the owner's own choice, else `RiskLimit.default_below_ceiling`, else **nothing**; the ceiling is a
+  ceiling and is never used as a target. (2) **Severity is the owner's at every point it is read**,
+  including one that took a failing test to find: an `ADVISORY` total-open-risk limit does not bound
+  the size. (3) **`AT_LIMIT` warns and `EXCEEDED` blocks** — a stated maximum is not breached by
+  touching it. (4) **The status is derived from the reasons and `ApprovalResult` refuses to
+  disagree** with them, so a future second producer cannot construct the flattering combination.
+  (5) **Unconstrained axes are reported** — instrument, asset, account, group and total open risk —
+  because *an unchecked axis is not an axis that was found acceptable*.
+
+  **The severity of an unknown age tracks whether anything was checking it.** With the owner's bound
+  configured, an unstateable age is `INDETERMINATE`; with no bound there was nothing to be past, so
+  it is a warning. An `INDETERMINATE` that fires on every page is one nobody reads.
+
+  **No ADR was widened and no exemption was taken.** ADR-0028's directional-vocabulary guard covers
+  `fmis.position_sizing` with no edit: the package passes `TradeDirection` through opaquely and lets
+  `fmis.portfolio_risk.stop_distance` own the sign rule. A test asserts it is absent from both
+  exemption lists and present in the covered set. Two existing guards were widened inside their own
+  stated extension points, plus four registry tests by one command name.
+
+  **Nothing is stored and nothing is executed.** No `RecordKind`, no repository touched, no write
+  verb anywhere in the package, and a CLI test observes the store's bytes before and after a run.
+
+  **Quality.** 6,964 → **7,359 tests** (+395, in 11 new files), identically under `-W error`.
+  **100 % statement and 100 % branch coverage** of all thirteen new and modified modules (1,933
+  statements, 662 branches). **44 mutation probes, 44 detected, 0 survivors**, byte-identical
+  restoration verified by SHA-256 with the bytecode cache cleared before every run. 44 new public
+  exports, **0 collisions** (896 total), **0 import cycles**, **0 new runtime dependencies**, **0
+  record kinds added**, **0 domain types changed**; `src/fmis/pipeline/cli.py` carries exactly the
+  29 uncovered statements it carried before this milestone.
+
+  **Live-verified against real Binance data** on 2026-08-15 against a store built entirely through
+  the product's own commands: `fmits approve ETHUSDT` returned `APPROVED` at 4.625 ETH with 925 USDT
+  at risk; a stated 10 % fraction was reduced to the owner's 2 % ceiling with the reduction named; a
+  transposed stop returned `BLOCKED` with **exit code 0**, because the evaluation succeeded and its
+  answer was no; and `fmits today` over the full watchlist returned 2 confirmed and 2 candidates,
+  each carrying its own approval status, size, resulting open risk and warnings.
+
+  **Nine defects and design errors were found before release** and are recorded in report 0021 §4
+  rather than quietly fixed — the most consequential being an advisory limit that blocked a trade the
+  owner had explicitly said not to block. Two of them were found by the live run and by no test,
+  because both offending lines fitted the page. One finding is **not fixed and is recorded**: an
+  exact quotient that does not terminate carries a 28-digit tail onto the page, and shortening it
+  would be a rounding policy this system does not set.
+
+  **`TODAY_SCHEMA_VERSION` moved `1 → 2`**: `OpportunityLine` gained five approval fields and
+  `Opportunities` gained the note that says whether an approval was computed at all. A consumer
+  reading a version-1 page would render every candidate as unapproved, which is a different claim
+  from *"this page did not check"*.
 
 ---
 

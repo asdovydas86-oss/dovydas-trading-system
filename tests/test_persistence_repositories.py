@@ -68,11 +68,12 @@ def store(tmp_path: Path) -> TradingStore:
 # --------------------------------------------------------------------------
 
 
-def test_the_composition_root_wires_ten_repositories(store: TradingStore) -> None:
+def test_the_composition_root_wires_eleven_repositories(store: TradingStore) -> None:
     # Widened for Milestone BK to admit `PlanRepository`, wired right after
-    # `TradeRepository`: additive, and not a replacement for any existing one.
-    assert len(store.repositories()) == 10
-    assert len({id(repo) for repo in store.repositories()}) == 10
+    # `TradeRepository`, and for BO to admit `ActivationRepository`, wired last:
+    # both additive, and neither a replacement for any existing one.
+    assert len(store.repositories()) == 11
+    assert len({id(repo) for repo in store.repositories()}) == 11
 
 
 def test_every_repository_shares_one_store(store: TradingStore) -> None:
@@ -97,7 +98,7 @@ def test_a_repository_owning_no_kind_is_refused(store: TradingStore) -> None:
 
 
 # --------------------------------------------------------------------------
-# `update` raises on all ten.
+# `update` raises on all eleven.
 # --------------------------------------------------------------------------
 
 

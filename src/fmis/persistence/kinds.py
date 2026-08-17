@@ -1,6 +1,6 @@
 """The one table naming every persisted record type and how to handle it.
 
-Eleven kinds, one row each. Every other module in this package reads this table and
+Fifteen kinds, one row each. Every other module in this package reads this table and
 none of them special-cases a type by name: the store does not know what a trade
 is, the index does not know what a snapshot is, and the version engine does not
 know which records can be superseded. They ask the spec.
@@ -80,6 +80,24 @@ from fmis.risk import (
     SUPPORTED_RISK_BUDGET_VERSIONS,
     RiskBudget,
 )
+from fmis.trade_lifecycle import (
+    STOP_AMENDMENT_KIND,
+    STOP_AMENDMENT_TYPE_SLUG,
+    SUPPORTED_STOP_AMENDMENT_VERSIONS,
+    SUPPORTED_TRADE_ACTIVATION_VERSIONS,
+    SUPPORTED_TRADE_LIFECYCLE_EVENT_VERSIONS,
+    SUPPORTED_TRADE_OUTCOME_VERSIONS,
+    TRADE_ACTIVATION_KIND,
+    TRADE_ACTIVATION_TYPE_SLUG,
+    TRADE_LIFECYCLE_EVENT_KIND,
+    TRADE_LIFECYCLE_EVENT_TYPE_SLUG,
+    TRADE_OUTCOME_KIND,
+    TRADE_OUTCOME_TYPE_SLUG,
+    StopAmendment,
+    TradeActivation,
+    TradeLifecycleEvent,
+    TradeOutcome,
+)
 from fmis.snapshotting import (
     DECISION_WINDOW_KIND,
     DECISION_WINDOW_TYPE_SLUG,
@@ -158,6 +176,10 @@ class RecordKind(Enum):
     JOURNAL_ENTRY = JOURNAL_ENTRY_KIND
     RISK_BUDGET = RISK_BUDGET_KIND
     ANALYSIS_RECORD = ANALYSIS_RECORD_KIND
+    TRADE_ACTIVATION = TRADE_ACTIVATION_KIND
+    TRADE_LIFECYCLE_EVENT = TRADE_LIFECYCLE_EVENT_KIND
+    STOP_AMENDMENT = STOP_AMENDMENT_KIND
+    TRADE_OUTCOME = TRADE_OUTCOME_KIND
 
 
 @dataclass(frozen=True, slots=True)
@@ -482,6 +504,90 @@ _SPEC_LIST: tuple[RecordSpec, ...] = (
         encode=lambda record: record.to_payload(),
         decode=AnalysisRecord.from_payload,
         validate_id=validate_archive_record_id,
+    ),
+    RecordSpec(
+        kind=RecordKind.TRADE_ACTIVATION,
+        type_slug=TRADE_ACTIVATION_TYPE_SLUG,
+        # A captured artifact for the same reason a `TradePlan` is one: an
+        # instruction the simulator is running against must not change after the
+        # market moved. A different size, ladder or entry is a *new* activation
+        # that supersedes this one through the lifecycle stream, which is the
+        # mechanism that keeps both readable.
+        durability=DurabilityClass.CAPTURED_ARTIFACT,
+        shape=StorageShape.RECORD_FILE,
+        record_type=TradeActivation,
+        supported_versions=SUPPORTED_TRADE_ACTIVATION_VERSIONS,
+        identity=lambda record: record.activation_id,
+        moment=lambda record: record.activated_at,
+        # The **plan**, so every activation of one commitment groups together —
+        # including a cancelled first attempt and the one that superseded it.
+        lineage_key=lambda record: record.plan_id,
+        digest=lambda record: record.content_digest,
+        supersedes=lambda _: None,
+        owner_scope=lambda record: OwnerScope(
+            book=record.book.value,
+            market=record.market.value,
+            account=record.account.value,
+        ),
+        encode=lambda record: record.to_payload(),
+        decode=TradeActivation.from_payload,
+        validate_id=validate_domain_record_id,
+    ),
+    RecordSpec(
+        kind=RecordKind.TRADE_LIFECYCLE_EVENT,
+        type_slug=TRADE_LIFECYCLE_EVENT_TYPE_SLUG,
+        durability=DurabilityClass.SOURCE_OF_TRUTH,
+        shape=StorageShape.EVENT_LOG,
+        record_type=TradeLifecycleEvent,
+        supported_versions=SUPPORTED_TRADE_LIFECYCLE_EVENT_VERSIONS,
+        identity=lambda record: record.event_id,
+        moment=lambda record: record.occurred_at,
+        lineage_key=lambda record: record.activation_id,
+        digest=lambda record: record.content_digest,
+        supersedes=lambda record: _maybe(record.supersedes),
+        supersedes_kinds=frozenset({RecordKind.TRADE_LIFECYCLE_EVENT}),
+        owner_scope=_no_scope,
+        encode=lambda record: record.to_payload(),
+        decode=TradeLifecycleEvent.from_payload,
+        validate_id=validate_domain_record_id,
+    ),
+    RecordSpec(
+        kind=RecordKind.STOP_AMENDMENT,
+        type_slug=STOP_AMENDMENT_TYPE_SLUG,
+        durability=DurabilityClass.SOURCE_OF_TRUTH,
+        shape=StorageShape.EVENT_LOG,
+        record_type=StopAmendment,
+        supported_versions=SUPPORTED_STOP_AMENDMENT_VERSIONS,
+        identity=lambda record: record.amendment_id,
+        moment=lambda record: record.occurred_at,
+        lineage_key=lambda record: record.activation_id,
+        digest=lambda record: record.content_digest,
+        supersedes=lambda record: _maybe(record.supersedes),
+        supersedes_kinds=frozenset({RecordKind.STOP_AMENDMENT}),
+        owner_scope=_no_scope,
+        encode=lambda record: record.to_payload(),
+        decode=StopAmendment.from_payload,
+        validate_id=validate_domain_record_id,
+    ),
+    RecordSpec(
+        kind=RecordKind.TRADE_OUTCOME,
+        type_slug=TRADE_OUTCOME_TYPE_SLUG,
+        # Frozen: `AP` §25.2 places MAE and MFE in the "frozen at close, never
+        # recomputable" row because kline history is not permanent. A second
+        # outcome for one activation is a rejection, not a new version.
+        durability=DurabilityClass.CAPTURED_ARTIFACT,
+        shape=StorageShape.RECORD_FILE,
+        record_type=TradeOutcome,
+        supported_versions=SUPPORTED_TRADE_OUTCOME_VERSIONS,
+        identity=lambda record: record.outcome_id,
+        moment=lambda record: record.frozen_at,
+        lineage_key=lambda record: record.activation_id,
+        digest=lambda record: record.content_digest,
+        supersedes=lambda _: None,
+        owner_scope=lambda record: OwnerScope(market=record.market.value),
+        encode=lambda record: record.to_payload(),
+        decode=TradeOutcome.from_payload,
+        validate_id=validate_domain_record_id,
     ),
 )
 

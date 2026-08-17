@@ -35,6 +35,8 @@ import textwrap
 from types import MappingProxyType
 
 from fmis.today.models import (
+    PaperTradeLine,
+    PaperTrading,
     AnalysisSummary,
     JournalSummary,
     MarketOverview,
@@ -447,8 +449,84 @@ def _queue_block(queue: PriorityQueue) -> list[str]:
     return lines
 
 
+def _paper_line(line: PaperTradeLine) -> list[str]:
+    lines = _token_line("  ", f"{line.market}  {line.state}")
+    lines.append(
+        f"{_DEEP}open {line.open_size}   entry "
+        f"{_value_text(line.entry)}   R {_value_text(line.total_r)}"
+    )
+    stop = (
+        f"{line.stop} (committed {line.initial_stop})"
+        if line.stop_moved
+        else line.stop
+    )
+    lines.append(
+        f"{_DEEP}stop {stop}   bars {line.bars_in_trade}   "
+        f"held {_value_text(line.holding)}"
+    )
+    if line.stop_widenings:
+        lines.extend(
+            _wrap(
+                f"the stop has been widened {line.stop_widenings} time(s) away "
+                "from the commitment"
+            )
+        )
+    if line.halted:
+        lines.extend(
+            _wrap(
+                "HALTED: one candle reached both the stop and a target and "
+                "opened between them. No fill was invented; this trade is "
+                "waiting for you, not for the market."
+            )
+        )
+    return lines
+
+
+def _value_text(value: str | NotAvailable) -> str:
+    """A string, or the dash that every absence on this page already renders as."""
+    return "-" if isinstance(value, NotAvailable) else value
+
+
+def _paper_group(title: str, lines: tuple[PaperTradeLine, ...]) -> list[str]:
+    if not lines:
+        return []
+    out = [f"{_INDENT}{title} ({len(lines)})"]
+    for line in lines:
+        out.extend(_paper_line(line))
+    return out
+
+
+def _paper_block(paper: PaperTrading) -> list[str]:
+    """The simulator's section: five groups, in the order the owner acts on them.
+
+    Partially exited first and pending last. What has money in it and a decision
+    outstanding comes before what is still waiting for a level — the same reason
+    this page puts capital and exposure before opportunity.
+    """
+    lines = _section("5. PAPER TRADING")
+    if paper.is_empty:
+        lines.extend(_absence(paper.note, label="paper trades") if isinstance(paper.note, NotAvailable) else _wrap("No paper trade is running and none has finished."))
+        return lines
+    lines.extend(_paper_group("PARTIALLY EXITED", paper.partially_exited))
+    lines.extend(_paper_group("OPEN", paper.open_trades))
+    lines.extend(_paper_group("TRIGGERED", paper.triggered))
+    lines.extend(_paper_group("PENDING", paper.pending))
+    lines.extend(_paper_group("RECENTLY CLOSED", paper.recently_closed))
+    if paper.halted:
+        lines.extend(
+            _wrap(
+                f"{len(paper.halted)} trade(s) are halted on an ambiguous candle "
+                "and will not advance until you record the exit you judge you "
+                "would have taken."
+            )
+        )
+    if not isinstance(paper.note, NotAvailable):
+        lines.extend(_wrap(paper.note))
+    return lines
+
+
 def _journal_block(journal: JournalSummary) -> list[str]:
-    lines = _section("5. TRADE JOURNAL")
+    lines = _section("6. TRADE JOURNAL")
     if isinstance(journal.note, NotAvailable):
         lines.extend(_absence(journal.note, label="Journal"))
         return lines
@@ -490,7 +568,7 @@ def _journal_block(journal: JournalSummary) -> list[str]:
 
 
 def _analysis_block(analysis: AnalysisSummary) -> list[str]:
-    lines = _section("6. RECENT ANALYSIS")
+    lines = _section("7. RECENT ANALYSIS")
     for label, entries in (
         ("archived pages", analysis.archived),
         ("cited analyses", analysis.citations),
@@ -530,7 +608,7 @@ def _warning_lines(warning: WorkspaceWarning) -> list[str]:
 
 
 def _warnings_block(workspace: TodayWorkspace) -> list[str]:
-    lines = _section("7. WORKSPACE WARNINGS")
+    lines = _section("8. WORKSPACE WARNINGS")
     if not workspace.warnings:
         lines.append(f"{_INDENT}none raised")
         return lines
@@ -574,6 +652,7 @@ def render_today(workspace: TodayWorkspace) -> str:
     lines.extend(_portfolio_block(workspace.portfolio))
     lines.extend(_opportunities_block(workspace.opportunities))
     lines.extend(_queue_block(workspace.queue))
+    lines.extend(_paper_block(workspace.paper))
     lines.extend(_journal_block(workspace.journal))
     lines.extend(_analysis_block(workspace.analysis))
     lines.extend(_warnings_block(workspace))

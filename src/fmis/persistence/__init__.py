@@ -19,7 +19,7 @@ Architecture §24, implemented rather than restated:
   observations accumulate; the write journal is hash-chained so a removed or
   altered event is detectable rather than merely unlikely.
 
-Ten repositories, one composition root:
+Eleven repositories, one composition root:
 
 | Repository | Owns | Update path |
 |---|---|---|
@@ -33,6 +33,7 @@ Ten repositories, one composition root:
 | `SnapshotRepository` | `MarketSnapshot`, `DecisionWindow` | frozen |
 | `AnalysisRecordRepository` | `AnalysisRecord` | frozen |
 | `OpportunityRepository` | `OpportunityProposal`, its events | events supersede; proposals frozen |
+| `ActivationRepository` | `TradeActivation`, its lifecycle stream, its stop moves, its outcome | events and amendments supersede; activations and outcomes frozen |
 
 **`update` raises everywhere.** It is a method so that callers find a message
 naming the legal path rather than an `AttributeError` they have to guess past.
@@ -110,6 +111,7 @@ from fmis.persistence.layout import (
     StoreLayout,
     default_store_root,
 )
+from fmis.persistence.lifecycle_repositories import ActivationRepository
 from fmis.persistence.ledger_repositories import (
     LedgerRepository,
     PositionRepository,
@@ -194,5 +196,6 @@ __all__ = [
     "SnapshotRepository",
     "AnalysisRecordRepository",
     "OpportunityRepository",
+    "ActivationRepository",
     "TradingStore",
 ]

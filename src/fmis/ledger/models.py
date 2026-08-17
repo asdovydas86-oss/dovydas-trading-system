@@ -133,6 +133,13 @@ class LedgerSource(Enum):
     MANUAL = "manual"
     STATEMENT_IMPORT = "statement_import"
     EXCHANGE_API = "exchange_api"
+    #: A fill **no venue produced and the owner did not type**: computed by the
+    #: paper simulator from a closed candle under a named, versioned fill policy.
+    #: Its own member rather than `MANUAL`, because a surface that cannot tell a
+    #: simulated fill from an asserted one is rendering a lie of omission — and
+    #: because the day a real fill and a simulated one sit in the same list, the
+    #: distinction has to be a field rather than a memory of which book was used.
+    PAPER_SIMULATION = "paper_simulation"
 
 
 class TradeSide(Enum):

@@ -232,6 +232,7 @@ def test_a_workspace_must_state_its_limitations() -> None:
             portfolio=space.portfolio,
             opportunities=space.opportunities,
             queue=space.queue,
+            paper=space.paper,
             journal=space.journal,
             analysis=space.analysis,
             warnings=space.warnings,
@@ -250,6 +251,7 @@ def test_a_workspace_rejects_a_section_of_the_wrong_type() -> None:
             portfolio=space.portfolio,
             opportunities=space.opportunities,
             queue=space.queue,
+            paper=space.paper,
             journal=space.journal,
             analysis=space.analysis,
             warnings=space.warnings,
@@ -291,8 +293,13 @@ def test_the_schema_version_is_pinned() -> None:
     gained the note that says whether an approval was computed at all. A consumer
     reading a version-1 page would render every candidate as unapproved, which is
     a different claim from *"this page did not check"*.
+
+    Bumped to `3` by Milestone BO for the same reason one layer out: the page
+    gained a whole section. A consumer reading a version-2 page against a store
+    full of live paper trades would render none of them, which is a different
+    claim from *"this page did not check"*.
     """
-    assert TODAY_SCHEMA_VERSION == 2
+    assert TODAY_SCHEMA_VERSION == 3
     assert workspace((result(waiting()),)).schema_version == TODAY_SCHEMA_VERSION
 
 
@@ -508,6 +515,7 @@ def _rebuild(space, **changes):
         "portfolio": space.portfolio,
         "opportunities": space.opportunities,
         "queue": space.queue,
+        "paper": space.paper,
         "journal": space.journal,
         "analysis": space.analysis,
         "warnings": space.warnings,

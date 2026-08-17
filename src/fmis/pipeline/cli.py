@@ -41,6 +41,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
+import fmis
 from fmis.archive import (
     ArchiveError,
     ArchiveStore,
@@ -91,6 +92,34 @@ from fmis.position_sizing import (
     run_approval,
     sizing_policy_from_text,
 )
+from fmis.paper import (
+    AMENDMENT_REASON_SUGGESTIONS,
+    ENTRY_TYPE_CHOICES,
+    LIFECYCLE_STATE_CHOICES,
+    PAPER_DUST_POLICY,
+    PAPER_ERRORS,
+    activate_request_from_text,
+    activate_trade,
+    amend_request_from_text,
+    amend_stop,
+    bars_from_series,
+    cancel_activation,
+    cancel_request_from_text,
+    list_paper_trades,
+    load_paper_trade,
+    render_activation,
+    render_history,
+    render_lifecycle,
+    render_simulation,
+    render_status,
+    run_simulation,
+    states_from_text,
+)
+from fmis.pipeline.candles import (
+    SIMULATION_CANDLE_LIMIT,
+    SIMULATION_INTERVAL,
+    fetch_simulation_candles,
+)
 from fmis.today import TodayError, render_today, run_today
 from fmis.valuation import (
     DEFAULT_BASE_CURRENCY,
@@ -118,6 +147,8 @@ from fmis.trade_capture import (
     load_trade,
     note_request_from_text,
     open_store,
+    plan_request_from_text,
+    record_plan,
     record_request_from_text,
     record_trade,
     render_listing,
@@ -1771,6 +1802,181 @@ def _configure_trade(parser: argparse.ArgumentParser) -> None:
     _add_fill_arguments(close, price_flag="--price")
     _add_store_arguments(close)
 
+    plan = subcommands.add_parser(
+        "plan",
+        help="record a commitment with no fill — a stop, targets and confidence",
+        description=(
+            "Record what the owner intends before they act: a market, a side, a "
+            "stop, an optional target ladder and a stated confidence. Writes one "
+            "TradePlan and, when a thesis is given, one JournalEntry. No fill, no "
+            "position and no money — this is the commitment `fmits trade "
+            "activate` hands to the paper simulator."
+        ),
+    )
+    plan.add_argument("symbol", metavar="SYMBOL", help="the pair, e.g. BTCUSDT")
+    plan.add_argument("--direction", required=True, choices=DIRECTION_CHOICES)
+    plan.add_argument("--book", required=True, choices=BOOK_CHOICES)
+    plan.add_argument("--stop", required=True, metavar="PRICE")
+    plan.add_argument(
+        "--target", dest="targets", action="append", default=None, metavar="PRICE",
+        help="stated nearest first; repeatable",
+    )
+    plan.add_argument(
+        "--confidence", required=True, metavar="LABEL",
+        help="the owner's own scale. Explicitly not a probability",
+    )
+    plan.add_argument("--committed-at", default=None, metavar="ISO8601")
+    plan.add_argument("--expires", default=None, metavar="ISO8601")
+    plan.add_argument("--setup", default=None, metavar="TERM")
+    plan.add_argument("--proposal", default=None, metavar="ID")
+    plan.add_argument("--snapshot", default=None, metavar="ID")
+    plan.add_argument("--analysis", action="append", default=None, metavar="ID")
+    plan.add_argument("--thesis", default=None, metavar="TEXT")
+    plan.add_argument("--note", default=None, metavar="TEXT")
+    plan.add_argument("--venue", default=DEFAULT_VENUE, metavar="NAME")
+    plan.add_argument("--quote", default=DEFAULT_QUOTE_ASSET, metavar="ASSET")
+    plan.add_argument(
+        "--mode", default=DEFAULT_MARKET_MODE, choices=MARKET_MODE_CHOICES
+    )
+    _add_store_arguments(plan)
+
+    activate = subcommands.add_parser(
+        "activate",
+        help="hand a recorded commitment to the paper simulator",
+        description=(
+            "Create a TradeActivation: the size, the entry type, the exit ladder "
+            "and the stop rules the simulator will run this commitment under. "
+            "Writes one activation and one journal entry. Nothing is executed, no "
+            "order is placed and no exchange is contacted — `fmits simulate` "
+            "advances it over closed candles."
+        ),
+    )
+    activate.add_argument("plan_id", metavar="TRADE_ID")
+    activate.add_argument("--size", required=True, metavar="QTY")
+    activate.add_argument(
+        "--entry-type", required=True, choices=ENTRY_TYPE_CHOICES,
+        help="market fills at the next bar's open; the other two wait for a level",
+    )
+    activate.add_argument(
+        "--entry", default=None, metavar="PRICE",
+        help="required for a limit or stop-entry, and refused for a market entry",
+    )
+    activate.add_argument(
+        "--share", dest="fractions", action="append", default=None, metavar="FRACTION",
+        help=(
+            "the share of the activated size taken at each target, nearest first. "
+            "Repeatable. When none is given the whole position exits at the first "
+            "target and the page says so"
+        ),
+    )
+    activate.add_argument(
+        "--account", default=None, metavar="ID",
+        help="which account the simulated fills sit in (default: paper)",
+    )
+    activate.add_argument(
+        "--interval", default=SIMULATION_INTERVAL, metavar="TF",
+        help=f"the timeframe the simulation advances on (default: {SIMULATION_INTERVAL})",
+    )
+    activate.add_argument("--break-even-r", default=None, metavar="R")
+    activate.add_argument("--break-even-offset-r", default=None, metavar="R")
+    activate.add_argument("--trail-r", default=None, metavar="R")
+    activate.add_argument("--trail-start-r", default=None, metavar="R")
+    activate.add_argument("--expires", default=None, metavar="ISO8601")
+    activate.add_argument("--activated-at", default=None, metavar="ISO8601")
+    activate.add_argument("--note", default=None, metavar="TEXT")
+    activate.add_argument("--quote", default=DEFAULT_QUOTE_ASSET, metavar="ASSET")
+    _add_store_arguments(activate)
+
+    stop = subcommands.add_parser(
+        "stop",
+        help="move a simulated trade's stop, append-only, with a reason",
+        description=(
+            "Append a StopAmendment. The TradePlan is never touched: "
+            "initial_invalidation stays what was committed to forever, and what "
+            "moves is the fold. A widening is recorded as a widening and counted "
+            "as one, which is why a reason is required rather than optional."
+        ),
+    )
+    stop.add_argument("activation_id", metavar="ACTIVATION_ID")
+    stop.add_argument("--to", dest="new_stop", required=True, metavar="PRICE")
+    stop.add_argument(
+        "--reason", required=True, metavar="TERM",
+        help=(
+            "the owner's own term. Suggested: "
+            + ", ".join(AMENDMENT_REASON_SUGGESTIONS)
+        ),
+    )
+    stop.add_argument("--occurred-at", default=None, metavar="ISO8601")
+    stop.add_argument("--note", default=None, metavar="TEXT")
+    _add_store_arguments(stop)
+
+    cancel = subcommands.add_parser(
+        "cancel",
+        help="withdraw an activation before anything has filled",
+        description=(
+            "Append a CANCELLED lifecycle event. Legal only while nothing has "
+            "filled: the lifecycle table decides that, so cancelling an open "
+            "position raises rather than quietly abandoning a fill the ledger "
+            "already holds."
+        ),
+    )
+    cancel.add_argument("activation_id", metavar="ACTIVATION_ID")
+    cancel.add_argument("--reason", required=True, metavar="TERM")
+    cancel.add_argument("--occurred-at", default=None, metavar="ISO8601")
+    cancel.add_argument("--note", default=None, metavar="TEXT")
+    _add_store_arguments(cancel)
+
+    status = subcommands.add_parser(
+        "status",
+        help="every simulated trade still running, with its monitoring block",
+        description=(
+            "Pending, triggered, open and partially exited paper trades, each with "
+            "remaining size, realized and unrealized R, distance to stop and "
+            "target, holding time and the stop's own history. Reads the store and "
+            "writes nothing."
+        ),
+    )
+    status.add_argument("--symbol", default=None, metavar="SYMBOL")
+    status.add_argument(
+        "--offline",
+        action="store_true",
+        help=(
+            "read the store only. Every excursion, mark and bar count then "
+            "comes back absent with its reason, because each one needs a candle"
+        ),
+    )
+    _add_store_arguments(status)
+
+    history = subcommands.add_parser(
+        "history",
+        help="every finished simulated trade, with its frozen outcome",
+        description=(
+            "One block per finished trade: the exit reason, the entry and exit, "
+            "the profit and loss, the final R, the excursions and the holding "
+            "time. The excursions were frozen when the trade ended, because kline "
+            "history is not permanent."
+        ),
+    )
+    history.add_argument("--symbol", default=None, metavar="SYMBOL")
+    _add_store_arguments(history)
+
+    lifecycle = subcommands.add_parser(
+        "lifecycle",
+        help="one simulated trade's complete event stream and stop history",
+        description=(
+            "Every lifecycle event, every stop move with who made it and why, "
+            "every fill, the monitoring block and the outcome. The state is folded "
+            "from the stream on every read and is stored nowhere."
+        ),
+    )
+    lifecycle.add_argument("activation_id", metavar="ACTIVATION_ID")
+    lifecycle.add_argument(
+        "--offline",
+        action="store_true",
+        help="read the store only; see `fmits trade status --offline`",
+    )
+    _add_store_arguments(lifecycle)
+
 
 def _record_request(args: argparse.Namespace, *, filed_at: datetime) -> object:
     """Hand every string straight to the capture layer, converting nothing here.
@@ -1812,6 +2018,57 @@ def _record_request(args: argparse.Namespace, *, filed_at: datetime) -> object:
         quote=args.quote,
         mode=args.mode,
     )
+
+
+#: The lifecycle states `fmits trade status` shows. Named here rather than
+#: derived from `LIVE_LIFECYCLE_STATES`, because the page's question is *"what is
+#: still running"* and a halted trade belongs on it — it is waiting for the owner
+#: rather than for a bar, which is exactly what the page exists to surface.
+_LIVE_STATE_NAMES: tuple[str, ...] = (
+    "pending",
+    "triggered",
+    "open",
+    "partially_exited",
+    "ambiguous",
+)
+
+
+def _market_of(store: object, activation_id: str) -> str:
+    """The provider symbol one activation trades, for the fetch below."""
+    return store.activations.load(activation_id).market.pair_symbol
+
+
+def _monitoring_bars(
+    store: object, args: argparse.Namespace
+) -> dict[str, tuple[object, ...]]:
+    """Closed candles for every market with a live paper trade, or none.
+
+    **The monitoring block is the reason this fetch exists.** The milestone
+    brief asks a position monitor for maximum favourable and adverse excursion,
+    bars in trade and distance to stop, and every one of them needs a candle:
+    without one the page can only say *"no bar has been observed"*, which is
+    honest and useless. `--offline` keeps the store-only reading for a run with
+    no network, and the page then says so figure by figure.
+
+    A fetch failure is **not** an error here. The page still renders from the
+    store, with the excursions absent and their reason printed — the same
+    degradation `fmits today` already applies when no mark source answers.
+    """
+    if getattr(args, "offline", False):
+        return {}
+    markets = sorted(
+        {
+            activation.market.pair_symbol
+            for activation, _ in store.activations.live_activations()
+        }
+    )
+    if not markets:
+        return {}
+    fetched = fetch_simulation_candles(markets, interval=SIMULATION_INTERVAL)
+    return {
+        symbol: bars_from_series(series)
+        for symbol, series in fetched.series.items()
+    }
 
 
 def _dispatch_trade(args: argparse.Namespace, *, filed_at: datetime) -> str:
@@ -1884,6 +2141,119 @@ def _dispatch_trade(args: argparse.Namespace, *, filed_at: datetime) -> str:
                 ),
             )
         )
+    if args.trade_command == "plan":
+        return render_outcome(
+            record_plan(
+                store,
+                plan_request_from_text(
+                    symbol=args.symbol,
+                    direction=args.direction,
+                    book=args.book,
+                    stop=args.stop,
+                    confidence=args.confidence,
+                    author=args.author,
+                    filed_at=filed_at,
+                    targets=args.targets,
+                    committed_at=args.committed_at,
+                    expires=args.expires,
+                    setup=args.setup,
+                    proposal=args.proposal,
+                    snapshot=args.snapshot,
+                    analysis=args.analysis,
+                    thesis=args.thesis,
+                    note=args.note,
+                    venue=args.venue,
+                    quote=args.quote,
+                    mode=args.mode,
+                ),
+            )
+        )
+    if args.trade_command == "activate":
+        return render_activation(
+            activate_trade(
+                store,
+                activate_request_from_text(
+                    store,
+                    plan_id=args.plan_id,
+                    size=args.size,
+                    entry_type=args.entry_type,
+                    interval=args.interval,
+                    filed_at=filed_at,
+                    account=args.account,
+                    entry=args.entry,
+                    fractions=args.fractions,
+                    break_even_r=args.break_even_r,
+                    break_even_offset_r=args.break_even_offset_r,
+                    trail_r=args.trail_r,
+                    trail_start_r=args.trail_start_r,
+                    expires=args.expires,
+                    activated_at=args.activated_at,
+                    note=args.note,
+                ),
+            )
+        )
+    if args.trade_command == "stop":
+        return render_activation(
+            amend_stop(
+                store,
+                amend_request_from_text(
+                    activation_id=args.activation_id,
+                    new_stop=args.new_stop,
+                    reason=args.reason,
+                    author=args.author,
+                    filed_at=filed_at,
+                    occurred_at=args.occurred_at,
+                    note=args.note,
+                ),
+            )
+        )
+    if args.trade_command == "cancel":
+        return render_activation(
+            cancel_activation(
+                store,
+                cancel_request_from_text(
+                    activation_id=args.activation_id,
+                    reason=args.reason,
+                    author=args.author,
+                    filed_at=filed_at,
+                    occurred_at=args.occurred_at,
+                    note=args.note,
+                ),
+            )
+        )
+    if args.trade_command == "status":
+        return render_status(
+            list_paper_trades(
+                store,
+                dust=PAPER_DUST_POLICY,
+                at=filed_at,
+                states=states_from_text(_LIVE_STATE_NAMES),
+                market=args.symbol,
+                bars_by_symbol=_monitoring_bars(store, args),
+            )
+        )
+    if args.trade_command == "history":
+        return render_history(
+            list_paper_trades(
+                store,
+                dust=PAPER_DUST_POLICY,
+                at=filed_at,
+                states=states_from_text(("resolved",)),
+                market=args.symbol,
+            )
+        )
+    if args.trade_command == "lifecycle":
+        return render_lifecycle(
+            load_paper_trade(
+                store,
+                args.activation_id,
+                dust=PAPER_DUST_POLICY,
+                at=filed_at,
+                bars=_monitoring_bars(store, args).get(
+                    _market_of(store, args.activation_id), ()
+                ),
+            )
+        )
     raise AssertionError(f"unreachable trade_command {args.trade_command!r}")
 
 
@@ -1920,6 +2290,112 @@ TRADE_COMMAND = Command(
     ),
     configure=_configure_trade,
     run=_run_trade,
+)
+
+
+def _configure_simulate(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "symbols",
+        nargs="*",
+        metavar="SYMBOL",
+        help=(
+            "the markets to advance. With none and without --all, every market "
+            "holding a live activation is advanced"
+        ),
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help=(
+            "advance every live activation. The default already does this; the "
+            "flag exists so a script can say so explicitly and so naming symbols "
+            "and asking for all at once is a usage error rather than a silent "
+            "preference"
+        ),
+    )
+    parser.add_argument(
+        "--interval",
+        default=SIMULATION_INTERVAL,
+        metavar="TF",
+        help=f"the timeframe to advance on (default: {SIMULATION_INTERVAL})",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=SIMULATION_CANDLE_LIMIT,
+        metavar="N",
+        help=f"closed candles to request per market (default: {SIMULATION_CANDLE_LIMIT})",
+    )
+    _add_store_arguments(parser)
+
+
+def _run_simulate(args: argparse.Namespace) -> int:
+    """Advance every live paper trade over the closed candles fetched for it.
+
+    The fetch is isolated per symbol and the simulation is not: a market the
+    provider could not serve becomes a row on the page, and a defect inside FMITS
+    propagates rather than being reported as *"this market could not be
+    simulated"*.
+    """
+    if args.symbols and args.all:
+        print(
+            "fmits simulate: name markets or pass --all, not both. Asking for "
+            "specific markets and for everything at once has no reading",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    filed_at = _reference_time(args.reference_time, omit=False)
+    assert filed_at is not None  # `omit=False` always yields an instant
+    try:
+        store = open_store(args.store_root)
+        wanted = tuple(symbol.upper() for symbol in args.symbols)
+        markets = sorted(
+            {
+                activation.market.pair_symbol
+                for activation, _ in store.activations.live_activations()
+                if not wanted or activation.market.pair_symbol.upper() in wanted
+            }
+        )
+        fetched = fetch_simulation_candles(
+            markets, interval=args.interval, limit=args.limit
+        )
+        print(
+            render_simulation(
+                run_simulation(
+                    store,
+                    ran_at=filed_at,
+                    code_version=fmis.__version__,
+                    interval=args.interval,
+                    bars_by_symbol={
+                        symbol: bars_from_series(series)
+                        for symbol, series in fetched.series.items()
+                    },
+                    failures=dict(fetched.failures),
+                    markets=wanted,
+                )
+            )
+        )
+    except PAPER_ERRORS as error:
+        print(f"fmits simulate: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    return EXIT_OK
+
+
+SIMULATE_COMMAND = Command(
+    name="simulate",
+    help="advance every paper trade over newly closed candles",
+    description=(
+        "The paper execution engine. Replays each live activation from the "
+        "moment it was activated, one closed candle at a time, and records what "
+        "happened: the entry trigger and its fill, every partial exit, every stop "
+        "the owner's rules moved, the close, and the outcome frozen at the "
+        "instant it ended. Deterministic — no randomness, no model, no "
+        "prediction, and no exchange is contacted. Re-running over the same "
+        "candles writes nothing, because every record's id is a digest of its own "
+        "content."
+    ),
+    configure=_configure_simulate,
+    run=_run_simulate,
 )
 
 
@@ -2028,6 +2504,7 @@ COMMANDS: tuple[Command, ...] = (
     PORTFOLIO_COMMAND,
     APPROVE_COMMAND,
     TRADE_COMMAND,
+    SIMULATE_COMMAND,
     ARCHIVE_COMMAND,
 )
 

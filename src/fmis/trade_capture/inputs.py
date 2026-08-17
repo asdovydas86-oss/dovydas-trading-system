@@ -39,6 +39,7 @@ from fmis.trade_capture.capture import (
     DEFAULT_VENUE,
     CloseRequest,
     NoteRequest,
+    PlanRequest,
     RecordRequest,
     market_from_symbol,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "capture_store_root",
     "open_store",
     "record_request_from_text",
+    "plan_request_from_text",
     "close_request_from_text",
     "note_request_from_text",
     "filters_from_text",
@@ -242,6 +244,56 @@ def record_request_from_text(
         fee_fx_rate_to_tax_currency=_maybe_decimal(
             fee_fx_rate, "fee is one side of this trade", "--fee-fx-rate"
         ),
+        setup_type=_maybe_text(setup, "no setup type was named"),
+        proposal_id=_maybe_text(proposal, "this plan was not proposed"),
+        market_snapshot_id=_maybe_text(snapshot, "no market context was frozen"),
+        analysis_record_ids=tuple(analysis or ()),
+        expires_at=_maybe_instant(expires, "this plan does not expire", "--expires"),
+        thesis=_maybe_text(thesis, "no thesis was stated"),
+        note=_maybe_text(note, "no note"),
+    )
+
+
+def plan_request_from_text(
+    *,
+    symbol: str,
+    direction: str,
+    book: str,
+    stop: str,
+    confidence: str,
+    author: str,
+    filed_at: datetime,
+    targets: Sequence[str] | None = None,
+    committed_at: str | None = None,
+    expires: str | None = None,
+    setup: str | None = None,
+    proposal: str | None = None,
+    snapshot: str | None = None,
+    analysis: Sequence[str] | None = None,
+    thesis: str | None = None,
+    note: str | None = None,
+    venue: str = DEFAULT_VENUE,
+    quote: str = DEFAULT_QUOTE_ASSET,
+    mode: str = DEFAULT_MARKET_MODE,
+    code_version: str | None = None,
+) -> PlanRequest:
+    """Everything `fmits trade plan` was given, as one validated request."""
+    return PlanRequest(
+        market=market_from_symbol(
+            symbol, venue=venue, quote=quote, mode=_market_mode(mode)
+        ),
+        book=_book(book),
+        direction=_direction(direction),
+        stop=_decimal(stop, "--stop"),
+        targets=tuple(
+            _decimal(target, f"--target {position + 1}")
+            for position, target in enumerate(targets or ())
+        ),
+        committed_at=_instant_or(committed_at, filed_at, "--committed-at"),
+        written_at=filed_at,
+        author=author,
+        confidence=confidence,
+        code_version=code_version or fmis.__version__,
         setup_type=_maybe_text(setup, "no setup type was named"),
         proposal_id=_maybe_text(proposal, "this plan was not proposed"),
         market_snapshot_id=_maybe_text(snapshot, "no market context was frozen"),

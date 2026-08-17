@@ -91,6 +91,7 @@ def test_a_very_long_symbol_and_reason_still_fit() -> None:
         portfolio=space.portfolio,
         opportunities=grouped,
         queue=build_queue(grouped.confirmed, ()),
+        paper=space.paper,
         journal=space.journal,
         analysis=space.analysis,
         warnings=space.warnings,
@@ -100,16 +101,17 @@ def test_a_very_long_symbol_and_reason_still_fit() -> None:
         assert len(rendered) <= _WIDTH, rendered
 
 
-def test_all_seven_sections_are_present_and_numbered() -> None:
+def test_all_eight_sections_are_present_and_numbered() -> None:
     page = _page()
     for heading in (
         "1. MARKET OVERVIEW",
         "2. PORTFOLIO OVERVIEW",
         "3. TODAY'S OPPORTUNITIES",
         "4. PRIORITY QUEUE",
-        "5. TRADE JOURNAL",
-        "6. RECENT ANALYSIS",
-        "7. WORKSPACE WARNINGS",
+        "5. PAPER TRADING",
+        "6. TRADE JOURNAL",
+        "7. RECENT ANALYSIS",
+        "8. WORKSPACE WARNINGS",
     ):
         assert heading in page, heading
 
@@ -124,9 +126,10 @@ def test_the_sections_appear_in_the_designed_order() -> None:
         page.index("2. PORTFOLIO OVERVIEW"),
         page.index("3. TODAY'S OPPORTUNITIES"),
         page.index("4. PRIORITY QUEUE"),
-        page.index("5. TRADE JOURNAL"),
-        page.index("6. RECENT ANALYSIS"),
-        page.index("7. WORKSPACE WARNINGS"),
+        page.index("5. PAPER TRADING"),
+        page.index("6. TRADE JOURNAL"),
+        page.index("7. RECENT ANALYSIS"),
+        page.index("8. WORKSPACE WARNINGS"),
     ]
     assert order == sorted(order)
 
@@ -160,7 +163,7 @@ def test_the_limitations_print_once_at_the_foot_and_not_beside_a_value() -> None
     page = _page()
     for code, _ in TODAY_LIMITATIONS:
         assert page.count(f"[{code}]") == 1, code
-    assert page.index("LIMITATIONS") > page.index("7. WORKSPACE WARNINGS")
+    assert page.index("LIMITATIONS") > page.index("8. WORKSPACE WARNINGS")
 
 
 # --------------------------------------------------------------------------
@@ -202,6 +205,7 @@ def test_the_measured_figures_print_with_their_sample_and_caveat() -> None:
         portfolio=spectacular.portfolio,
         opportunities=grouped,
         queue=build_queue((flagged,), ()),
+        paper=spectacular.paper,
         journal=spectacular.journal,
         analysis=spectacular.analysis,
         warnings=workspace_warnings(
@@ -273,6 +277,7 @@ def test_a_refused_entry_is_printed_in_its_own_group_with_the_refusal_named() ->
         portfolio=base.portfolio,
         opportunities=grouped,
         queue=build_queue((stopless,), ()),
+        paper=base.paper,
         journal=base.journal,
         analysis=base.analysis,
         warnings=base.warnings,
@@ -450,6 +455,7 @@ def _with(space, **changes):
         "portfolio": space.portfolio,
         "opportunities": space.opportunities,
         "queue": space.queue,
+        "paper": space.paper,
         "journal": space.journal,
         "analysis": space.analysis,
         "warnings": space.warnings,
@@ -525,7 +531,7 @@ def test_a_workspace_with_no_warnings_says_none_were_raised() -> None:
     accepts must not produce a section that silently disappears."""
     page = render_today(_with(workspace(_scan()), warnings=()))
     assert "none raised" in page
-    assert "7. WORKSPACE WARNINGS" in page
+    assert "8. WORKSPACE WARNINGS" in page
 
 
 def test_an_opportunity_with_no_risk_reward_prints_no_ratio() -> None:

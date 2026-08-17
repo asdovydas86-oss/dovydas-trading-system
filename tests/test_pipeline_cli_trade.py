@@ -398,4 +398,8 @@ def test_the_registry_holds_the_trade_command_between_portfolio_and_archive() ->
     assert names[names.index("today") + 1] == "portfolio"
     assert names[names.index("portfolio") + 1] == "approve"
     assert names[names.index("approve") + 1] == "trade"
-    assert names[names.index("trade") + 1] == "archive"
+    # Milestone BO inserted "simulate" between "trade" and "archive": the
+    # command that *advances* what was recorded belongs beside the one that
+    # records it, and both come before the archive that reads everything back.
+    assert names[names.index("trade") + 1] == "simulate"
+    assert names[names.index("simulate") + 1] == "archive"

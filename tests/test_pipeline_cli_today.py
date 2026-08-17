@@ -131,8 +131,8 @@ def test_today_renders_a_full_page_and_exits_zero(
     assert "FMITS TODAY" in out
     for heading in (
         "1. MARKET OVERVIEW", "2. PORTFOLIO OVERVIEW", "3. TODAY'S OPPORTUNITIES",
-        "4. PRIORITY QUEUE", "5. TRADE JOURNAL", "6. RECENT ANALYSIS",
-        "7. WORKSPACE WARNINGS",
+        "4. PRIORITY QUEUE", "6. TRADE JOURNAL", "7. RECENT ANALYSIS",
+        "8. WORKSPACE WARNINGS",
     ):
         assert heading in out, heading
 

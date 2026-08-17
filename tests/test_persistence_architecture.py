@@ -204,6 +204,7 @@ def test_no_module_in_the_store_participates_in_an_import_cycle() -> None:
         "ledger_repositories",
         "decision_repositories",
         "capital_repositories",
+        "lifecycle_repositories",
         "composition",
     ]
     rank = {name: position for position, name in enumerate(order)}

@@ -328,7 +328,7 @@ def test_the_registry_carries_nine_commands() -> None:
     names = [command.name for command in cli_module.COMMANDS]
     assert names == [
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "portfolio", "approve", "trade", "archive",
+        "today", "portfolio", "approve", "trade", "simulate", "archive",
     ]
     assert len(set(names)) == len(names)
 

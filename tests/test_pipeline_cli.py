@@ -243,7 +243,7 @@ def test_the_registry_still_has_every_original_command() -> None:
     names = {command.name for command in cli_module.COMMANDS}
     assert {
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "portfolio", "approve", "trade", "archive",
+        "today", "portfolio", "approve", "trade", "simulate", "archive",
     } == names
 
 

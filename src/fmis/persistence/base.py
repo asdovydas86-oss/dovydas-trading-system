@@ -1,6 +1,6 @@
 """The shape every repository has, and the two verbs that are almost never legal.
 
-Nine repositories, one base. What they share is not code reuse for its own sake:
+Eleven repositories, one base. What they share is not code reuse for its own sake:
 it is the guarantee that `load`, `history`, `at` and `search` mean the *same thing*
 on every kind, so a caller who has learned one repository has learned all of them.
 

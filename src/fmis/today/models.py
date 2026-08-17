@@ -51,6 +51,8 @@ __all__ = [
     "Opportunities",
     "QueueEntry",
     "PriorityQueue",
+    "PaperTradeLine",
+    "PaperTrading",
     "JournalLine",
     "ClosedPositionLine",
     "JournalSummary",
@@ -64,7 +66,7 @@ __all__ = [
 #: `Opportunities` gained the note that says whether an approval was computed at
 #: all. A consumer reading a version-1 page would render every candidate as
 #: unapproved, which is a different claim from *"this page did not check"*.
-TODAY_SCHEMA_VERSION = 2
+TODAY_SCHEMA_VERSION = 3
 
 
 class TodayError(Exception):
@@ -742,8 +744,110 @@ class AnalysisSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class PaperTradeLine:
+    """One simulated trade, reduced to what the day's page shows.
+
+    Every figure is already a string. The page renders; it does not compute, and
+    a line holding a `Decimal` would invite a surface to divide it by something.
+
+    `state` is the folded lifecycle state and `halted` is derived from it rather
+    than being a second field the two could disagree about — a halted trade is
+    the one thing on this page that is waiting for the **owner** rather than for
+    the market, and it must not read as merely open.
+    """
+
+    activation_id: str
+    market: str
+    state: str
+    open_size: str
+    entry: str | NotAvailable
+    stop: str
+    initial_stop: str
+    total_r: str | NotAvailable
+    holding: str | NotAvailable
+    bars_in_trade: int
+    stop_widenings: int
+
+    def __post_init__(self) -> None:
+        for name in ("activation_id", "market", "state", "open_size", "stop", "initial_stop"):
+            _text(getattr(self, name), name)
+        for name in ("entry", "total_r", "holding"):
+            value = getattr(self, name)
+            if not isinstance(value, NotAvailable):
+                _text(value, name)
+        _count(self.bars_in_trade, "bars_in_trade")
+        _count(self.stop_widenings, "stop_widenings")
+
+    @property
+    def halted(self) -> bool:
+        """Derived, never stored: one fact, one place."""
+        return self.state == "ambiguous"
+
+    @property
+    def stop_moved(self) -> bool:
+        return self.stop != self.initial_stop
+
+
+@dataclass(frozen=True, slots=True)
+class PaperTrading:
+    """The paper simulator's own section of the day's page.
+
+    Five lists rather than one, because *"waiting to trigger"*, *"triggered"*,
+    *"open"*, *"partly out"* and *"finished today"* are five different things the
+    owner does next — and a single list ordered by state would put the one that
+    needs a decision underneath four that do not.
+
+    `note` says what this section could not check. It is present rather than
+    optional for the same reason every other section here carries one: a page
+    that renders a blank where a check failed reads as a page where the check
+    passed.
+    """
+
+    pending: tuple[PaperTradeLine, ...] = ()
+    triggered: tuple[PaperTradeLine, ...] = ()
+    open_trades: tuple[PaperTradeLine, ...] = ()
+    partially_exited: tuple[PaperTradeLine, ...] = ()
+    recently_closed: tuple[PaperTradeLine, ...] = ()
+    note: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no paper trade was read",
+            owned_by="fmis.paper",
+            forbidden_inference="that no paper trade exists",
+        )
+    )
+
+    def __post_init__(self) -> None:
+        for name in (
+            "pending",
+            "triggered",
+            "open_trades",
+            "partially_exited",
+            "recently_closed",
+        ):
+            _tuple_of(getattr(self, name), PaperTradeLine, name)
+        if not isinstance(self.note, NotAvailable):
+            _text(self.note, "note")
+
+    @property
+    def live(self) -> tuple[PaperTradeLine, ...]:
+        """Everything the simulator is still running, in section order."""
+        return (
+            self.pending + self.triggered + self.open_trades + self.partially_exited
+        )
+
+    @property
+    def halted(self) -> tuple[PaperTradeLine, ...]:
+        """Every trade waiting for the owner rather than for the next candle."""
+        return tuple(line for line in self.live if line.halted)
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.live and not self.recently_closed
+
+
+@dataclass(frozen=True, slots=True)
 class TodayWorkspace:
-    """One evening's complete workspace: seven sections in a fixed order.
+    """One evening's complete workspace: eight sections in a fixed order.
 
     The order is the design decision. Health, capital and existing exposure come
     before opportunity, because the highest-probability way this product loses
@@ -763,6 +867,7 @@ class TodayWorkspace:
     portfolio: PortfolioOverview
     opportunities: Opportunities
     queue: PriorityQueue
+    paper: PaperTrading
     journal: JournalSummary
     analysis: AnalysisSummary
     warnings: tuple[WorkspaceWarning, ...]
@@ -783,6 +888,7 @@ class TodayWorkspace:
             ("portfolio", PortfolioOverview),
             ("opportunities", Opportunities),
             ("queue", PriorityQueue),
+            ("paper", PaperTrading),
             ("journal", JournalSummary),
             ("analysis", AnalysisSummary),
         )

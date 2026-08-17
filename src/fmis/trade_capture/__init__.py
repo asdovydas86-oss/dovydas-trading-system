@@ -42,7 +42,11 @@ from fmis.trade_capture.capture import (
     append_note,
     capture_version_set,
     close_trade,
+    entry_side,
+    exit_side,
     market_from_symbol,
+    PlanRequest,
+    record_plan,
     record_trade,
 )
 from fmis.trade_capture.inputs import (
@@ -57,6 +61,7 @@ from fmis.trade_capture.inputs import (
     filters_from_text,
     note_request_from_text,
     open_store,
+    plan_request_from_text,
     record_request_from_text,
 )
 from fmis.trade_capture.models import (
@@ -110,11 +115,15 @@ __all__ = [
     "NOTE_REASON",
     "DEFAULT_VENUE",
     "DEFAULT_QUOTE_ASSET",
+    "entry_side",
+    "exit_side",
     "market_from_symbol",
     "capture_version_set",
     "RecordRequest",
     "CloseRequest",
     "NoteRequest",
+    "PlanRequest",
+    "record_plan",
     "record_trade",
     "close_trade",
     "append_note",
@@ -127,6 +136,7 @@ __all__ = [
     "DEFAULT_MARKET_MODE",
     "capture_store_root",
     "open_store",
+    "plan_request_from_text",
     "record_request_from_text",
     "close_request_from_text",
     "note_request_from_text",

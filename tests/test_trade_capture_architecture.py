@@ -361,6 +361,15 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # `fmits approve`. The two assertions below are unaffected and still
         # prove the store is never reached from here.
         "fmis.position_sizing",
+        # Widened for Milestone BO, on the identical footing again.
+        # `fmis.paper` is an application-layer package at the same tier as
+        # `fmis.today`, `fmis.valuation` and `fmis.position_sizing`, and its own
+        # text boundary — `paper.inputs` — exists for exactly the reason this
+        # guard does: so the CLI parses no price, builds no `AccountId` and
+        # opens no `TradingStore` for `fmits simulate` or for the six new
+        # `fmits trade` subcommands. The two assertions below are unaffected and
+        # still prove the store is never reached from here.
+        "fmis.paper",
     )
     reached = {
         name

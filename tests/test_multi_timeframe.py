@@ -847,7 +847,7 @@ def test_registry_names_are_unique() -> None:
     assert len(names) == len(set(names))
     assert set(names) == {
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "portfolio", "approve", "trade", "archive",
+        "today", "portfolio", "approve", "trade", "simulate", "archive",
     }
 
 

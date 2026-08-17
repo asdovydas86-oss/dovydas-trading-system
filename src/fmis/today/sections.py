@@ -29,7 +29,12 @@ from collections.abc import Mapping, Sequence
 from datetime import timedelta
 from typing import Any
 
+from fmis.money import canonical_decimal_text
+from fmis.provenance import Absent
+from fmis.trade_lifecycle import TradeLifecycleState
 from fmis.today.models import (
+    PaperTradeLine,
+    PaperTrading,
     AnalysisLine,
     AnalysisSummary,
     ClosedPositionLine,
@@ -48,6 +53,7 @@ from fmis.today.models import (
 )
 
 __all__ = [
+    "paper_trading",
     "REGIME_NOTE",
     "RECENT_LIMIT",
     "opportunities_from_results",
@@ -731,4 +737,150 @@ def analysis_summary(
         citations=tuple(_citation_line(record) for record in recent_citations),
         snapshots=tuple(_snapshot_line(snapshot) for snapshot in recent_snapshots),
         change_note=change_note,
+    )
+
+
+# --------------------------------------------------------------------------
+# The paper simulator's section.
+# --------------------------------------------------------------------------
+
+
+def _paper_line(view: Any) -> PaperTradeLine:
+    """One simulated trade, reduced to strings. **Nothing is computed here.**
+
+    Every figure comes off the `TradeMonitor` the simulator's own read path
+    produced, so a number on this page and the same number under
+    `fmits trade status` are the same value rendered twice — not two
+    calculations that agree today.
+    """
+    monitor = view.monitor
+    return PaperTradeLine(
+        activation_id=view.activation_id,
+        market=view.activation.market.pair_symbol,
+        state=view.state.value,
+        open_size=str(monitor.remaining),
+        entry=_paper_decimal(monitor.entry_price),
+        stop=_decimal_text(monitor.effective_stop),
+        initial_stop=_decimal_text(monitor.initial_stop),
+        total_r=_paper_decimal(monitor.total_r),
+        holding=_paper_str(monitor.holding_time),
+        bars_in_trade=monitor.bars_in_trade,
+        stop_widenings=monitor.stop_widenings,
+    )
+
+
+def _decimal_text(value: Any) -> str:
+    """One exact price or ratio, in the domain's single canonical spelling."""
+    return canonical_decimal_text(value)
+
+
+def _paper_decimal(value: Any) -> str | NotAvailable:
+    """A domain `Decimal | Absent` becomes canonical text or a stated absence."""
+    if isinstance(value, Absent):
+        return _paper_absence(value)
+    return _decimal_text(value)
+
+
+def _paper_str(value: Any) -> str | NotAvailable:
+    """A domain `T | Absent` whose value is not a price — a duration, a label.
+
+    A second helper rather than one that branches on the type: this package
+    holds no `decimal` import and gains none, so what is a price and what is not
+    is decided by the **call site**, where the answer is known, rather than by an
+    `isinstance` here, where it would be guessed.
+    """
+    if isinstance(value, Absent):
+        return _paper_absence(value)
+    return str(value)
+
+
+def _paper_absence(value: Any) -> NotAvailable:
+    """The simulator's own reason, carried through verbatim.
+
+    Not paraphrased: the reason the simulator gave is more specific than
+    anything this layer could invent, and a page that reworded it would be a
+    second answer to the same question.
+    """
+    return NotAvailable(
+        reason=value.reason,
+        owned_by="fmis.paper",
+        forbidden_inference=(
+            "that the figure is zero, or that this trade never moved that way. "
+            "It is a figure the simulator could not state"
+        ),
+    )
+
+
+#: The states a trade is over in, in the order the section lists them. Named
+#: here rather than derived from `TERMINAL_LIFECYCLE_STATES`, because that set
+#: holds only `RESOLVED` — the fold's terminal state — and the owner's question
+#: is *"which of these have finished"*, which four more states answer.
+_FINISHED_STATES: tuple[str, ...] = (
+    "closed",
+    "resolved",
+    "cancelled",
+    "expired",
+    "superseded",
+)
+
+
+def paper_trading(
+    views: Sequence[Any], *, read: bool
+) -> PaperTrading:
+    """Group the simulator's trades by what the owner does next about each.
+
+    `read=False` produces an empty section whose note says the store was not
+    consulted — which is a different claim from *"there are no paper trades"*
+    and must not render the same way. This is the identical discipline every
+    other section on this page already follows for an unread store.
+    """
+    if not read:
+        return PaperTrading(
+            note=NotAvailable(
+                reason=(
+                    "the store was not read, so whether any paper trade is "
+                    "running is unknown"
+                ),
+                owned_by="fmis.paper",
+                forbidden_inference=(
+                    "that no paper trade is running. This page did not look"
+                ),
+            )
+        )
+    buckets: dict[str, list[PaperTradeLine]] = {
+        state.value: [] for state in TradeLifecycleState
+    }
+    for view in views:
+        line = _paper_line(view)
+        # Every member of the enum has a bucket by construction, so a state
+        # added later lands somewhere visible rather than in a key nothing
+        # reads. `PAPER_SECTION_GROUPS` below then decides which list it joins,
+        # and a guard asserts the two cover the enum between them — the first
+        # draft hard-coded six keys, and a finished trade folds to `RESOLVED`
+        # rather than `CLOSED`, so *every* finished trade was invisible.
+        buckets[line.state].append(line)
+    return PaperTrading(
+        pending=tuple(buckets["pending"]),
+        triggered=tuple(buckets["triggered"]),
+        # A halted trade sits with the open ones, because that is what it is: it
+        # holds exposure and it is waiting for a decision. `PaperTradeLine.halted`
+        # marks it out, so nothing has to remember to look in a sixth list.
+        open_trades=tuple(buckets["open"] + buckets["ambiguous"]),
+        partially_exited=tuple(buckets["partially_exited"]),
+        # `CLOSED` and `RESOLVED` alike: the engine freezes an outcome the moment
+        # a trade closes, so `CLOSED` is transient within one run and a finished
+        # trade is almost always read as `RESOLVED`. `CANCELLED`, `EXPIRED` and
+        # `SUPERSEDED` end a trade too, and a page that showed none of them would
+        # answer *"what happened to the ones I activated"* with silence.
+        recently_closed=tuple(
+            line
+            for state in _FINISHED_STATES
+            for line in buckets[state]
+        ),
+        note=(
+            "every activation this store holds was folded from its own event "
+            "stream; no state is stored. This page reads no simulation candle, "
+            "so an excursion and a bar count are absent here — `fmits trade "
+            "status` fetches them"
+        ),
     )

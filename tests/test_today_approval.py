@@ -405,6 +405,7 @@ def test_an_empty_reading_carries_no_account_at_all() -> None:
 
 
 def test_the_schema_version_moved_because_the_shape_did() -> None:
+    """Bumped again by BO, which added a whole section rather than five fields."""
     from fmis.today import TODAY_SCHEMA_VERSION
 
-    assert TODAY_SCHEMA_VERSION == 2
+    assert TODAY_SCHEMA_VERSION == 3

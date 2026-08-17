@@ -49,6 +49,7 @@ from fmis.proposal import StatedConfidence
 from fmis.provenance import Absent, VersionedTerm
 from fmis.records import (
     RecordAudit,
+    require_member,
     require_text,
     require_tuple_of,
     require_utc,
@@ -80,10 +81,14 @@ __all__ = [
     "DEFAULT_VENUE",
     "DEFAULT_QUOTE_ASSET",
     "market_from_symbol",
+    "entry_side",
+    "exit_side",
     "capture_version_set",
     "RecordRequest",
+    "PlanRequest",
     "CloseRequest",
     "NoteRequest",
+    "record_plan",
     "record_trade",
     "close_trade",
     "append_note",
@@ -151,6 +156,23 @@ _EXIT_SIDE = MappingProxyType(
         TradeDirection.SHORT: TradeSide.BUY,
     }
 )
+
+
+def entry_side(direction: TradeDirection) -> TradeSide:
+    """Which way the base asset moves when a commitment is **opened**.
+
+    Public because this milestone is no longer the only caller: `fmis.paper`
+    turns a simulated fill into a `Trade` and needs the identical mapping. A
+    second copy of it would be the one place a short's entry could quietly become
+    a long's — the failure ADR-0028's boundary exists to make impossible, and the
+    reason the mapping stays in the package that already holds the exemption.
+    """
+    return _ENTRY_SIDE[require_member(direction, TradeDirection, "direction")]
+
+
+def exit_side(direction: TradeDirection) -> TradeSide:
+    """The inverse of `entry_side`, and the only other side this domain names."""
+    return _EXIT_SIDE[require_member(direction, TradeDirection, "direction")]
 
 
 def market_from_symbol(
@@ -531,6 +553,151 @@ def record_trade(store: TradingStore, request: RecordRequest) -> CaptureOutcome:
             plan.plan_id,
             dust=CAPTURE_DUST_POLICY,
             at=request.written_at,
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PlanRequest:
+    """A commitment with **no fill** — what the owner intends before they act.
+
+    `RecordRequest` captures a trade already entered, which was the whole of
+    `BK`'s scope. A paper simulation needs the other half: a stop, a target ladder
+    and a stated confidence, committed to *before* the market moved and with no
+    money behind it yet. Without it, the only way to reach `fmits trade activate`
+    would be through a command that had already opened a real position.
+
+    Deliberately **not** a `RecordRequest` with optional fill fields. A record
+    whose meaning depends on which of fourteen fields happen to be present is a
+    record two readers interpret two ways; two request types with two build
+    methods over one `TradePlan` is the shape that cannot be misread.
+    """
+
+    market: MarketId
+    book: Book
+    direction: TradeDirection
+    stop: Decimal
+    committed_at: datetime
+    written_at: datetime
+    author: str
+    confidence: str
+    code_version: str
+    targets: tuple[Decimal, ...] = ()
+    setup_type: str | Absent = field(
+        default_factory=lambda: Absent("no setup type was named")
+    )
+    proposal_id: str | Absent = field(
+        default_factory=lambda: Absent("this plan was not proposed")
+    )
+    market_snapshot_id: str | Absent = field(
+        default_factory=lambda: Absent("no market context was frozen")
+    )
+    analysis_record_ids: tuple[str, ...] = ()
+    expires_at: datetime | Absent = field(
+        default_factory=lambda: Absent("this plan does not expire")
+    )
+    thesis: str | Absent = field(default_factory=lambda: Absent("no thesis was stated"))
+    note: str | Absent = field(default_factory=lambda: Absent("no note"))
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.market, MarketId):
+            raise TypeError("market must be a MarketId")
+        object.__setattr__(
+            self, "committed_at", require_utc(self.committed_at, "committed_at")
+        )
+        object.__setattr__(
+            self,
+            "written_at",
+            _require_filing(self.written_at, self.committed_at, "commitment"),
+        )
+        object.__setattr__(self, "stop", _require_price(self.stop, "stop"))
+        require_tuple_of(self.targets, Decimal, "targets")
+        object.__setattr__(
+            self,
+            "targets",
+            tuple(
+                _require_price(target, f"target {position + 1}")
+                for position, target in enumerate(self.targets)
+            ),
+        )
+        for name in ("author", "confidence", "code_version"):
+            object.__setattr__(self, name, require_text(getattr(self, name), name))
+        require_tuple_of(self.analysis_record_ids, str, "analysis_record_ids")
+
+    def build_plan(self) -> TradePlan:
+        return TradePlan(
+            created_at=self.committed_at,
+            committed_at=self.committed_at,
+            market=self.market,
+            book=self.book,
+            direction=self.direction,
+            initial_invalidation=self.stop,
+            targets=self.targets,
+            stated_confidence=StatedConfidence(self.confidence),
+            version_set=capture_version_set(code_version=self.code_version),
+            audit=RecordAudit.frozen_at(self.committed_at),
+            setup_type=(
+                self.setup_type
+                if isinstance(self.setup_type, Absent)
+                else VersionedTerm(
+                    vocabulary_id=SETUP_TYPE_VOCABULARY,
+                    term_id=self.setup_type,
+                    taxonomy_version=TAXONOMY_VERSION,
+                )
+            ),
+            proposal_id=self.proposal_id,
+            market_snapshot_id=self.market_snapshot_id,
+            analysis_record_ids=self.analysis_record_ids,
+            expires_at=self.expires_at,
+            note=self.note,
+        )
+
+
+def record_plan(store: TradingStore, request: PlanRequest) -> CaptureOutcome:
+    """Record a commitment nothing has filled against yet.
+
+    One record, and one more when a thesis is stated. The resulting view's status
+    is `PLANNED`, which is a real and readable state rather than an incomplete
+    one — and it is the state `fmits trade activate` hands to the simulator.
+    """
+    _require_store(store)
+    if not isinstance(request, PlanRequest):
+        raise TypeError("request must be a PlanRequest")
+    plan = request.build_plan()
+    write = _write_request(
+        written_at=request.written_at,
+        author=request.author,
+        reason=RECORD_REASON,
+        version_set=capture_version_set(code_version=request.code_version),
+    )
+    written = [_written("trade_plan", store.plans.create(plan, request=write))]
+    if not isinstance(request.thesis, Absent):
+        written.append(
+            _written(
+                "journal_entry",
+                store.journals.create(
+                    JournalEntry(
+                        kind=JournalKind.IDEA,
+                        recorded_at=request.written_at,
+                        author=request.author,
+                        audit=RecordAudit.frozen_at(request.written_at),
+                        title=(
+                            f"thesis: {request.market.pair_symbol} "
+                            f"{request.direction.value}"
+                        ),
+                        body=request.thesis,
+                        market_snapshot_id=request.market_snapshot_id,
+                        links=(_plan_link(plan.plan_id),),
+                    ),
+                    request=write,
+                ),
+            )
+        )
+    return CaptureOutcome(
+        action="planned",
+        written=tuple(written),
+        view=load_trade(
+            store, plan.plan_id, dust=CAPTURE_DUST_POLICY, at=request.written_at
         ),
     )
 

@@ -131,6 +131,35 @@ class TradeDirection(Enum):
         return self is not TradeDirection.NO_TRADE
 
     @property
+    def sign(self) -> Decimal:
+        """`+1` when a rising price helps the commitment, `-1` when it hurts it.
+
+        **The sign rule, handed out as a number so it is derived once.** A
+        consumer that has to ask *"is this level above or below the commitment"*
+        — a paper fill engine deciding whether a bar reached a target, an
+        excursion accumulator deciding which extreme is favourable — otherwise
+        re-derives it, and the second derivation is where a short's arithmetic
+        silently becomes a long's. `fmis.portfolio_risk.stop_distance` states the
+        identical rule for the risk distance; this is the same rule for every
+        comparison that is not a distance, in the one package `TradeDirection`
+        already lives in.
+
+        `NO_TRADE` raises rather than returning zero: a decision not to act has
+        no side, and a zero sign would silently make every comparison against it
+        true.
+
+        A `Decimal` rather than an `int`, so multiplying it into an exact price
+        cannot widen the result's type.
+        """
+        if self is TradeDirection.NO_TRADE:
+            raise DomainValidationError(
+                "NO_TRADE has no side and therefore no sign; an explicit "
+                "decision not to act is not a direction a price can be compared "
+                "against"
+            )
+        return Decimal(1) if self is TradeDirection.LONG else Decimal(-1)
+
+    @property
     def opposite(self) -> TradeDirection:
         if self is TradeDirection.LONG:
             return TradeDirection.SHORT

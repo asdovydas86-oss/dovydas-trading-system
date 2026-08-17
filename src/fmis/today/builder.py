@@ -60,6 +60,7 @@ from fmis.provenance import Absent
 from fmis.records import TradeDomainError
 from fmis.swing_setup import SCAN_UNIVERSE, run_market_scan
 from fmis.today.attention import build_queue
+from fmis.paper import load_paper_trade
 from fmis.today.models import (
     NotAvailable,
     StoreUnreadableError,
@@ -70,6 +71,7 @@ from fmis.today.sections import (
     analysis_summary,
     journal_summary,
     market_overview_from_results,
+    paper_trading,
     opportunities_from_results,
     portfolio_overview,
 )
@@ -187,6 +189,10 @@ class StoreReading:
     #: never share capacity across accounts, and picking one of several would
     #: produce a confident answer about the wrong capacity pool.
     account: Any | None = None
+    #: Every simulated trade this store holds, already assembled by the paper
+    #: package's own read path. Views rather than raw records, so this page and
+    #: `fmits trade status` render one calculation instead of two that agree.
+    paper_trades: tuple[Any, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.root, str) or not self.root.strip():
@@ -201,6 +207,7 @@ class StoreReading:
             "citations",
             "market_snapshots",
             "archived",
+            "paper_trades",
         ):
             if not isinstance(getattr(self, name), tuple):
                 raise TypeError(f"{name} must be a tuple")
@@ -255,6 +262,22 @@ def _archived_entries(archive_root: Path) -> tuple[Any, ...]:
         return tuple(ArchiveStore(archive_root).list())
     except (ArchiveError, OSError):
         return ()
+
+
+def _paper_views(store: TradingStore, at: datetime) -> tuple[Any, ...]:
+    """Every simulated trade this store holds, assembled by the paper read path.
+
+    **No candles are fetched.** This page runs offline against the store, so the
+    excursions of a trade that has not finished come back `Absent` with the
+    reason — `fmits simulate` is where a bar is read, and the frozen outcome is
+    where a finished trade's excursion comes from. A page that invented a zero
+    excursion for an open trade would make every one of them look like a trade
+    that never went against the owner.
+    """
+    return tuple(
+        load_paper_trade(store, activation.activation_id, dust=DUST_POLICY, at=at)
+        for activation in store.activations.activations()
+    )
 
 
 def read_store(
@@ -316,6 +339,7 @@ def read_store(
                 )
             ),
             account=sole_account(store),
+            paper_trades=_paper_views(store, at),
         )
     except (PersistenceError, TradeDomainError) as error:
         # Both families, and the second is not redundant: a hand-edited index
@@ -525,6 +549,7 @@ def build_today(
         valuation=reading.valuation,
     )
     queue = build_queue(opportunities.confirmed, opportunities.candidates)
+    paper = paper_trading(reading.paper_trades, read=reading.present)
     journal = journal_summary(
         entries=reading.journal_entries,
         closed_positions=reading.closed_positions,
@@ -550,6 +575,7 @@ def build_today(
         portfolio=portfolio,
         opportunities=opportunities,
         queue=queue,
+        paper=paper,
         journal=journal,
         analysis=analysis,
         warnings=raised,

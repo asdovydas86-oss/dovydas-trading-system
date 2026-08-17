@@ -7,8 +7,8 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | Milestone BN's product-docs commit, on top of `b66a88f` (BN's production code + tests) — **committed and pushed**. Milestones `BJ`–`BM`, recorded here as pending commit, are in fact in `origin/main` at `4519d0a`; those entries are point-in-time records and are not revised |
-| **Verified on** | 2026-08-15 |
+| **Last verified against** | Milestone BO's production commit `e4195fc`, on top of `51814b1`, with this product-docs commit recorded directly on top of it. Milestone BN's own entry was verified against its product-docs commit on top of `b66a88f`, committed and pushed. Milestones `BJ`–`BM`, recorded here as pending commit, are in fact in `origin/main` at `4519d0a`; those entries are point-in-time records and are not revised |
+| **Verified on** | 2026-08-16 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -67,10 +67,20 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of Milestone `BN` (Position Sizing & Trade Approval Engine, `b66a88f`) — what the owner can
+**As of Milestone `BO` (Paper Trading & Trade Lifecycle Engine) — what the owner can
 do today.**
 
 ```
+fmits trade plan BTCUSDT --stop … --target …    # record a commitment with no fill: what you intend
+fmits trade activate PLAN_ID --size … --entry … # hand it to the paper simulator
+fmits simulate --all                            # advance every paper trade over newly closed candles
+fmits simulate BTCUSDT ETHUSDT                  # advance the markets you name
+fmits trade status                              # every paper trade still running, with its monitor
+fmits trade status --offline                    # the same page, no candle fetched, every gap named
+fmits trade history                             # every finished paper trade, with its frozen outcome
+fmits trade lifecycle ACTIVATION_ID             # one trade's whole event stream and stop history
+fmits trade stop ACTIVATION_ID --to … --reason … # move a stop; append-only, the plan is untouched
+fmits trade cancel ACTIVATION_ID --reason …     # withdraw an activation before anything filled
 fmits approve BTCUSDT --direction long …        # how large this may be, and whether your limits permit it
 fmits approve --plan PLAN_ID --entry …          # size a commitment already recorded, without retyping it
 fmits approve … --risk-fraction 0.01            # size at a stated fraction, capped by your own ceiling
@@ -83,7 +93,7 @@ fmits trade show   TRADE_ID                     # one recorded trade, assembled 
 fmits trade list   --status open                # every recorded trade, filtered, never ranked
 fmits trade note   TRADE_ID --body "…"          # append a journal entry; nothing is ever edited
 fmits trade close  TRADE_ID --reason …          # append an exit and the reason for it
-fmits today                                     # the daily trading workspace: one page, seven sections
+fmits today                                     # the daily trading workspace: one page, eight sections
 fmits today BTCUSDT ETHUSDT --store-root PATH   # a chosen watchlist, against a chosen store
 fmits today --no-records                        # the same page, without reading the store
 fmits today --no-marks                          # read the store, fetch no price
@@ -230,6 +240,52 @@ the automation ladder remains unstarted.
 ---
 
 ## 4. Product milestones
+
+### 2026-08-16 · `BO` — Paper Trading & Trade Lifecycle Engine
+
+**Status:** Released — `e4195fc` (production code + tests), with the product-docs commit recorded
+directly on top of it.
+
+**What the owner can do that was impossible before: watch a trade live its whole life.**
+
+Before `BO`, FMITS could find a setup, size it, approve it and record a fill the owner had already
+taken. It could not tell them what happened next. Now it can:
+
+```
+fmits trade plan BTCUSDT --direction long --book paper --stop 62200 \
+      --target 63300 --target 64200 --confidence moderate --thesis "…"
+fmits trade activate <PLAN> --size 0.4 --entry-type limit --entry 62800 \
+      --share 0.5 --share 0.5 --break-even-r 1 --trail-r 2
+fmits simulate --all
+fmits trade status
+```
+
+The entry waits at 62800 until a closed candle comes back to it. Half the position leaves at the
+first target and half at the second. The stop moves to break-even once the trade is 1 R in front and
+trails 2 R behind the best price it has seen. Every one of those is recorded as an event the owner
+can read back, and **nothing is ever edited**: the commitment's original stop is still the original
+stop, and the stop that is in force is the fold of every move made since.
+
+`fmits trade status` answers the question the owner actually has: how much is open, at what entry,
+how far from the stop, how far from the next target, how much risk is committed, what the trade has
+made and lost in R, how far it ran in each direction, how long it has been on, and how many times
+the stop was moved away from the commitment.
+
+**It is paper only, and it says so on every page.** No exchange is reached, no order is placed, no
+credential exists. A paper fill is what this system computes would have happened, at zero modelled
+cost, and it is excluded from every real-money figure.
+
+**Two things it refuses to do.** When a single candle reaches both the stop and a target, it does
+not guess which came first — it **halts the trade and says so**, and the owner records the exit they
+judge they would have taken. And it invents no price: a level fills at the level, or at the bar's
+open when the bar gapped through it, and the same rule applies whether the gap helped or hurt.
+
+**Re-running changes nothing.** `fmits simulate` replays each trade from the beginning every time
+and writes only what is new — verified on a live store by comparing every byte before and after.
+
+Full record: [report 0022](reports/0022_2026-08-16_PAPER_TRADING_AND_TRADE_LIFECYCLE_IMPLEMENTATION.md) ·
+[design](docs/design/PAPER_TRADING_AND_TRADE_LIFECYCLE_V1.md).
+
 
 Reverse-chronological. Every **Released** entry cites a commit verified to exist in this repository.
 An entry whose milestone is implemented and validated but not yet versioned is marked

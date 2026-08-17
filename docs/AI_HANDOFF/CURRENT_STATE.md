@@ -7,7 +7,114 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone BN — Position Sizing & Trade Approval Engine (2026-08-15): the first
+**Last updated for:** Milestone BO — Paper Trading & Trade Lifecycle Engine (2026-08-16): the first
+milestone that answers *"what happened to this trade"* rather than *"can I take it"*. Two new
+packages, `fmis.trade_lifecycle` and `fmis.paper`; four new record kinds; an eleventh repository; a
+twelfth command, `fmits simulate`; six new `fmits trade` subcommands; and an eighth section on
+`fmits today`. Committed as `e4195fc` (production code + tests) on top of `51814b1`, with the
+product documents directly on top of it. Full record:
+[report 0022](../../reports/0022_2026-08-16_PAPER_TRADING_AND_TRADE_LIFECYCLE_IMPLEMENTATION.md) ·
+[design](../design/PAPER_TRADING_AND_TRADE_LIFECYCLE_V1.md).
+
+---
+
+## Milestone BO — Paper Trading & Trade Lifecycle Engine
+
+- **BO — Paper Trading & Trade Lifecycle Engine** (`e4195fc`, on top of `51814b1`). The system stops
+  describing a trade and starts *living* one.
+
+  **What shipped.** Two packages, split along the boundary `fmis.plan`/`fmis.trade_capture` and
+  `fmis.portfolio_risk`/`fmis.valuation` already draw:
+
+  - `fmis.trade_lifecycle` (5 modules) — the domain. `TradeActivation`, `TradeLifecycleEvent`,
+    `StopAmendment`, `TradeOutcome`, and the two folds that are the only place a state or an
+    effective stop exists. **No candle, no store, no clock**, because `fmis.persistence.kinds`
+    imports it and a market-half import there would make the store depend on a candle decoder.
+  - `fmis.paper` (12 modules) — the engine. `advance(state, bar) → StepResult`, one closed candle at
+    a time, and the surfaces over it. `fmis.paper.bars` is **the only module in either package that
+    imports `fmis.data`**, asserted as a set.
+
+  Plus `fmis.pipeline.candles`, an eleventh repository (`ActivationRepository`), a twelfth command
+  (**`fmits simulate`**), six new `fmits trade` subcommands (`plan`, `activate`, `stop`, `cancel`,
+  `status`, `history`, `lifecycle`) and an eighth `fmits today` section.
+
+  **A simulated fill is a real ledger `Trade` under `Book.PAPER`.** `AP` §5.5 already said what the
+  book means, so the position fold, the exposure engine, the constraint engine, the valuation and
+  `fmits today` all work on a paper trade with **no new code** — and a live `fmits portfolio` over a
+  store holding an open paper position reports *"no open position in the covered books."*
+
+  **Six refusals worth carrying forward.** No intrabar path is invented. The bar's **open** resolves
+  what four numbers genuinely contain, and nothing more. A bar that opens between the stop and a
+  target and reaches both **halts** the trade rather than guessing. An entry that filled inside its
+  bar on a bar that also reached an exit level halts too — the first draft deferred there and called
+  it symmetric, and an adversarial review found it was not: a breakout fills near the top of its bar,
+  so the level the rest of that bar is likeliest to reach is the stop, and skipping it made every
+  stopped-out breakout survive a bar longer than it did. A run's candle window is bounded at **both**
+  ends, so `--reference-time` is a replay clock rather than a label. And costs are a **named,
+  versioned policy at zero**, which is a different object from an omission.
+
+  **`AP` §9.3 built for the first time.** `TradePlan.initial_invalidation` never changes — not a
+  rule, an absence of any code path — and the effective stop is the fold of an append-only
+  `StopAmendment` stream. The chain is validated rather than trusted, a `POLICY_DERIVED` amendment
+  **may only tighten** (refused at read time as well as at write time), and a *tightened* stop still
+  honours the commitment, because counting it as a departure would make the metric read as
+  indiscipline every time the owner did the right thing.
+
+  **What `TradeOutcome` deliberately does not store.** Realized P&L, average entry, R-multiple and
+  P&L percentage are absent from the record: §25.2 classes them as projections over a permanent
+  ledger. What is frozen is what candle history alone can answer and will not answer forever — the
+  excursions, the bar count, the exit reason and the stop in force at the exit — and the excursions
+  are stored as **prices**, because money needs a quantity that changed and R needs an entry the
+  ledger owns.
+
+  **Replaying the same bars writes nothing the second time**, verified at the byte level on a live
+  store: every derived value is a function of the bars alone and every id is a digest of its
+  record's content, so resume is a consequence rather than a mechanism.
+
+  **`PROPOSED → PENDING → TRIGGERED → OPEN` is one chain across two objects.** An activation naming
+  a proposal advances that proposal's own stream to `TRIGGERED` — and **not** to `EXECUTED`, because
+  §8.4 defines that as a `Trade` landing and a paper fill is excluded from every real-money
+  aggregate; recording one would put simulated activity into the acceptance rate and every other
+  §20.5 behavioural metric.
+
+  **No ADR was widened and no directional exemption was taken.** Both packages branch on which way a
+  trade points — a simulator must — and neither names a side: `TradeDirection.sign` was added to
+  `fmis.snapshotting`, where the enum already lives, and every comparison in 7,684 new lines is
+  arithmetic over that number. Two existing guards were widened inside their own stated extension
+  points, each with its justification recorded in the test.
+
+  **Quality.** 7,359 → **7,805 tests** (+446, in 15 new files), identically under `-W error`.
+  **100 % statement and 100 % branch coverage** of all 19 new and 7 modified modules (4,193
+  statements, 1,220 branches, 0 missed). **45 mutation probes, 45 detected, 0 survivors**, byte-identical
+  restoration verified by SHA-256 with the bytecode cache cleared before every run. 140 new public
+  exports, **0 collisions** (1,045 total), **0 import cycles**, **0 new runtime dependencies**,
+  **4 record kinds added** (11 → 15), **0 domain types changed**.
+
+  **Live-verified against real Binance data** on 2026-08-16 against a store built entirely through
+  the product's own commands: a limit entry filled at exactly 62800 on the bar that came back to it,
+  79 real closed 1h bars advanced, 47 bars in trade, MFE 0.745 R and MAE −0.441 R measured from real
+  candles, break-even correctly *not* fired because 0.745 R had not reached the stated 1 R, and a
+  second run left the store's bytes unchanged.
+
+  **Ten findings are recorded in report 0022 §5 rather than quietly fixed** — five from an
+  adversarial review of the shipped code, one from the live run, three from mutation probes against
+  an already-green suite, and one from the release gate itself, after all of those had passed:
+  `fmits today` bucketed paper trades by six hard-coded state names and read five, so because a
+  finished trade folds to `RESOLVED` rather than `CLOSED`, **every finished paper trade was
+  invisible on the day's page**. The buckets are now derived from the enum and a guard asserts the
+  section's coverage equals it. Two are
+  **not fixed and are recorded**: a non-terminating R multiple prints a long tail (`BN`'s own
+  finding, inherited), and a paper fill carries a placeholder FX rate whose *source* says so in
+  words. **Three mutation probes were badly written and are recorded as such**, because a probe that
+  cannot fail proves nothing.
+
+  **`TODAY_SCHEMA_VERSION` moved `2 → 3`**: the page gained a whole section. A consumer reading a
+  version-2 page against a store full of live paper trades would render none of them, which is a
+  different claim from *"this page did not check"*.
+
+---
+
+**Previously last updated for:** Milestone BN — Position Sizing & Trade Approval Engine (2026-08-15): the first
 milestone that answers *"can I take this trade"* rather than *"is this setup good"*. One new package,
 `fmis.position_sizing`, and one new command, `fmits approve`; `fmits today` now carries an approval
 status, a recommended size, the resulting open risk, the blocking reasons and the warnings on every

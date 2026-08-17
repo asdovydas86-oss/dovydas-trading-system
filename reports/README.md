@@ -47,7 +47,7 @@ Examples:
 - Reports are **never deleted** unless the user explicitly authorizes deletion.
 - Do **not** create generic `REPORT.md` files in the repository root.
 
-**Next available report number: `0022`**
+**Next available report number: `0023`**
 
 ## Metadata header
 
@@ -78,6 +78,7 @@ Each report should open with a short metadata table:
 | 0019 | 2026-08-14 | Hostile Review | Portfolio Intelligence & Risk Engine (Milestone BL) — Hostile Review | Final | `main` / uncommitted (base `dbc4765`) | [0019_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_HOSTILE_REVIEW.md](0019_2026-08-14_PORTFOLIO_INTELLIGENCE_AND_RISK_ENGINE_HOSTILE_REVIEW.md) |
 | 0020 | 2026-08-14 | Implementation | Market Snapshot & Price Integration (Milestone BM) — Implementation Record | Final | `main` / uncommitted (base `dbc4765`) | [0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md](0020_2026-08-14_MARKET_SNAPSHOT_AND_PRICE_INTEGRATION_IMPLEMENTATION.md) |
 | 0021 | 2026-08-15 | Implementation | Position Sizing & Trade Approval Engine (Milestone BN) — Implementation Record | Final | `main` / `b66a88f` | [0021_2026-08-15_POSITION_SIZING_AND_TRADE_APPROVAL_IMPLEMENTATION.md](0021_2026-08-15_POSITION_SIZING_AND_TRADE_APPROVAL_IMPLEMENTATION.md) |
+| 0022 | 2026-08-16 | Implementation | Paper Trading & Trade Lifecycle Engine (Milestone BO) — Implementation Record | Final | `main` / `e4195fc` | [0022_2026-08-16_PAPER_TRADING_AND_TRADE_LIFECYCLE_IMPLEMENTATION.md](0022_2026-08-16_PAPER_TRADING_AND_TRADE_LIFECYCLE_IMPLEMENTATION.md) |
 | 0013 | 2026-08-11 | Review | Research Harness Correction V1 — Hostile Review | Final | `main` / uncommitted (base `f9ddc54`) | [0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md](0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
 | 0012 | 2026-08-11 | Implementation | Research Harness Correction V1 — Implementation Record | Final | `main` / uncommitted (base `f9ddc54`) | [0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md](0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) |
 | 0011 | 2026-08-08 | Implementation | Swing Setup Historical Backtest Harness V1 — Implementation Record | Final | `main` / uncommitted (base `35bce7a`) | [0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md](0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md) |

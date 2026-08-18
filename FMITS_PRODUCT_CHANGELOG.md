@@ -7,8 +7,8 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | Milestone BO's production commit `e4195fc`, on top of `51814b1`, with this product-docs commit recorded directly on top of it. Milestone BN's own entry was verified against its product-docs commit on top of `b66a88f`, committed and pushed. Milestones `BJ`–`BM`, recorded here as pending commit, are in fact in `origin/main` at `4519d0a`; those entries are point-in-time records and are not revised |
-| **Verified on** | 2026-08-16 |
+| **Last verified against** | Milestone BP's production commit `e1cfad0`, on top of `3a2bd3a`, with this product-docs commit recorded directly on top of it. Milestone BO's production commit `e4195fc` sits on top of `51814b1`, with its product-docs commit directly on top of it. Milestone BN's own entry was verified against its product-docs commit on top of `b66a88f`, committed and pushed. Milestones `BJ`–`BM`, recorded here as pending commit, are in fact in `origin/main` at `4519d0a`; those entries are point-in-time records and are not revised |
+| **Verified on** | 2026-08-18 |
 | **Verification method** | live repository + `git log` + full test run + accepted ADRs |
 
 ---
@@ -67,10 +67,17 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of Milestone `BO` (Paper Trading & Trade Lifecycle Engine) — what the owner can
+**As of Milestone `BP` (Statistics & Performance Engine) — what the owner can
 do today.**
 
 ```
+fmits statistics                                # does this system have an edge: every measured figure
+fmits statistics --as-of 2026-06-30T00:00:00+00:00  # the same figures as they stood at a past instant
+fmits statistics --minimum-sample 50            # refuse every rate below a floor you set
+fmits performance                               # what the trades made, and how they behaved
+fmits expectancy                                # the one question, with the sample in front of it
+fmits equity --starting-equity 100000           # the equity curve and the drawdowns on it
+fmits trades summary                            # the counts, and the last trades one per line
 fmits trade plan BTCUSDT --stop … --target …    # record a commitment with no fill: what you intend
 fmits trade activate PLAN_ID --size … --entry … # hand it to the paper simulator
 fmits simulate --all                            # advance every paper trade over newly closed candles
@@ -93,7 +100,7 @@ fmits trade show   TRADE_ID                     # one recorded trade, assembled 
 fmits trade list   --status open                # every recorded trade, filtered, never ranked
 fmits trade note   TRADE_ID --body "…"          # append a journal entry; nothing is ever edited
 fmits trade close  TRADE_ID --reason …          # append an exit and the reason for it
-fmits today                                     # the daily trading workspace: one page, eight sections
+fmits today                                     # the daily trading workspace: one page, nine sections
 fmits today BTCUSDT ETHUSDT --store-root PATH   # a chosen watchlist, against a chosen store
 fmits today --no-records                        # the same page, without reading the store
 fmits today --no-marks                          # read the store, fetch no price
@@ -240,6 +247,60 @@ the automation ladder remains unstarted.
 ---
 
 ## 4. Product milestones
+
+### 2026-08-18 · `BP` — Statistics & Performance Engine
+
+**Status:** Released — `e1cfad0` (production code + tests), with the product-docs commit recorded
+directly on top of it. **A new user-visible capability**, and the first one that answers a question
+about the *system* rather than about a market or a trade.
+
+**What the owner can do that was impossible before: find out whether any of this works.**
+
+Before `BP`, FMITS could find a setup, size it, approve it, record the fill and simulate the whole
+life of the trade. It could not tell the owner whether the trades, taken together, made money — or
+whether the number that says they did rests on four observations.
+
+```
+fmits statistics
+fmits expectancy
+fmits equity --starting-equity 100000
+```
+
+Counts, gross and net profit, average and largest win and loss, profit factor, payoff ratio,
+expectancy in money **and** in R, win and loss rate, the excursion figures that say how much
+movement each trade sat through, an equity curve, a drawdown curve, and twelve breakdowns — by
+symbol, timeframe, setup, direction, book, source, account, venue, regime, month, quarter and year.
+
+**Every rate carries the number of trades it rests on, and is refused below a floor.** The floor is
+stated on the page, is configurable, and is printed with the sentence that matters: *passing it
+establishes nothing*. **Counts are never refused** — *"you closed three trades and lost on all
+three"* is a fact at three, and withholding it would be its own dishonesty.
+
+**It says what it cannot measure.** An R multiple, a maximum adverse excursion and a bar count exist
+only for trades the simulator ran; a trade the owner recorded by hand has none of them, because
+nothing froze them at the time. So every figure over those fields reports how many trades actually
+contributed, and a page whose corpus has none says so in one sentence instead of printing zeros.
+
+**The equity curve invents nothing between trades.** One step per closed trade. Open positions are
+tracked separately and excluded, because their value needs a price and reverses. Without a stated
+starting equity it is a cumulative profit-and-loss curve and every percentage says why it is
+missing — this system has never been told what the account began with.
+
+**A decline that has not recovered is reported as ongoing**, never as a finished episode with a
+duration.
+
+**It writes nothing, ever.** Statistics are recomputed on every run and stored nowhere, so there is
+no second copy to disagree with the trades it is computed from. Two runs over one store print the
+identical page, and the store is byte-identical afterwards.
+
+**And it does not pretend the numbers settle anything.** No probability is calibrated. No
+multiplicity correction is applied to the breakdowns — instead the page prints how many cells were
+examined, so a striking-looking cell can be read against how many chances there were for one to
+appear.
+
+Full record: [report 0023](reports/0023_2026-08-18_STATISTICS_AND_PERFORMANCE_ENGINE_IMPLEMENTATION.md).
+
+---
 
 ### 2026-08-16 · `BO` — Paper Trading & Trade Lifecycle Engine
 

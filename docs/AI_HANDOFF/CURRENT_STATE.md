@@ -7,14 +7,76 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone BO — Paper Trading & Trade Lifecycle Engine (2026-08-16): the first
-milestone that answers *"what happened to this trade"* rather than *"can I take it"*. Two new
-packages, `fmis.trade_lifecycle` and `fmis.paper`; four new record kinds; an eleventh repository; a
-twelfth command, `fmits simulate`; six new `fmits trade` subcommands; and an eighth section on
-`fmits today`. Committed as `e4195fc` (production code + tests) on top of `51814b1`, with the
-product documents directly on top of it. Full record:
-[report 0022](../../reports/0022_2026-08-16_PAPER_TRADING_AND_TRADE_LIFECYCLE_IMPLEMENTATION.md) ·
-[design](../design/PAPER_TRADING_AND_TRADE_LIFECYCLE_V1.md).
+**Last updated for:** Milestone BP — Statistics & Performance Engine (2026-08-18): the first
+milestone that answers *"does this system actually have an edge"*. One new package,
+`fmis.statistics`; **no** new record kind, repository or write path; five new commands —
+`fmits statistics`, `performance`, `expectancy`, `equity` and `trades summary` — and a ninth
+section on `fmits today`. Committed as `e1cfad0` (production code + tests) on top of `3a2bd3a`,
+with the product documents directly on top of it. Full record: [report 0023](../../reports/0023_2026-08-18_STATISTICS_AND_PERFORMANCE_ENGINE_IMPLEMENTATION.md).
+
+---
+
+## Milestone BP — Statistics & Performance Engine
+
+- **BP — Statistics & Performance Engine** (`e1cfad0`, on top of `3a2bd3a`). The system stops
+  recording what happened and starts measuring whether it worked.
+
+  **What shipped.** One package, `fmis.statistics` (15 modules), and it stores **nothing**:
+
+  - the pure tier — `models` (the normalized `TradeStat`), `sampling` (the `n` guard), `general`,
+    `performance`, `risk`, `quality`, `distribution`, `equity`, `drawdown`, `breakdown`;
+  - one module that opens a store, `collect`, so every fold above it is exercisable with no
+    filesystem at all;
+  - the surfaces — `report`, `inputs`, `render`.
+
+  **It is a pure projection, and that is architectural.** `AP` §25.2 classes cohort statistics as
+  `Aggregate` — *recomputable, disposable* — so this milestone adds **no `RecordKind`, no
+  repository and no write path**. A guard asserts that no store write verb appears anywhere in the
+  package, and a live run leaves the store byte-identical.
+
+  **The sample floor is a boundary, not a caveat.** `AP` §20.7 rule 2 requires the guard *"at the
+  boundary, so no surface can route around it"*; `fmis.statistics.sampling` is that boundary, and
+  nothing else in the package divides, averages or takes a median. **The floor governs rates, and
+  not counts** — *"you closed three trades and lost on all three"* is a fact at `n = 3`, and
+  refusing to say it would be a different dishonesty from overstating it. Default floor 30, with
+  `AP` §20.1's own scaling table printed beside every refusal and the sentence *"passing it
+  establishes nothing"*.
+
+  **Two sources of trade, one vocabulary, and the difference is never hidden.** A simulated trade
+  carries an R multiple, an excursion and a bar count, frozen at close by `AP` §25.3; a
+  hand-recorded one carries none of them. A **total** with a missing contributor is `Absent`; a
+  **distribution** is computed over the members that have the value and reports that `n`. A
+  recorded trade's R multiple *is* computed — from `TradeView.capital_at_risk`, which already
+  exists — so the two kinds are comparable on the one scale that crosses markets.
+
+  **The multiplicity hazard is a mechanism.** `TRADER_WORKSPACE` §3.4.12: with ~25 segmentations and
+  no correction, *"the defence is a document, not a mechanism."* `BreakdownSet.cells_examined`
+  counts every cell across every dimension and every page prints it. No correction is applied and
+  the page says so.
+
+  **Quality.** 7,805 → **8,378 tests** (+573, in 12 new files), identically under `-W error`. **100 % statement and 100 %
+  branch coverage** of all 15 new modules (1,860 statements, 614 branches, 0 missed) and of the four
+  modified `fmis.today` modules. **60 mutation probes, 60 detected, 0 survivors**, byte-identical
+  restoration verified by SHA-256 with the bytecode cache cleared on both sides of every probe. 102
+  new public exports, **0 collisions** (1,147 total), **0 import cycles** across 257 modules,
+  **0 new runtime dependencies**, **0 record kinds added**, **0 domain types changed**, and **no
+  ADR-0028 exemption taken** — the per-direction breakdown groups on the enum at runtime.
+
+  **Ten findings are recorded in report 0023 §5 rather than quietly fixed.** The most consequential
+  is `5.1`: `DEFAULT_REGIME_DIMENSION` was `"trend"`, a dimension `fmis.market_regime` has never
+  emitted, so the per-regime breakdown placed **every trade in `UNCLASSIFIED`** and the cut the brief
+  asked for was dead on arrival. It survived every test that existed because no fixture carried a
+  real frozen snapshot. The value is now copied with a guard asserting it still matches
+  `RegimeDimensionName` — the copy-and-guard the boundary tests already use for the market-half list.
+  Three more were mutation-found test gaps, two were name collisions the zero-collision guard caught,
+  and one was a corrupt store raising past this layer's own error class. Three limitations are
+  **recorded and not fixed**, including a non-terminating quotient inherited from `BN` and `BO`.
+
+  **Live-verified** against a store built entirely through `fmits trade record` and
+  `fmits trade close`: six trades, five closed, every figure hand-checked — net 2090 USDT, profit
+  factor 2.0977, expectancy 418 USDT, average R 0.5973, maximum drawdown 1506 over 26 days,
+  recovered. **The demonstration harness was rebuilt twice and both of its own defects are
+  recorded**, because a demonstration its harness can mis-build proves nothing.
 
 ---
 

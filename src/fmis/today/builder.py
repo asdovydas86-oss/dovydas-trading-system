@@ -67,12 +67,14 @@ from fmis.today.models import (
     TodayError,
     TodayWorkspace,
 )
+from fmis.statistics import report_for_store
 from fmis.today.sections import (
     analysis_summary,
     journal_summary,
     market_overview_from_results,
     paper_trading,
     opportunities_from_results,
+    performance_summary,
     portfolio_overview,
 )
 from fmis.today.warnings import workspace_warnings
@@ -193,6 +195,11 @@ class StoreReading:
     #: package's own read path. Views rather than raw records, so this page and
     #: `fmits trade status` render one calculation instead of two that agree.
     paper_trades: tuple[Any, ...] = ()
+    #: The `StatisticsReport` for this store, or `None` when the store was not
+    #: read. `None` rather than an empty report, because *"this page did not
+    #: look"* and *"this page looked and found no trade"* are different facts and
+    #: only the second one is a statement about the owner's trading.
+    statistics: Any | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.root, str) or not self.root.strip():
@@ -340,6 +347,11 @@ def read_store(
             ),
             account=sole_account(store),
             paper_trades=_paper_views(store, at),
+            # The **same** dust policy this reading folded positions with. Two
+            # policies over one store draw the boundary between one round trip
+            # and the next in two places, so the page's position count and its
+            # statistics would disagree about how many trades there are.
+            statistics=report_for_store(store_root, at=at, dust=DUST_POLICY),
         )
     except (PersistenceError, TradeDomainError) as error:
         # Both families, and the second is not redundant: a hand-edited index
@@ -550,6 +562,7 @@ def build_today(
     )
     queue = build_queue(opportunities.confirmed, opportunities.candidates)
     paper = paper_trading(reading.paper_trades, read=reading.present)
+    performance = performance_summary(reading.statistics, at=reference_time)
     journal = journal_summary(
         entries=reading.journal_entries,
         closed_positions=reading.closed_positions,
@@ -576,6 +589,7 @@ def build_today(
         opportunities=opportunities,
         queue=queue,
         paper=paper,
+        performance=performance,
         journal=journal,
         analysis=analysis,
         warnings=raised,

@@ -233,6 +233,7 @@ def test_a_workspace_must_state_its_limitations() -> None:
             opportunities=space.opportunities,
             queue=space.queue,
             paper=space.paper,
+            performance=space.performance,
             journal=space.journal,
             analysis=space.analysis,
             warnings=space.warnings,
@@ -252,6 +253,7 @@ def test_a_workspace_rejects_a_section_of_the_wrong_type() -> None:
             opportunities=space.opportunities,
             queue=space.queue,
             paper=space.paper,
+            performance=space.performance,
             journal=space.journal,
             analysis=space.analysis,
             warnings=space.warnings,
@@ -298,8 +300,14 @@ def test_the_schema_version_is_pinned() -> None:
     gained a whole section. A consumer reading a version-2 page against a store
     full of live paper trades would render none of them, which is a different
     claim from *"this page did not check"*.
+
+    Bumped to `4` by Milestone BP, which added the performance section. The
+    reason is one step stronger here: a consumer reading a version-4 page and
+    ignoring `PerformanceSummary.sample_floor` would render a rate the guard
+    **refused** as one the page merely lacked, which is the specific
+    misreading `AP` §20.7 puts a boundary in front of.
     """
-    assert TODAY_SCHEMA_VERSION == 3
+    assert TODAY_SCHEMA_VERSION == 4
     assert workspace((result(waiting()),)).schema_version == TODAY_SCHEMA_VERSION
 
 
@@ -516,6 +524,7 @@ def _rebuild(space, **changes):
         "opportunities": space.opportunities,
         "queue": space.queue,
         "paper": space.paper,
+        "performance": space.performance,
         "journal": space.journal,
         "analysis": space.analysis,
         "warnings": space.warnings,

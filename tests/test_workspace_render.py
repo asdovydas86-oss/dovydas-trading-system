@@ -270,18 +270,27 @@ def test_provenance_is_rendered_for_every_answered_section() -> None:
 # ============ 6. the CLI ====================================================
 
 
-def test_the_registry_carries_nine_commands() -> None:
+def test_the_registry_carries_its_commands_in_the_declared_order() -> None:
     # Widened for Milestone AV to admit "backtest", registered right after
     # "scan"; for BJ to admit "today", registered right after "daily"; and for
     # BM to admit "portfolio", registered right after "today" because a
     # valuation is read after the page that summarizes it; and for BN to admit
     # "approve", registered right after "portfolio" because a candidate is sized
-    # against the portfolio the command before it values. All four additive,
-    # none a replacement for any existing command.
+    # against the portfolio the command before it values; for BO to admit
+    # "simulate"; and for BP to admit the five statistics surfaces, registered
+    # after "simulate" because a statistic is read over trades the commands
+    # before it produced. All additive, none a replacement for any existing
+    # command.
+    #
+    # The assertion is on the **list**, not the set: registration order is what
+    # `--help` prints, and a command quietly moving to the end of it is a
+    # user-visible change this should make somebody justify.
     names = [command.name for command in cli_module.COMMANDS]
     assert names == [
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "portfolio", "approve", "trade", "simulate", "archive",
+        "today", "portfolio", "approve", "trade", "simulate",
+        "statistics", "performance", "expectancy", "equity", "trades",
+        "archive",
     ]
     assert len(set(names)) == len(names)
 

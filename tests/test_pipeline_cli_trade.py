@@ -402,4 +402,10 @@ def test_the_registry_holds_the_trade_command_between_portfolio_and_archive() ->
     # command that *advances* what was recorded belongs beside the one that
     # records it, and both come before the archive that reads everything back.
     assert names[names.index("trade") + 1] == "simulate"
-    assert names[names.index("simulate") + 1] == "archive"
+    # Milestone BP inserted its five statistics surfaces between "simulate" and
+    # "archive": a statistic is read over the trades every command before it
+    # produced, and `archive` still comes last because it reads everything back.
+    # The chain this test pins — today → portfolio → approve → trade → simulate,
+    # then eventually archive — is unchanged.
+    assert names.index("simulate") < names.index("statistics")
+    assert names[-1] == "archive"

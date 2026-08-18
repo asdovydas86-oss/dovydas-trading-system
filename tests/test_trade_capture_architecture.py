@@ -370,6 +370,17 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # `fmits trade` subcommands. The two assertions below are unaffected and
         # still prove the store is never reached from here.
         "fmis.paper",
+        # Widened for Milestone BP, on the identical footing once more.
+        # `fmis.statistics` is an application-layer package at the same tier as
+        # the four above, and its own text boundary — `statistics.inputs` —
+        # exists for exactly the reason this guard does. It is worth recording
+        # that the first draft of `fmits statistics` also reached for
+        # `fmis.provenance` to build an `Absent` for "no cut requested"; that
+        # was this guard doing its job, and the fix was to move the three
+        # absences into `statistics.inputs` where every other conversion lives,
+        # not to admit a second prefix. The two assertions below are unaffected
+        # and still prove the store is never reached from here.
+        "fmis.statistics",
     )
     reached = {
         name

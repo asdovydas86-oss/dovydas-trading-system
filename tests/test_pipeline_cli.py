@@ -233,18 +233,47 @@ def test_verify_detects_corruption(
 # ============ 5. existing commands are unaffected =============================
 
 
+#: Every command the CLI registers, as a set. Widened once per milestone that
+#: adds one, and only ever **added to**: `AV` added "backtest", `BJ` "today",
+#: `BM` "portfolio", `BN` "approve", `BO` "simulate", and `BP` the five
+#: statistics surfaces. The equality is the point — a command silently
+#: disappearing fails this exactly as a command silently appearing does.
+EXPECTED_COMMANDS = {
+    "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
+    "today", "portfolio", "approve", "trade", "simulate", "archive",
+    "statistics", "performance", "expectancy", "equity", "trades",
+}
+
+
 def test_the_registry_still_has_every_original_command() -> None:
-    # Widened for Milestone AV to admit "backtest": a ninth command, additive
-    # to the registry rather than a replacement for any existing one. Widened
-    # again for BJ to admit "today": a tenth, equally additive — every earlier
-    # command still parses and runs exactly as before. Widened again for BM to
-    # admit "portfolio": an eleventh, and for BN to admit "approve": a twelfth.
-    # The same claim holds for each.
     names = {command.name for command in cli_module.COMMANDS}
-    assert {
-        "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "portfolio", "approve", "trade", "simulate", "archive",
-    } == names
+    assert EXPECTED_COMMANDS == names
+
+
+def test_every_registered_command_has_a_distinct_name_and_a_runner() -> None:
+    """A registry entry with no runner cannot be reached, and two entries with
+    one name make the second unreachable — `Command` makes both representable
+    and only this asserts neither happened."""
+    names = [command.name for command in cli_module.COMMANDS]
+    assert len(names) == len(set(names))
+    for command in cli_module.COMMANDS:
+        assert callable(command.run), command.name
+        assert callable(command.configure), command.name
+        assert command.help and command.description, command.name
+
+
+def test_the_five_statistics_commands_are_the_ones_the_milestone_named() -> None:
+    """`fmits trades summary` is a **subcommand** of a new top-level `trades`,
+    which sits one character from the existing `trade`. Pinned here so the
+    near-collision is a recorded decision rather than a surprise: argparse does
+    no prefix matching on subcommands, so `fmits trade` and `fmits trades`
+    dispatch to different runners and neither shadows the other."""
+    names = {command.name for command in cli_module.COMMANDS}
+    assert {"statistics", "performance", "expectancy", "equity", "trades"} <= names
+    assert "trade" in names and "trades" in names
+    parser = cli_module.build_parser()
+    assert parser.parse_args(["trades", "summary"]).command == "trades"
+    assert parser.parse_args(["trades", "summary"]).trades_command == "summary"
 
 
 def test_swing_still_works_exactly_as_before_when_archive_is_omitted(

@@ -127,10 +127,16 @@ WINNING_BARS = (
 # --------------------------------------------------------------------------
 
 
-def test_simulate_is_registered_between_trade_and_archive() -> None:
+def test_simulate_is_registered_after_trade_and_before_archive() -> None:
+    """Widened for Milestone BP, which registered its five statistics surfaces
+    between `simulate` and `archive`. The relation this guard protects is
+    unchanged — `simulate` follows the command that records the trades it
+    replays, and `archive` stays last — so the assertion moved from adjacency
+    to ordering rather than being deleted."""
     names = [command.name for command in cli_module.COMMANDS]
     assert names[names.index("trade") + 1] == "simulate"
-    assert names[names.index("simulate") + 1] == "archive"
+    assert names.index("simulate") < names.index("archive")
+    assert names[-1] == "archive"
 
 
 def test_every_new_trade_subcommand_parses() -> None:
@@ -384,7 +390,11 @@ def test_today_shows_the_paper_section_after_the_queue(capsys, tmp_path: Path) -
     )
     assert code == cli_module.EXIT_OK
     assert out.index("5. PAPER TRADING") > out.index("4. PRIORITY QUEUE")
-    assert out.index("6. TRADE JOURNAL") > out.index("5. PAPER TRADING")
+    # Milestone BP inserted "6. PERFORMANCE" between the simulator's section
+    # and the journal, so the journal is now seventh. What this guard holds is
+    # that the paper section sits between the queue and the journal, which is
+    # still exactly true.
+    assert out.index("7. TRADE JOURNAL") > out.index("5. PAPER TRADING")
     assert "PENDING (1)" in out
 
 

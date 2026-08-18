@@ -64,8 +64,11 @@ from fmis.today.models import (
     AnalysisSummary,
     ClosedPositionLine,
     FailedSymbol,
+    BookPerformance,
     PaperTradeLine,
     PaperTrading,
+    PerformanceLine,
+    PerformanceSummary,
     JournalLine,
     JournalSummary,
     LimitLine,
@@ -87,6 +90,7 @@ from fmis.today.models import (
 )
 from fmis.today.render import render_today
 from fmis.today.sections import (
+    PERFORMANCE_RECENT_LIMIT,
     RECENT_LIMIT,
     REGIME_NOTE,
     analysis_summary,
@@ -94,6 +98,7 @@ from fmis.today.sections import (
     paper_trading,
     market_overview_from_results,
     opportunities_from_results,
+    performance_summary,
     portfolio_overview,
 )
 from fmis.today.warnings import (
@@ -123,6 +128,9 @@ __all__ = [
     "JournalSummary",
     "PaperTradeLine",
     "PaperTrading",
+    "PerformanceLine",
+    "BookPerformance",
+    "PerformanceSummary",
     "JournalLine",
     "ClosedPositionLine",
     "AnalysisSummary",
@@ -152,6 +160,8 @@ __all__ = [
     "portfolio_overview",
     "journal_summary",
     "paper_trading",
+    "performance_summary",
+    "PERFORMANCE_RECENT_LIMIT",
     "analysis_summary",
     # composition and rendering
     "OBJECTIVE",

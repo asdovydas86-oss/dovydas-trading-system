@@ -58,6 +58,9 @@ __all__ = [
     "JournalSummary",
     "AnalysisLine",
     "AnalysisSummary",
+    "PerformanceLine",
+    "BookPerformance",
+    "PerformanceSummary",
     "TodayWorkspace",
 ]
 
@@ -66,7 +69,11 @@ __all__ = [
 #: `Opportunities` gained the note that says whether an approval was computed at
 #: all. A consumer reading a version-1 page would render every candidate as
 #: unapproved, which is a different claim from *"this page did not check"*.
-TODAY_SCHEMA_VERSION = 3
+#: `4` for Milestone BP: a ninth section, `PerformanceSummary`. A consumer
+#: reading a version-3 page sees no performance figures at all, which is the
+#: correct reading — but one reading a version-4 page and ignoring
+#: `sample_floor` would render a refused rate as a missing one.
+TODAY_SCHEMA_VERSION = 4
 
 
 class TodayError(Exception):
@@ -789,6 +796,205 @@ class PaperTradeLine:
 
 
 @dataclass(frozen=True, slots=True)
+class PerformanceLine:
+    """One finished trade, reduced to what the day's page shows.
+
+    Every figure is already a string, exactly as `PaperTradeLine`'s are: the
+    page renders and does not compute, and a line holding a `Decimal` would
+    invite a surface to divide it by something.
+    """
+
+    trade_ref: str
+    market: str
+    result: str
+    closed_at: str
+    r_multiple: str | NotAvailable
+    net: str | NotAvailable
+
+    def __post_init__(self) -> None:
+        for name in ("trade_ref", "market", "result", "closed_at"):
+            _text(getattr(self, name), name)
+        for name in ("r_multiple", "net"):
+            value = getattr(self, name)
+            if not isinstance(value, NotAvailable):
+                _text(value, name)
+
+
+@dataclass(frozen=True, slots=True)
+class BookPerformance:
+    """One book's headline figures, so paper and real money never share a row.
+
+    Two of these rather than one set of totals, because `AP` §5.5 makes the
+    book the economic classification and a page that added them would put
+    simulated results into a statement about the owner's money. `label` names
+    which book, so the renderer prints what it was given rather than deciding.
+    """
+
+    label: str
+    trades: int
+    closed: int
+    expectancy: str | NotAvailable
+    win_rate: str | NotAvailable
+
+    def __post_init__(self) -> None:
+        _text(self.label, "label")
+        _count(self.trades, "trades")
+        _count(self.closed, "closed")
+        for name in ("expectancy", "win_rate"):
+            value = getattr(self, name)
+            if not isinstance(value, NotAvailable):
+                _text(value, name)
+
+
+@dataclass(frozen=True, slots=True)
+class PerformanceSummary:
+    """Whether this is working — the day's page's ninth question.
+
+    **`sample_floor` and `resolved` are fields rather than prose**, because
+    every rate here is refused below the floor and a page that showed a rate
+    without the population it rests on would be exactly the false authority
+    `AP` §20.7 puts a boundary guard in front of. A refused rate arrives as a
+    `NotAvailable` carrying the reason, and the renderer has no short form that
+    could drop it.
+    """
+
+    trades: int = 0
+    open_trades: int = 0
+    closed_today: int = 0
+    resolved: int = 0
+    sample_floor: int = 0
+    #: The floor policy, stated **once** for the whole section. Every refused
+    #: rate below carries only its own two numbers, so the justification lives
+    #: in one place and cannot drift between four copies of itself.
+    floor_note: str = (
+        "no sample floor was stated for this section, which means no rate on it "
+        "was guarded"
+    )
+    quote_asset: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no trade has been recorded",
+            owned_by="fmis.statistics",
+            forbidden_inference="that the owner has never traded",
+        )
+    )
+    expectancy: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no statistics were computed",
+            owned_by="fmis.statistics",
+            forbidden_inference="that expectancy is zero",
+        )
+    )
+    expectancy_r: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no statistics were computed",
+            owned_by="fmis.statistics",
+            forbidden_inference="that expectancy in R is zero",
+        )
+    )
+    win_rate: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no statistics were computed",
+            owned_by="fmis.statistics",
+            forbidden_inference="that no trade has won",
+        )
+    )
+    profit_factor: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no statistics were computed",
+            owned_by="fmis.statistics",
+            forbidden_inference="that profits and losses are balanced",
+        )
+    )
+    average_r: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no statistics were computed",
+            owned_by="fmis.statistics",
+            forbidden_inference="that the average trade returned nothing",
+        )
+    )
+    average_holding_time: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no statistics were computed",
+            owned_by="fmis.statistics",
+            forbidden_inference="that no trade has been held",
+        )
+    )
+    current_equity: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no starting equity is recorded anywhere in this system",
+            owned_by="fmis.statistics",
+            forbidden_inference="that the account is empty",
+        )
+    )
+    realized: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no trade has closed",
+            owned_by="fmis.statistics",
+            forbidden_inference="that nothing has been realized",
+        )
+    )
+    current_drawdown: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no equity curve exists to measure a decline on",
+            owned_by="fmis.statistics",
+            forbidden_inference="that the account is at its high-water mark",
+        )
+    )
+    recent: tuple[PerformanceLine, ...] = ()
+    books: tuple[BookPerformance, ...] = ()
+    note: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no trade was read",
+            owned_by="fmis.statistics",
+            forbidden_inference="that the owner has never traded",
+        )
+    )
+
+    def __post_init__(self) -> None:
+        for name in (
+            "trades",
+            "open_trades",
+            "closed_today",
+            "resolved",
+            "sample_floor",
+        ):
+            _count(getattr(self, name), name)
+        _text(self.floor_note, "floor_note")
+        for name in (
+            "quote_asset",
+            "expectancy",
+            "expectancy_r",
+            "win_rate",
+            "profit_factor",
+            "average_r",
+            "average_holding_time",
+            "current_equity",
+            "realized",
+            "current_drawdown",
+            "note",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, NotAvailable):
+                _text(value, name)
+        _tuple_of(self.recent, PerformanceLine, "recent")
+        _tuple_of(self.books, BookPerformance, "books")
+
+    @property
+    def is_empty(self) -> bool:
+        return self.trades == 0
+
+    @property
+    def has_stateable_rate(self) -> bool:
+        """Whether any rate survived the floor — what the page leads with.
+
+        Derived rather than stored: two fields that could disagree about
+        whether a number exists is the shape that produced BO's invisible
+        finished trades.
+        """
+        return not isinstance(self.win_rate, NotAvailable)
+
+
+@dataclass(frozen=True, slots=True)
 class PaperTrading:
     """The paper simulator's own section of the day's page.
 
@@ -868,6 +1074,7 @@ class TodayWorkspace:
     opportunities: Opportunities
     queue: PriorityQueue
     paper: PaperTrading
+    performance: PerformanceSummary
     journal: JournalSummary
     analysis: AnalysisSummary
     warnings: tuple[WorkspaceWarning, ...]
@@ -889,6 +1096,7 @@ class TodayWorkspace:
             ("opportunities", Opportunities),
             ("queue", PriorityQueue),
             ("paper", PaperTrading),
+            ("performance", PerformanceSummary),
             ("journal", JournalSummary),
             ("analysis", AnalysisSummary),
         )

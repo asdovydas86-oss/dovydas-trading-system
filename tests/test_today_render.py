@@ -92,6 +92,7 @@ def test_a_very_long_symbol_and_reason_still_fit() -> None:
         opportunities=grouped,
         queue=build_queue(grouped.confirmed, ()),
         paper=space.paper,
+        performance=space.performance,
         journal=space.journal,
         analysis=space.analysis,
         warnings=space.warnings,
@@ -101,35 +102,42 @@ def test_a_very_long_symbol_and_reason_still_fit() -> None:
         assert len(rendered) <= _WIDTH, rendered
 
 
-def test_all_eight_sections_are_present_and_numbered() -> None:
+#: Every section heading, in page order. Milestone BP inserted "6. PERFORMANCE"
+#: and pushed the last three down one. Kept as one tuple both tests read, so a
+#: section added later cannot be present in one assertion and missing from the
+#: other.
+SECTION_HEADINGS = (
+    "1. MARKET OVERVIEW",
+    "2. PORTFOLIO OVERVIEW",
+    "3. TODAY'S OPPORTUNITIES",
+    "4. PRIORITY QUEUE",
+    "5. PAPER TRADING",
+    "6. PERFORMANCE",
+    "7. TRADE JOURNAL",
+    "8. RECENT ANALYSIS",
+    "9. WORKSPACE WARNINGS",
+)
+
+
+def test_all_nine_sections_are_present_and_numbered() -> None:
     page = _page()
-    for heading in (
-        "1. MARKET OVERVIEW",
-        "2. PORTFOLIO OVERVIEW",
-        "3. TODAY'S OPPORTUNITIES",
-        "4. PRIORITY QUEUE",
-        "5. PAPER TRADING",
-        "6. TRADE JOURNAL",
-        "7. RECENT ANALYSIS",
-        "8. WORKSPACE WARNINGS",
-    ):
+    for heading in SECTION_HEADINGS:
         assert heading in page, heading
+
+
+def test_the_headings_are_numbered_consecutively_from_one() -> None:
+    """A renumbering that skipped or repeated a number would still pass the
+    membership test above; this is what catches it."""
+    numbers = [int(heading.split(".", 1)[0]) for heading in SECTION_HEADINGS]
+    assert numbers == list(range(1, len(SECTION_HEADINGS) + 1))
 
 
 def test_the_sections_appear_in_the_designed_order() -> None:
     """Capital and existing exposure before opportunity. A dashboard that opens
     with opportunities is a dashboard that produces trades."""
     page = _page()
-    order = [
-        page.index("ATTENTION"),
-        page.index("1. MARKET OVERVIEW"),
-        page.index("2. PORTFOLIO OVERVIEW"),
-        page.index("3. TODAY'S OPPORTUNITIES"),
-        page.index("4. PRIORITY QUEUE"),
-        page.index("5. PAPER TRADING"),
-        page.index("6. TRADE JOURNAL"),
-        page.index("7. RECENT ANALYSIS"),
-        page.index("8. WORKSPACE WARNINGS"),
+    order = [page.index("ATTENTION")] + [
+        page.index(heading) for heading in SECTION_HEADINGS
     ]
     assert order == sorted(order)
 
@@ -163,7 +171,7 @@ def test_the_limitations_print_once_at_the_foot_and_not_beside_a_value() -> None
     page = _page()
     for code, _ in TODAY_LIMITATIONS:
         assert page.count(f"[{code}]") == 1, code
-    assert page.index("LIMITATIONS") > page.index("8. WORKSPACE WARNINGS")
+    assert page.index("LIMITATIONS") > page.index(SECTION_HEADINGS[-1])
 
 
 # --------------------------------------------------------------------------
@@ -206,6 +214,7 @@ def test_the_measured_figures_print_with_their_sample_and_caveat() -> None:
         opportunities=grouped,
         queue=build_queue((flagged,), ()),
         paper=spectacular.paper,
+        performance=spectacular.performance,
         journal=spectacular.journal,
         analysis=spectacular.analysis,
         warnings=workspace_warnings(
@@ -278,6 +287,7 @@ def test_a_refused_entry_is_printed_in_its_own_group_with_the_refusal_named() ->
         opportunities=grouped,
         queue=build_queue((stopless,), ()),
         paper=base.paper,
+        performance=base.performance,
         journal=base.journal,
         analysis=base.analysis,
         warnings=base.warnings,
@@ -456,6 +466,7 @@ def _with(space, **changes):
         "opportunities": space.opportunities,
         "queue": space.queue,
         "paper": space.paper,
+        "performance": space.performance,
         "journal": space.journal,
         "analysis": space.analysis,
         "warnings": space.warnings,
@@ -531,7 +542,7 @@ def test_a_workspace_with_no_warnings_says_none_were_raised() -> None:
     accepts must not produce a section that silently disappears."""
     page = render_today(_with(workspace(_scan()), warnings=()))
     assert "none raised" in page
-    assert "8. WORKSPACE WARNINGS" in page
+    assert SECTION_HEADINGS[-1] in page
 
 
 def test_an_opportunity_with_no_risk_reward_prints_no_ratio() -> None:

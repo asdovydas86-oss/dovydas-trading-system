@@ -42,6 +42,7 @@ from fmis.today.models import (
     MarketOverview,
     Opportunities,
     OpportunityLine,
+    PerformanceSummary,
     PortfolioOverview,
     PriorityQueue,
     QueueEntry,
@@ -525,8 +526,112 @@ def _paper_block(paper: PaperTrading) -> list[str]:
     return lines
 
 
+def _performance_pair(label: str, value: Any) -> list[str]:
+    """A labelled figure, or its refusal in full.
+
+    A refused rate prints the sentence the sample guard produced, never a dash.
+    On this page a dash beside "win rate" is read as zero, and the difference
+    between *"you have won nothing"* and *"too few trades to state a rate"* is
+    the whole reason the guard exists.
+
+    **Wrapped rather than truncated.** An exact quotient that does not
+    terminate is long, and this page raises on any line over 78 columns. The
+    two ways out are to shorten the number — a rounding policy this system does
+    not set — or to fold the line, and only one of those changes the value.
+    """
+    if isinstance(value, NotAvailable):
+        return _absence(value, label=label)
+    line = f"{_INDENT}{label:<22} {value}"
+    if len(line) <= _WIDTH:
+        return [line]
+    return textwrap.wrap(
+        str(value),
+        width=_WIDTH,
+        initial_indent=f"{_INDENT}{label:<22} ",
+        subsequent_indent=_INDENT + " " * 23,
+    )
+
+
+def _performance_block(performance: PerformanceSummary) -> list[str]:
+    """The sixth section: whether this is working, and on how many trades.
+
+    The sample count comes **before** the figures. Every other section here
+    reports what is; this one reports what the record so far suggests, and the
+    single most likely misreading of the page is treating a rate over four
+    trades as a property of the system.
+    """
+    lines = _section("6. PERFORMANCE")
+    if performance.is_empty:
+        if isinstance(performance.note, NotAvailable):
+            lines.extend(_absence(performance.note, label="performance"))
+        else:
+            lines.extend(_wrap(performance.note))
+        return lines
+    # `_value_text`, not an f-string interpolation. `quote_asset` is a
+    # `str | NotAvailable`, and formatting the absence directly puts a dataclass
+    # repr — 185 characters of it — onto a page that raises above 78. The
+    # builder never produces that pairing, but `PerformanceSummary` is exported
+    # and a consumer can build one, so the renderer handles it rather than
+    # trusting its caller.
+    lines.extend(
+        _wrap(
+            f"{performance.trades} trade(s) in "
+            f"{_value_text(performance.quote_asset)}, {performance.resolved} "
+            f"resolved, {performance.open_trades} open, "
+            f"{performance.closed_today} closed today",
+            indent=_INDENT,
+            hanging="  ",
+        )
+    )
+    lines.extend(_wrap(performance.floor_note, indent=_INDENT, hanging="  "))
+    lines.append("")
+    lines.extend(_performance_pair("Expectancy", performance.expectancy))
+    lines.extend(_performance_pair("Expectancy in R", performance.expectancy_r))
+    lines.extend(_performance_pair("Win rate", performance.win_rate))
+    lines.extend(_performance_pair("Profit factor", performance.profit_factor))
+    lines.extend(_performance_pair("Average R", performance.average_r))
+    lines.extend(
+        _performance_pair("Average holding time", performance.average_holding_time)
+    )
+    lines.extend(_performance_pair("Realized", performance.realized))
+    lines.extend(_performance_pair("Current equity", performance.current_equity))
+    lines.extend(_performance_pair("Current drawdown", performance.current_drawdown))
+    if performance.books:
+        lines.append("")
+        lines.append(f"{_INDENT}PAPER vs OTHER BOOKS")
+        for book in performance.books:
+            lines.append(
+                f"{_DEEP}{book.label:<14} {book.trades} trade(s), "
+                f"{book.closed} resolved"
+            )
+            for label, value in (
+                ("expectancy", book.expectancy),
+                ("win rate", book.win_rate),
+            ):
+                text = value.reason if isinstance(value, NotAvailable) else value
+                lines.extend(_wrap(f"{label}: {text}", indent=_DEEP + "  "))
+    if performance.recent:
+        lines.append("")
+        lines.append(f"{_INDENT}LAST {len(performance.recent)} CLOSED")
+        for line in performance.recent:
+            lines.extend(_token_line(_DEEP, f"{line.market}  {line.result}"))
+            # Wrapped, for the reason `_performance_pair` is: an exact R
+            # multiple can run to thirty digits, and this page refuses to emit
+            # a line it cannot fit rather than quietly shortening a number.
+            lines.extend(
+                _wrap(
+                    f"closed {line.closed_at}   R {_value_text(line.r_multiple)}"
+                    f"   net {_value_text(line.net)}",
+                    indent=_DEEP + "  ",
+                )
+            )
+    if not isinstance(performance.note, NotAvailable):
+        lines.extend(_wrap(performance.note))
+    return lines
+
+
 def _journal_block(journal: JournalSummary) -> list[str]:
-    lines = _section("6. TRADE JOURNAL")
+    lines = _section("7. TRADE JOURNAL")
     if isinstance(journal.note, NotAvailable):
         lines.extend(_absence(journal.note, label="Journal"))
         return lines
@@ -568,7 +673,7 @@ def _journal_block(journal: JournalSummary) -> list[str]:
 
 
 def _analysis_block(analysis: AnalysisSummary) -> list[str]:
-    lines = _section("7. RECENT ANALYSIS")
+    lines = _section("8. RECENT ANALYSIS")
     for label, entries in (
         ("archived pages", analysis.archived),
         ("cited analyses", analysis.citations),
@@ -608,7 +713,7 @@ def _warning_lines(warning: WorkspaceWarning) -> list[str]:
 
 
 def _warnings_block(workspace: TodayWorkspace) -> list[str]:
-    lines = _section("8. WORKSPACE WARNINGS")
+    lines = _section("9. WORKSPACE WARNINGS")
     if not workspace.warnings:
         lines.append(f"{_INDENT}none raised")
         return lines
@@ -653,6 +758,7 @@ def render_today(workspace: TodayWorkspace) -> str:
     lines.extend(_opportunities_block(workspace.opportunities))
     lines.extend(_queue_block(workspace.queue))
     lines.extend(_paper_block(workspace.paper))
+    lines.extend(_performance_block(workspace.performance))
     lines.extend(_journal_block(workspace.journal))
     lines.extend(_analysis_block(workspace.analysis))
     lines.extend(_warnings_block(workspace))

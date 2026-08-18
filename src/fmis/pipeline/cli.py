@@ -155,6 +155,23 @@ from fmis.trade_capture import (
     render_outcome,
     render_trade,
 )
+from fmis.statistics import (
+    DIMENSION_NAMES,
+    NO_EQUITY_BASIS,
+    NO_STARTING_EQUITY,
+    STATISTICS_ERRORS,
+    DEFAULT_REGIME_DIMENSION,
+    as_of_from_text,
+    baseline_from_text,
+    policy_from_text,
+    render_equity,
+    render_expectancy,
+    render_performance,
+    render_statistics,
+    render_trades_summary,
+    report_for_store,
+    statistics_store_root,
+)
 from fmis.workspace import Workspace, render_workspace, workspace_for_symbol
 from fmis.pipeline.regime import (
     REGIME_LIMITATIONS,
@@ -2399,6 +2416,284 @@ SIMULATE_COMMAND = Command(
 )
 
 
+# ---------------------------------------------------------------------------
+# Statistics — five read-only pages over the durable store (Milestone BP)
+# ---------------------------------------------------------------------------
+
+
+def _configure_statistics_common(parser: argparse.ArgumentParser) -> None:
+    """The flags every statistics page shares.
+
+    One function rather than five copies: the sample floor and the two equity
+    baselines change what the numbers *mean*, and a page that accepted a
+    different set of them would be a page whose figures were not comparable
+    with its siblings'.
+    """
+    parser.add_argument(
+        "--store-root",
+        default=None,
+        metavar="PATH",
+        help=(
+            "the durable store to read trades from (default: the owner's "
+            "store). Read-only: these commands write nothing at all"
+        ),
+    )
+    parser.add_argument(
+        "--minimum-sample",
+        default=None,
+        metavar="N",
+        help=(
+            "the number of observations below which a rate is refused rather "
+            "than printed (default: 30). Counts and totals are never withheld; "
+            "only rates, expectancies and ratios are"
+        ),
+    )
+    parser.add_argument(
+        "--starting-equity",
+        default=None,
+        metavar="AMOUNT",
+        help=(
+            "what the account began with. Without it the curve is cumulative "
+            "realized profit and loss and every percentage is reported as "
+            "unavailable, because this system records the opening capital nowhere"
+        ),
+    )
+    parser.add_argument(
+        "--equity-basis",
+        default=None,
+        metavar="AMOUNT",
+        help=(
+            "the equity a risk percentage is a percentage of. One basis for the "
+            "whole corpus, because the equity at the time of each trade is not "
+            "recorded"
+        ),
+    )
+    parser.add_argument(
+        "--base-currency",
+        default=DEFAULT_BASE_CURRENCY,
+        metavar="ASSET",
+        help=(
+            f"the asset the supplied baselines are stated in (default: "
+            f"{DEFAULT_BASE_CURRENCY}). Figures are never summed across quote "
+            "assets; each gets its own set"
+        ),
+    )
+    parser.add_argument(
+        "--as-of",
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "compute the figures as they stood at a past instant. Trades "
+            "committed after it, and trades that closed after it, are excluded "
+            "— so the page states what was knowable then rather than what is "
+            "known now"
+        ),
+    )
+    parser.add_argument(
+        "--reference-time",
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "instant the reading is taken at (default: now). Supply it to make "
+            "the rendered output reproducible."
+        ),
+    )
+
+
+def _statistics_report(args: argparse.Namespace, *, regime: str | None = None):
+    """Build one report from the shared flags. The only place they are read.
+
+    Every string becomes a domain value in `fmis.statistics.inputs`, never
+    here: this layer parses argv and prints, and a `Absent` constructed in a CLI
+    would put a domain reason in the one module with no tests over the domain.
+    """
+    reference = _reference_time(args.reference_time, omit=False)
+    assert reference is not None  # `omit=False` always yields an instant
+    return report_for_store(
+        statistics_store_root(args.store_root),
+        at=reference,
+        policy=policy_from_text(args.minimum_sample),
+        starting_equity=baseline_from_text(
+            args.starting_equity,
+            asset=args.base_currency,
+            flag="--starting-equity",
+            absent=NO_STARTING_EQUITY,
+        ),
+        equity_basis=baseline_from_text(
+            args.equity_basis,
+            asset=args.base_currency,
+            flag="--equity-basis",
+            absent=NO_EQUITY_BASIS,
+        ),
+        as_of=as_of_from_text(args.as_of),
+        regime_dimension=regime or DEFAULT_REGIME_DIMENSION,
+    )
+
+
+def _run_statistics_page(args: argparse.Namespace, name: str, render, **extra) -> int:
+    """Build, render, print. Every statistics command's whole body.
+
+    A store that does not exist is an empty corpus and renders a page; a store
+    that exists and cannot be read is a failure and says so. Collapsing the two
+    would report that an owner with a corrupt store has never traded.
+    """
+    try:
+        report = _statistics_report(args, regime=getattr(args, "regime", None))
+        rendered = render(report, **extra)
+    except STATISTICS_ERRORS as error:
+        print(f"fmits {name}: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(rendered)
+    return EXIT_OK
+
+
+def _configure_statistics(parser: argparse.ArgumentParser) -> None:
+    _configure_statistics_common(parser)
+    parser.add_argument(
+        "--regime",
+        default=DEFAULT_REGIME_DIMENSION,
+        metavar="DIMENSION",
+        help=(
+            f"which regime dimension the per-regime breakdown groups on "
+            f"(default: {DEFAULT_REGIME_DIMENSION}). A snapshot records several "
+            "and this engine picks none for you"
+        ),
+    )
+
+
+def _run_statistics(args: argparse.Namespace) -> int:
+    return _run_statistics_page(args, "statistics", render_statistics)
+
+
+STATISTICS_COMMAND = Command(
+    name="statistics",
+    help="every measured statistic over the recorded trades",
+    description=(
+        "Does this system have an edge. Counts, performance, risk, excursion "
+        "quality, the equity and drawdown curves, and every breakdown — all "
+        "computed from recorded history alone. Every rate carries the number of "
+        "trades it rests on and is refused below a stated floor; every count is "
+        "shown at any sample, because a count is a fact and a rate is a claim. "
+        "Nothing is estimated, inferred, predicted or calibrated, no candle is "
+        "fetched and no record is written. Statistics are recomputed on every "
+        "run and stored nowhere."
+    ),
+    configure=_configure_statistics,
+    run=_run_statistics,
+)
+
+
+def _run_performance(args: argparse.Namespace) -> int:
+    return _run_statistics_page(args, "performance", render_performance)
+
+
+PERFORMANCE_COMMAND = Command(
+    name="performance",
+    help="what the trades made and how they behaved",
+    description=(
+        "Gross and net profit, average and largest win and loss, profit factor, "
+        "payoff ratio, expectancy in money and in R, and the excursion figures "
+        "that say how much movement each trade sat through. Excursions exist "
+        "only for simulated trades, and every figure states how many of the "
+        "corpus actually contributed."
+    ),
+    configure=_configure_statistics_common,
+    run=_run_performance,
+)
+
+
+def _run_expectancy(args: argparse.Namespace) -> int:
+    return _run_statistics_page(args, "expectancy", render_expectancy)
+
+
+EXPECTANCY_COMMAND = Command(
+    name="expectancy",
+    help="what the average trade did, and how many trades that rests on",
+    description=(
+        "The narrowest page and the one most easily over-read, so the sample "
+        "floor and the population come before the numbers. Expectancy in money "
+        "and in R, win and loss rate, profit factor and payoff ratio — each "
+        "refused outright below the floor rather than printed with a caveat, "
+        "because a caveat beside a number is read as a number."
+    ),
+    configure=_configure_statistics_common,
+    run=_run_expectancy,
+)
+
+
+def _configure_equity(parser: argparse.ArgumentParser) -> None:
+    _configure_statistics_common(parser)
+    parser.add_argument(
+        "--points",
+        type=int,
+        default=20,
+        metavar="N",
+        help=(
+            "how many of the most recent closed-trade steps to list (default: "
+            "20). Every step is in the figures whether or not it is listed"
+        ),
+    )
+
+
+def _run_equity(args: argparse.Namespace) -> int:
+    return _run_statistics_page(args, "equity", render_equity, points=args.points)
+
+
+EQUITY_COMMAND = Command(
+    name="equity",
+    help="the deterministic equity and drawdown curves",
+    description=(
+        "One step per closed trade and nothing between them. Nothing is "
+        "interpolated, open positions are tracked separately and excluded, and "
+        "no mark-to-market value is included — this system retains no mark "
+        "history to reconstruct one from. Drawdown is measured from each "
+        "high-water mark to the recovery of that mark, and a decline that has "
+        "not recovered is reported as ongoing rather than as a finished episode."
+    ),
+    configure=_configure_equity,
+    run=_run_equity,
+)
+
+
+def _configure_trades(parser: argparse.ArgumentParser) -> None:
+    subcommands = parser.add_subparsers(dest="trades_command", required=True)
+    summary = subcommands.add_parser(
+        "summary",
+        help="the counts, and the most recent closed trades one per line",
+        description=(
+            "How many trades there are, of what kind, in what state, and how "
+            "the last of them ended. A companion to `fmits trade list`, which "
+            "shows commitments; this shows what happened to them."
+        ),
+    )
+    _configure_statistics_common(summary)
+    summary.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        metavar="N",
+        help="how many recent closed trades to list (default: 10)",
+    )
+
+
+def _run_trades(args: argparse.Namespace) -> int:
+    return _run_statistics_page(
+        args, "trades summary", render_trades_summary, limit=args.limit
+    )
+
+
+TRADES_COMMAND = Command(
+    name="trades",
+    help="summaries over the recorded trades",
+    description=(
+        "Read-only summaries over every trade in the store. Distinct from "
+        "`fmits trade`, which records and inspects one commitment at a time."
+    ),
+    configure=_configure_trades,
+    run=_run_trades,
+)
+
+
 def _configure_archive(parser: argparse.ArgumentParser) -> None:
     # `--archive-root` is defined on every subcommand, not the shared parent:
     # argparse requires a parent optional to precede the subcommand token
@@ -2505,6 +2800,11 @@ COMMANDS: tuple[Command, ...] = (
     APPROVE_COMMAND,
     TRADE_COMMAND,
     SIMULATE_COMMAND,
+    STATISTICS_COMMAND,
+    PERFORMANCE_COMMAND,
+    EXPECTANCY_COMMAND,
+    EQUITY_COMMAND,
+    TRADES_COMMAND,
     ARCHIVE_COMMAND,
 )
 

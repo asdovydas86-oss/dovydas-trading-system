@@ -336,8 +336,20 @@ def test_no_rule_module_invents_a_number(  # noqa: D103 - the docstring is below
     docstring justifies. The two measured figures live in `evidence.py` and
     reach these modules only by import — so a threshold cannot be typed into a
     rule without failing here.
+
+    Two list lengths are admitted **by name**: `RECENT_LIMIT`, and
+    `PERFORMANCE_RECENT_LIMIT` added by Milestone BP. Both are how many rows a
+    section prints, both carry a docstring saying why, and neither is a
+    threshold anything is compared against — which is the distinction this
+    guard exists to hold. BP's duration formatting was moved to
+    `fmis.statistics.duration_text` rather than admitted here, because `86400`
+    and `3600` genuinely are unit constants and belong in one place.
     """
     permitted = {0, 1, float(CLUSTER_MINIMUM)}
+    named_lengths = {
+        float(sections_module.RECENT_LIMIT),
+        float(sections_module.PERFORMANCE_RECENT_LIMIT),
+    }
     for module in (warnings_module, sections_module):
         found = {
             float(node.value)
@@ -346,7 +358,7 @@ def test_no_rule_module_invents_a_number(  # noqa: D103 - the docstring is below
             and isinstance(node.value, (int, float))
             and not isinstance(node.value, bool)
         }
-        assert found <= permitted | {float(sections_module.RECENT_LIMIT)}, module.__name__
+        assert found <= permitted | named_lengths, module.__name__
 
 
 def test_the_measured_figures_are_defined_only_in_the_evidence_module() -> None:

@@ -26,15 +26,24 @@ scan order because `sorted` is stable.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fmis.money import canonical_decimal_text
+from fmis.money import Money, canonical_decimal_text
 from fmis.provenance import Absent
+from fmis.statistics import (
+    closed_between,
+    duration_text,
+    performance_statistics,
+    recent_trades,
+)
 from fmis.trade_lifecycle import TradeLifecycleState
 from fmis.today.models import (
+    BookPerformance,
     PaperTradeLine,
     PaperTrading,
+    PerformanceLine,
+    PerformanceSummary,
     AnalysisLine,
     AnalysisSummary,
     ClosedPositionLine,
@@ -54,6 +63,8 @@ from fmis.today.models import (
 
 __all__ = [
     "paper_trading",
+    "performance_summary",
+    "PERFORMANCE_RECENT_LIMIT",
     "REGIME_NOTE",
     "RECENT_LIMIT",
     "opportunities_from_results",
@@ -882,5 +893,247 @@ def paper_trading(
             "stream; no state is stored. This page reads no simulation candle, "
             "so an excursion and a bar count are absent here — `fmits trade "
             "status` fetches them"
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 6. Performance — whether this is working (Milestone BP)
+# ---------------------------------------------------------------------------
+
+#: How many finished trades the day's page lists. Ten, because the brief names
+#: ten and because a page that listed every trade would stop being a day's page
+#: — `fmits trades summary` is where the whole corpus is read.
+PERFORMANCE_RECENT_LIMIT = 10
+
+
+#: What a reader must not conclude from a figure the sample floor withheld.
+_FLOOR_FORBIDS = (
+    "that the figure is zero, or that the trades behind it are too few to "
+    "matter — the number exists and is simply not a rate yet"
+)
+
+#: What a reader must not conclude from a figure whose input is missing.
+_MISSING_FORBIDS = "that the figure is zero"
+
+
+def _floor_refusal(resolved: int, floor: int) -> NotAvailable:
+    """The short form of a sample-floor refusal, built from its two numbers.
+
+    **No prose is restated.** The floor's full justification is five sentences
+    and belongs once per section — repeated against four figures it makes the
+    day's page unreadable, which makes the guard easier to ignore rather than
+    harder. So this is derived from `n` and the floor, and
+    `PerformanceSummary.floor_note` carries the policy.
+
+    A population of **zero** is reported as one rather than as *"below the
+    floor"*: both are true, and *"no resolved trade"* is the one that tells the
+    owner what to do about it.
+    """
+    reason = (
+        "no resolved trade to state this from"
+        if resolved == 0
+        else f"refused: {resolved} resolved trade(s), below the floor of {floor}"
+    )
+    return NotAvailable(
+        reason=reason,
+        owned_by="fmis.statistics",
+        forbidden_inference=_FLOOR_FORBIDS,
+    )
+
+
+def _performance_text(
+    value: Any,
+    *,
+    forbids: str = _MISSING_FORBIDS,
+    floored: tuple[int, int] | None = None,
+) -> str | NotAvailable:
+    """One rule for turning a statistic into what the page holds.
+
+    `floored` is `(resolved, floor)` and is supplied **only for the figures the
+    sample guard actually governs** — the rates. Supplying it for a mean would
+    label an empty population as a floor refusal, and supplying it for a
+    zero-denominator refusal would label that as one too; both are absences the
+    guard did not produce, and calling them its work would misdirect the reader
+    to the sample when the problem is elsewhere. Every other absence keeps its
+    own reason verbatim, because those reasons are one line and are all
+    different.
+    """
+    if isinstance(value, Absent):
+        if floored is not None and floored[0] < floored[1]:
+            return _floor_refusal(floored[0], floored[1])
+        return NotAvailable(
+            reason=value.reason,
+            owned_by="fmis.statistics",
+            forbidden_inference=forbids,
+        )
+    if isinstance(value, Money):
+        return f"{value.text} {value.asset.code}"
+    if isinstance(value, timedelta):
+        return _duration_text(value)
+    return canonical_decimal_text(value)
+
+
+def _duration_text(span: timedelta) -> str:
+    """Days and hours — `fmis.statistics.duration_text`, called.
+
+    Not reimplemented, for two reasons that point the same way. This page's own
+    magic-number guard forbids a rule module from typing `86400`, and it is
+    right to: a unit constant here is a second place the unit is decided. And
+    `fmits statistics` already formats durations, so a local copy would let the
+    two pages disagree about what a holding time reads as.
+    """
+    return duration_text(span, minutes=False)
+
+
+def _performance_line(stat: Any) -> PerformanceLine:
+    return PerformanceLine(
+        trade_ref=stat.trade_ref,
+        market=stat.market.value,
+        result=stat.result.value,
+        closed_at=(
+            "-" if isinstance(stat.closed_at, Absent) else stat.closed_at.isoformat()
+        ),
+        # No `floored` here: a single trade's R multiple and profit and loss are
+        # facts about that trade, and the sample guard governs neither.
+        r_multiple=_performance_text(stat.r_multiple),
+        net=_performance_text(stat.realized_pnl_net),
+    )
+
+
+def _book_performance(
+    label: str, trades: tuple[Any, ...], policy: Any, asset: Any
+) -> BookPerformance:
+    """One book's headline pair, folded through the engine rather than by hand.
+
+    `performance_statistics` is called again over the narrowed population
+    instead of the numbers being re-derived here, because the sample floor has
+    to apply to a book's win rate exactly as it applies to the corpus's — and a
+    second computation would be a second place it could be skipped.
+    """
+    reading = performance_statistics(trades, policy, quote_asset=asset)
+    resolved = reading.resolved.size
+    return BookPerformance(
+        label=label,
+        trades=len(trades),
+        closed=resolved,
+        # Expectancy is a mean and is not floored; its absence means the
+        # population is empty, and it says so in its own words.
+        expectancy=_performance_text(reading.expectancy),
+        win_rate=_performance_text(
+            reading.win_rate, floored=(resolved, policy.minimum_sample)
+        ),
+    )
+
+
+def performance_summary(
+    report: Any, *, at: datetime, limit: int = PERFORMANCE_RECENT_LIMIT
+) -> PerformanceSummary:
+    """The day's page's performance section, from one already-built report.
+
+    **Takes a report rather than a store**, so this module keeps the property
+    every other section here has: it adapts, and it performs no I/O. The report
+    is built in `fmis.today.builder`, beside every other store read.
+
+    `closed today` is the trades that closed inside the UTC day containing
+    `at` — a half-open window, so a trade closing at midnight is counted on the
+    day that is starting and never on both.
+    """
+    if not isinstance(at, datetime):
+        raise TypeError(f"at must be a datetime, got {type(at).__name__}")
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 0:
+        raise TodayError("limit must be a non-negative int")
+    if report is None:
+        return PerformanceSummary(
+            note=NotAvailable(
+                reason=(
+                    "this run did not read the store, so no statistic was "
+                    "computed over it"
+                ),
+                owned_by="fmis.statistics",
+                forbidden_inference="that the owner has recorded no trade",
+            )
+        )
+
+    asset_report = report.primary
+    if isinstance(asset_report, Absent):
+        return PerformanceSummary(
+            sample_floor=report.policy.minimum_sample,
+            note=asset_report.reason,
+        )
+
+    performance = asset_report.performance
+    floor = report.policy.minimum_sample
+    # Constructed rather than `at.replace(hour=0, ...)`. `fmis.today`'s
+    # architecture guard forbids `.replace` anywhere in this package because it
+    # is the store's write verb, and it matches on the name alone — correctly,
+    # since a guard that had to know which object it was called on would be a
+    # guard with an exception in it. Building the instant explicitly costs one
+    # line and keeps the ban absolute.
+    utc_moment = at.astimezone(timezone.utc)
+    day_start = datetime(
+        utc_moment.year, utc_moment.month, utc_moment.day, tzinfo=timezone.utc
+    )
+    closed_today = closed_between(
+        asset_report.trades, start=day_start, end=day_start + timedelta(days=1)
+    )
+    paper = tuple(stat for stat in asset_report.trades if stat.is_paper)
+    other = tuple(stat for stat in asset_report.trades if not stat.is_paper)
+
+    return PerformanceSummary(
+        trades=asset_report.size,
+        open_trades=asset_report.general.open_trades.count,
+        closed_today=len(closed_today),
+        resolved=performance.resolved.size,
+        sample_floor=report.policy.minimum_sample,
+        quote_asset=asset_report.quote_asset.code,
+        # Only the two **rates** are floored. Expectancy, expectancy in R and
+        # average R are means over a stated `n` and are true descriptions of
+        # the trades in hand at any sample.
+        expectancy=_performance_text(performance.expectancy),
+        expectancy_r=_performance_text(performance.expectancy_r),
+        win_rate=_performance_text(
+            performance.win_rate, floored=(performance.resolved.size, floor)
+        ),
+        profit_factor=_performance_text(
+            performance.profit_factor, floored=(performance.resolved.size, floor)
+        ),
+        average_r=_performance_text(performance.average_r),
+        average_holding_time=_performance_text(
+            asset_report.general.average_holding_time
+        ),
+        current_equity=_performance_text(
+            asset_report.equity.current_equity,
+            forbids=(
+                "that the account is empty. This system records the owner's "
+                "opening capital nowhere"
+            ),
+        ),
+        realized=_performance_text(asset_report.equity.realized),
+        current_drawdown=_performance_text(asset_report.drawdown.current),
+        floor_note=(
+            f"rates are refused below {floor} resolved trades, and passing that "
+            "floor establishes nothing. `fmits expectancy` prints the full basis"
+        ),
+        recent=tuple(
+            _performance_line(stat)
+            for stat in recent_trades(asset_report.trades, limit)
+        ),
+        # Two rows, always both, even when one is empty. A page that dropped the
+        # empty book would let a store holding only paper trades read as a
+        # statement about the owner's money.
+        books=(
+            _book_performance(
+                "paper", paper, report.policy, asset_report.quote_asset
+            ),
+            _book_performance(
+                "other books", other, report.policy, asset_report.quote_asset
+            ),
+        ),
+        note=(
+            f"every rate here is refused below {report.policy.minimum_sample} "
+            "resolved trades and says so; counts are shown at any sample. "
+            "Excursion figures and R multiples exist only for simulated trades. "
+            "`fmits statistics` is the whole picture"
         ),
     )

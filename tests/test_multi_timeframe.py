@@ -845,9 +845,13 @@ def test_registry_names_are_unique() -> None:
     # none a replacement.
     names = [c.name for c in cli_module.COMMANDS]
     assert len(names) == len(set(names))
+    # Widened for each milestone that registers a command — most recently BP,
+    # whose five statistics surfaces sit between `simulate` and `archive`. The
+    # property this test holds is uniqueness plus an exact roster; both survive.
     assert set(names) == {
         "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
-        "today", "portfolio", "approve", "trade", "simulate", "archive",
+        "today", "portfolio", "approve", "trade", "simulate", "statistics", "performance",
+        "expectancy", "equity", "trades", "archive",
     }
 
 

@@ -7,11 +7,59 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone BG-D1 — Stable Setup Identity (2026-08-19): a setup now keeps the
+**Last updated for:** BG-D1b — Setup Identity Pipeline Integration (2026-08-19): the stable setup
+identity is now reachable from live market data. One new application-layer package,
+`fmis.setup_observation`, turns the swing-setup engine's `SetupAssessment` into a
+`SetupObservation`, groups a run of them into `SetupOccurrence`s, and answers *"is this a new idea
+or the same one again"*. **No new record kind, no repository, no CLI change, nothing persisted, and
+`fmis.swing_setup` untouched.** Committed as `1909134`. Full record:
+[report 0025](../../reports/0025_2026-08-19_SETUP_IDENTITY_PIPELINE_INTEGRATION.md).
+
+---
+
+## BG-D1b — Setup Identity Pipeline Integration
+
+- **BG-D1b** (`1909134`). `BG-D1` built the domain half and left it
+  unreachable from live data. This closes that gap.
+
+  **`fmis.setup_observation`, not `fmis.pipeline`, and the reason is a guard.** The brief asked for
+  the adapter beside `pipeline/prices.py`. It cannot go there: `fmis.pipeline` is a market-half
+  package, and `test_no_market_half_package_imports_the_trading_domain` — *"or the analysis becomes
+  a function of the position, the oldest bias in trading"* — forbids it naming `fmis.proposal`,
+  `fmis.accounts` or `fmis.snapshotting`. It was tried and failed. `prices.py` is not a
+  counter-example but the pattern: it holds no domain import either and delegates to `fmis.marks`,
+  an application package. Every domain edge `pipeline/cli.py` has is that same shape.
+
+  **What it produces.** `observation_from_assessment` for one reading;
+  `observe_setup_series` for a chronological run, returning a `SetupIdentityRun` that carries the
+  observations, the occurrences, `is_new_occurrence` and `repeated_observation_count` — the facts a
+  future surface needs to print *"seen before"* instead of printing the same idea as new.
+
+  **The anchor is the stop's `MEASURED` origin** (`BD` R-13: the stop price and the structural
+  invalidation are the same number). A stop with no `LevelOrigin` yields `Absent`, never a
+  fabricated anchor. `LevelOrigin.index` travels as provenance only.
+
+  **Three things deliberately not done.** Freshness's three bar ages are `Absent` with a reason —
+  the engine computes none and the adapter may not derive one. `SetupType` is never populated.
+  **No surface calls the adapter yet**, so `fmits setup`, `fmits scan` and `fmits today` are
+  byte-identical and there is **no user-visible capability** — the changelog is correctly unchanged.
+
+  **Verification.** 53 focused tests, 8499 passing under `-W error`, **100 % statement and branch
+  coverage** of the new package, 22/23 adapter mutation probes detected (survivor proven
+  equivalent), 33/34 domain probes re-detected, 4 import-order regression tests, 0 record kinds
+  added, 0 new dependencies, `fmis.swing_setup` unchanged. **One guard allowlist extended** —
+  `test_nothing_below_imports_level_crossing` gained a seventh permitted consumer, on the same
+  footing Milestone AR was admitted, with the justification written into the test. ADR-0028's
+  directional guard needed **no** exemption: the direction map is derived from the engine's own
+  members rather than naming a side.
+
+---
+
+**Previously:** Milestone BG-D1 — Stable Setup Identity (2026-08-19): a setup now keeps the
 same name from one bar to the next, so one idea that persists for a week is **one** setup rather
 than forty. **No new package, no new record kind, no new domain vocabulary** — three modules inside
 `fmis.proposal`, plus a latent defect fixed in `lifecycle.admit` and one line corrected in the
-backtest harness. Committed as `ec352b7` (production code + tests) on top of `2da08b9`, with the product documents directly on top of it. Full record:
+backtest harness. **Not committed and not pushed** — two commits are prepared. Full record:
 [report 0024](../../reports/0024_2026-08-19_SETUP_IDENTITY_IMPLEMENTATION.md).
 
 ---

@@ -381,6 +381,19 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # not to admit a second prefix. The two assertions below are unaffected
         # and still prove the store is never reached from here.
         "fmis.statistics",
+        # Widened for the BG-D1 surface slice, on the identical footing again.
+        # `fmis.setup_observation` is an application-layer package at the same
+        # tier as the five above: it is the only place a `SetupAssessment`
+        # becomes a `SetupObservation`, and it owns both the conversion and the
+        # rendering of the identity block `fmits setup` appends. The CLI names
+        # no domain root for it — the one domain value it needs, a `MarketId`,
+        # comes from `market_from_symbol` in the already-permitted
+        # `fmis.trade_capture`, which is the same discipline the note above
+        # records for `fmis.provenance`. Nothing is persisted: the two types the
+        # package produces are rebuildable projections the store refuses, and
+        # the two assertions below are unaffected and still prove the store is
+        # never reached from here.
+        "fmis.setup_observation",
     )
     reached = {
         name

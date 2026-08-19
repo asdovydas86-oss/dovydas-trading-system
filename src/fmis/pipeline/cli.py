@@ -145,6 +145,7 @@ from fmis.trade_capture import (
     filters_from_text,
     list_trades,
     load_trade,
+    market_from_symbol,
     note_request_from_text,
     open_store,
     plan_request_from_text,
@@ -155,6 +156,7 @@ from fmis.trade_capture import (
     render_outcome,
     render_trade,
 )
+from fmis.setup_observation import observe_setup_series, render_setup_identity
 from fmis.statistics import (
     DIMENSION_NAMES,
     NO_EQUITY_BASIS,
@@ -614,9 +616,52 @@ def _run_setup(args: argparse.Namespace) -> int:
             print()
         if result.assessment is not None:
             print(render_setup(result.assessment))
+            identity = _setup_identity_block(result)
+            if identity is not None:
+                print(identity)
         else:
             print(f"fmits setup: {result.requested_symbol}: {result.failure}", file=sys.stderr)
     return _exit_code_for(results)
+
+
+#: The gap tolerance `fmits setup` groups under. **Zero, and the value cannot
+#: matter here**: one invocation observes one bar, so there is no gap for a
+#: tolerance to span. It is named rather than inlined so the choice is visible —
+#: a surface that one day passes a *series* has to revisit it, and the data model
+#: is explicit that no value for this parameter has been validated.
+SETUP_IDENTITY_GAP_BARS = 0
+
+
+def _setup_identity_block(result: SetupRunResult) -> str | None:
+    """The stable-identity block for one assessed symbol, or `None`.
+
+    **Appended to the page; nothing above it changes.** `render_setup` produces
+    exactly the bytes it always did, and this block is printed after it.
+
+    `None` is returned when the symbol cannot be resolved to a market. That is
+    not a failure of the analysis: `market_from_symbol` refuses to guess where
+    `BTCUSDT` divides into base and quote, and a symbol quoted in something other
+    than the default is a real, legitimate case. Suppressing one *extra* block is
+    the proportionate response — printing a fabricated market to keep the section
+    would put an invented fact under a heading whose entire purpose is identity.
+
+    Nothing here is written anywhere. `SetupObservation` and `SetupOccurrence` are
+    rebuildable projections and the store refuses both.
+    """
+    assessment = result.assessment
+    if assessment is None:  # pragma: no cover - guarded by the caller
+        return None
+    try:
+        market = market_from_symbol(assessment.symbol)
+    except (*CAPTURE_ERRORS, TypeError, ValueError):
+        return None
+    run = observe_setup_series(
+        [assessment],
+        market=market,
+        code_version=fmis.__version__,
+        occurrence_gap_bars=SETUP_IDENTITY_GAP_BARS,
+    )
+    return render_setup_identity(run)
 
 
 SETUP_COMMAND = Command(

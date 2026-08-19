@@ -7,7 +7,60 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** Milestone BP — Statistics & Performance Engine (2026-08-18): the first
+**Last updated for:** Milestone BG-D1 — Stable Setup Identity (2026-08-19): a setup now keeps the
+same name from one bar to the next, so one idea that persists for a week is **one** setup rather
+than forty. **No new package, no new record kind, no new domain vocabulary** — three modules inside
+`fmis.proposal`, plus a latent defect fixed in `lifecycle.admit` and one line corrected in the
+backtest harness. Committed as `ec352b7` (production code + tests) on top of `2da08b9`, with the product documents directly on top of it. Full record:
+[report 0024](../../reports/0024_2026-08-19_SETUP_IDENTITY_IMPLEMENTATION.md).
+
+---
+
+## Milestone BG-D1 — Stable Setup Identity
+
+- **BG-D1 — Stable Setup Identity** (`ec352b7`, on top of `2da08b9`). The measured defect: `AV`
+  keyed setup identity on `Trigger.level.origin.index`, a **window-relative** number that falls by
+  one every bar as the analysis window slides. Identity therefore changed every bar even when
+  nothing about the market had — **549 "unique setups" from 552 directional observations**
+  (report 0012 §7), and `is_first_confirmation` firing on essentially every confirmed bar rather
+  than once per setup.
+
+  **The rule, stated once.** An identity may only be built from facts that do not move when the
+  window moves. A setup's identity is its `Anchor` — `(market, book, direction,
+  invalidation_level_origin)` — and the origin contributes only the pivot candle's **absolute
+  timestamp**, the swing label and the confirmation window. The index is carried as provenance and
+  excluded from identity.
+
+  **What shipped**, all inside `fmis.proposal`:
+
+  - `setup_identity.py` — `stable_origin_id`, `level_origin_ref`, `anchor_of`, `anchor_identity`,
+    `anchors_match`, and `SETUP_VOCABULARY_ID`. **`SetupType` is not a new class**: §9.2 makes it a
+    `VersionedTerm` in the `setup` vocabulary, which `TradePlan.setup_type` already carries.
+  - `observation.py` — `SetupObservation` (§9.3). Composes `SetupReading` rather than redeclaring
+    its eighteen fields. A projection, and it says so by having no record id, no audit and **no
+    codec**.
+  - `occurrence.py` — `SetupOccurrence` and `group_occurrences(...)` (§9.4). A pure function of the
+    series and one named parameter, `occurrence_gap_bars`, which is **required and has no default**
+    because the data model declines to choose a value.
+
+  **Two fixes to existing code.** `lifecycle._anchor_matches` compared anchors with `==`, which
+  includes the window-relative `swing_index` — so creation rule 4 *could never have deduplicated*,
+  and would have created a new proposal every bar. It was inert only because nothing in `src/` ever
+  constructed an `Anchor`. And `swing_setup/backtest_identity.setup_identity` now keys on the
+  pivot's timestamp rather than its index.
+
+  **Verification.** 66 focused tests, 8440 passing under `-W error`, **100 % statement and branch
+  coverage** of all three new modules, **33/34 mutation probes detected** (the one survivor proven
+  equivalent), identical digests across separate processes, 0 new packages, 0 new record kinds,
+  0 domain types changed, 0 architecture guards weakened, 0 new dependencies.
+
+  **No user-visible capability yet.** No composition-root adapter converts a live `SetupAssessment`
+  into a `SetupObservation`, and no `fmits` command surfaces occurrences — so the changelog is
+  deliberately unchanged. That adapter belongs in `fmis.pipeline` and is the natural next slice.
+
+---
+
+**Previously:** Milestone BP — Statistics & Performance Engine (2026-08-18): the first
 milestone that answers *"does this system actually have an edge"*. One new package,
 `fmis.statistics`; **no** new record kind, repository or write path; five new commands —
 `fmits statistics`, `performance`, `expectancy`, `equity` and `trades summary` — and a ninth

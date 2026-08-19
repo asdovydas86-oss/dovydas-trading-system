@@ -7,7 +7,49 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BG-D1b — Setup Identity Pipeline Integration (2026-08-19): the stable setup
+**Last updated for:** BG-D1c — Setup Identity Surface Integration (2026-08-19): `fmits setup SYMBOL`
+now prints the setup's **stable identity** — the line the owner compares between runs to tell *"the
+same idea, still there"* from *"a new idea"*. **The first user-visible capability of the BG-D1 line.**
+The existing page is byte-identical; the block is appended. Committed as `a4191f2`. Full
+record: [report 0026](../../reports/0026_2026-08-19_SETUP_IDENTITY_SURFACE_INTEGRATION.md).
+
+---
+
+## BG-D1c — Setup Identity Surface Integration
+
+- **BG-D1c** (`a4191f2`). `BG-D1` built the identity, `BG-D1b` made it
+  reachable from live data, and this puts it on the page.
+
+  **What it prints.** A `SETUP IDENTITY` block below the existing page: the occurrence identity, the
+  `MEASURED` anchor (market · book · direction, and the origin with its confirmation window), the
+  policy, and the instant measured. Verified live against Binance — `fmits setup DOTUSDT` run twice
+  in two processes printed a byte-identical block on a real `CONFIRMED SHORT`, and `ARBUSDT` printed
+  a different one the same day.
+
+  **What it deliberately does not print.** A repeat count. One invocation observes **one bar** —
+  `fmits setup` fetches each timeframe once and `StructuralFactSheet` keeps a `DataWindow`, not its
+  candles — so `is_new_occurrence` would be `True` and the count `1` for every setup forever. A
+  field that is always the same value dressed as a measurement is the *stale or misleading* case.
+  The counts live in `render_identity_run`, built and tested here, for the first surface that holds
+  a series. `swing_index` is never printed: it is window-relative and would read as identity.
+
+  **Where the renderer lives.** `fmis.setup_observation.render`, not beside `render_setup`. The
+  engine's renderer is a market-half module and may not import a domain value; an identity is one.
+  The command surface composes the two, being the only layer allowed to see both.
+
+  **Verification.** 31 focused tests; 8,499 → 8,530 passing under `-W error`; **100 % statement and
+  branch coverage** of `fmis.setup_observation`; 0 lines missed in the new `cli.py` region;
+  **21/21 mutation probes detected, zero survivors**; live-verified against real market data. The
+  existing page is asserted **byte-identical**. 0 record kinds, 0 repositories, 0 domain types, 0
+  new dependencies, `fmis.swing_setup` untouched.
+
+  **One guard allowlist extended**: `test_the_cli_reaches_neither_the_domain_nor_the_store` gained
+  `fmis.setup_observation`, the fourth app-tier prefix after BN, BO and BP, with the justification
+  written in. The CLI still names no domain root and opens no store.
+
+---
+
+**Previously:** BG-D1b — Setup Identity Pipeline Integration (2026-08-19): the stable setup
 identity is now reachable from live market data. One new application-layer package,
 `fmis.setup_observation`, turns the swing-setup engine's `SetupAssessment` into a
 `SetupObservation`, groups a run of them into `SetupOccurrence`s, and answers *"is this a new idea

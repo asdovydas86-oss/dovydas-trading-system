@@ -47,7 +47,7 @@ Examples:
 - Reports are **never deleted** unless the user explicitly authorizes deletion.
 - Do **not** create generic `REPORT.md` files in the repository root.
 
-**Next available report number: `0026`**
+**Next available report number: `0027`**
 
 ## Metadata header
 
@@ -82,6 +82,7 @@ Each report should open with a short metadata table:
 | 0023 | 2026-08-18 | Implementation | Statistics & Performance Engine (Milestone BP) — Implementation Record | Final | `main` / `e1cfad0` | [0023_2026-08-18_STATISTICS_AND_PERFORMANCE_ENGINE_IMPLEMENTATION.md](0023_2026-08-18_STATISTICS_AND_PERFORMANCE_ENGINE_IMPLEMENTATION.md) |
 | 0024 | 2026-08-19 | Implementation | Stable Setup Identity (Milestone BG-D1) — Implementation Record | Final | `main` / `2da08b9` | [0024_2026-08-19_SETUP_IDENTITY_IMPLEMENTATION.md](0024_2026-08-19_SETUP_IDENTITY_IMPLEMENTATION.md) |
 | 0025 | 2026-08-19 | Implementation | Setup Identity Pipeline Integration (BG-D1b) — Implementation Record | Final | `main` / `2da08b9` | [0025_2026-08-19_SETUP_IDENTITY_PIPELINE_INTEGRATION.md](0025_2026-08-19_SETUP_IDENTITY_PIPELINE_INTEGRATION.md) |
+| 0026 | 2026-08-19 | Implementation | Setup Identity Surface Integration (BG-D1c) — Implementation Record | Final | `main` / `2da08b9` | [0026_2026-08-19_SETUP_IDENTITY_SURFACE_INTEGRATION.md](0026_2026-08-19_SETUP_IDENTITY_SURFACE_INTEGRATION.md) |
 | 0013 | 2026-08-11 | Review | Research Harness Correction V1 — Hostile Review | Final | `main` / uncommitted (base `f9ddc54`) | [0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md](0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
 | 0012 | 2026-08-11 | Implementation | Research Harness Correction V1 — Implementation Record | Final | `main` / uncommitted (base `f9ddc54`) | [0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md](0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) |
 | 0011 | 2026-08-08 | Implementation | Swing Setup Historical Backtest Harness V1 — Implementation Record | Final | `main` / uncommitted (base `35bce7a`) | [0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md](0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md) |

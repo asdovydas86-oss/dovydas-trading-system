@@ -248,6 +248,55 @@ the automation ladder remains unstarted.
 
 ## 4. Product milestones
 
+### 2026-08-19 · `BG-D1c` — Stable setup identity on `fmits setup`
+
+**Status:** Released — `a4191f2` (production code + tests), with this product-docs commit recorded
+directly on top of it. **A new user-visible capability**, and the first one the `BG-D1` line
+produces.
+
+**What the owner can do that was impossible before: tell yesterday's setup from a new one.**
+
+Before this, every run of `fmits setup DOTUSDT` printed a fresh page with nothing on it that said
+whether the idea was the one the owner had already looked at on Monday. A setup that persisted for a
+week read as seven unrelated setups. The measured form of the same defect was recorded in report
+0012 §7: **549 "unique setups" from 552 directional observations**, because identity was keyed on a
+bar index that slid forward with the analysis window.
+
+`fmits setup SYMBOL` now closes the page with the setup's stable identity:
+
+```
+── SETUP IDENTITY ────────────────────────────────────────────────────
+  occurrence  sha256:b9f854b65dfbb2451…
+  anchor      binance:DOTUSDT:spot · swing · short
+  origin      a58da478cdd45bf5 (confirmed over 2 bars)
+  continuity  the same idea keeps this line between runs.
+              A different line is a different setup.
+  policy      swing-setup-v1
+  measured    2026-08-19T16:00:00+00:00
+```
+
+**The line is the mechanism.** It is built from facts that do not move when the window moves — the
+originating swing's own candle timestamp, its label and the confirmation window that made it a
+level. Run the command tomorrow: an identical line means the same idea, still there. A different
+line means a different setup, not the same one re-read.
+
+**Nothing above it changed.** The existing page is byte-identical — same fields, same order, same
+wording — and a test asserts the whole of stdout equals the old page plus the new block.
+
+**It refuses to guess.** A `WAIT` reading has no structural level to anchor on and says so rather
+than inventing one: *"the reading has no stop with a MEASURED level origin to anchor on"*. A symbol
+FMITS cannot split into base and quote — `BTCEUR` under a default USDT quote — prints its full
+analysis with no identity block, because a fabricated market under an identity heading would be
+worse than no heading.
+
+**What it does not claim.** One invocation observes one bar, so the page states no repeat count and
+no "seen N times". Both exist and are tested, and they will appear on the first surface that holds a
+run of readings rather than a single one.
+
+**No position size, no probability, no score and no recommendation** — unchanged, and none was
+added. Nothing is stored: the identity is recomputed from the reading every time, and the store
+refuses to hold it.
+
 ### 2026-08-18 · `BP` — Statistics & Performance Engine
 
 **Status:** Released — `e1cfad0` (production code + tests), with the product-docs commit recorded

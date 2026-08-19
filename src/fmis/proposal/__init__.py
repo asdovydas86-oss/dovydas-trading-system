@@ -31,6 +31,21 @@ from fmis.proposal.lifecycle import (
     admit,
     fold_proposal_state,
 )
+from fmis.proposal.observation import ObservationError, SetupObservation
+from fmis.proposal.occurrence import (
+    OccurrenceError,
+    SetupOccurrence,
+    group_occurrences,
+)
+from fmis.proposal.setup_identity import (
+    SETUP_IDENTITY_VERSION,
+    SETUP_VOCABULARY_ID,
+    anchor_identity,
+    anchor_of,
+    anchors_match,
+    level_origin_ref,
+    stable_origin_id,
+)
 from fmis.proposal.models import (
     AUTHOR_ORIGINS,
     UNCALIBRATED_PROBABILITY,
@@ -83,4 +98,17 @@ __all__ = [
     "AdmissionOutcome",
     "ProposalAdmission",
     "admit",
+    # BG-D1 — stable setup identity and its two projections
+    "SETUP_VOCABULARY_ID",
+    "SETUP_IDENTITY_VERSION",
+    "stable_origin_id",
+    "level_origin_ref",
+    "anchor_of",
+    "anchor_identity",
+    "anchors_match",
+    "ObservationError",
+    "SetupObservation",
+    "OccurrenceError",
+    "SetupOccurrence",
+    "group_occurrences",
 ]

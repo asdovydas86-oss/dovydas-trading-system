@@ -14,6 +14,12 @@ carries. A different level, a direction flip, or an intervening `WAIT` all
 start a new identity. This is deliberately the smallest rule the historical
 observations already support: no clustering, no price-proximity heuristic, no
 new structural concept.
+
+**The level is named by its pivot's timestamp, never by its index.** An index
+is window-relative and therefore moves every bar; a pivot's timestamp does
+not. Keying on the index is the defect `BG-D1` closed, and
+`fmis.proposal.setup_identity` is where the rule now lives for the domain.
+This module applies the same rule to research bookkeeping.
 """
 
 from __future__ import annotations
@@ -47,9 +53,17 @@ def setup_identity(symbol: str, direction: Direction | None, trigger: Trigger | 
         return f"{symbol}|{direction.value}|no-level"
     level = trigger.level
     if level.origin is not None:
+        # The pivot candle's **timestamp**, never its index. `LevelOrigin.index`
+        # is window-relative: the analysis window slides forward one candle per
+        # instant, so a fixed swing's index falls by one every bar and this key
+        # changed every bar even when nothing about the market had — 549 "unique
+        # setups" from 552 directional observations, report 0012 §7. The
+        # timestamp is the same absolute instant however much the window has
+        # moved. The rule is stated once, in `fmis.proposal.setup_identity`; this
+        # is research bookkeeping applying it, not a second definition of it.
         return (
             f"{symbol}|{direction.value}|{level.side.value}|"
-            f"origin={level.origin.index}:{level.origin.label.value}"
+            f"origin={level.origin.timestamp.isoformat()}:{level.origin.label.value}"
         )
     return f"{symbol}|{direction.value}|{level.side.value}|price={level.price!r}"
 

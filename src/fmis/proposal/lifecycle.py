@@ -63,6 +63,7 @@ from fmis.records import (
     validate_domain_record_id,
 )
 from fmis.proposal.models import OpportunityProposal, ProposalError
+from fmis.proposal.setup_identity import anchors_match
 from fmis.snapshotting import Anchor
 
 __all__ = [
@@ -735,4 +736,20 @@ def admit(
 
 
 def _anchor_matches(left: Anchor, right: Anchor) -> bool:
-    return left == right
+    """Whether two anchors name the same idea — `setup_identity`'s rule, not `==`.
+
+    Structural equality was the original implementation and was wrong in a way
+    that could not fire while nothing in the repository constructed an `Anchor`.
+    `LevelOriginRef.swing_index` is **window-relative**: the analysis window slides
+    forward one candle per instant, so the same pivot reports a different index on
+    every bar, and `left == right` therefore returns `False` for two readings of
+    one idea taken a bar apart. Creation rule 4 would have admitted a new proposal
+    every bar — 549 "unique setups" from 552 observations, this time with frozen
+    artifacts pointing at them, which is precisely the failure `admit`'s own
+    docstring says keying on the `MEASURED` anchor prevents.
+
+    Deduplication and the read-time grouping in `occurrence.py` now call the same
+    function, so *"one live proposal per anchor"* and *"one occurrence per anchor"*
+    can never disagree about what the same setup is.
+    """
+    return anchors_match(left, right)

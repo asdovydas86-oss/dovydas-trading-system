@@ -277,6 +277,62 @@ class TestSetupIdentity:
         id_b = setup_identity("BTCUSDT", Direction.LONG, _trigger_confirmed(level_b, 12))
         assert id_a != id_b
 
+    def test_a_sliding_window_does_not_rename_the_same_pivot(self) -> None:
+        """BG-D1's regression: the key is the pivot instant, not its index.
+
+        The same pivot candle, seen from two windows that place it at index 40
+        and index 12, is one setup. Keying on the index made it two, which is
+        how 552 directional observations became 549 "unique setups"
+        (report 0012 §7).
+        """
+        pivot = _BASE + timedelta(hours=16)
+        near = LevelOrigin(
+            index=12,
+            timestamp=pivot,
+            label=StructuralSwingLabel.HIGHER_HIGH,
+            confirmation_bars=2,
+        )
+        far = LevelOrigin(
+            index=40,
+            timestamp=pivot,
+            label=StructuralSwingLabel.HIGHER_HIGH,
+            confirmation_bars=2,
+        )
+        assert near.index != far.index, "the fixture must exercise the defect"
+
+        id_near = setup_identity(
+            "BTCUSDT",
+            Direction.LONG,
+            _trigger_confirmed(_level(105.0, LevelSide.UPPER, near), 10),
+        )
+        id_far = setup_identity(
+            "BTCUSDT",
+            Direction.LONG,
+            _trigger_confirmed(_level(105.0, LevelSide.UPPER, far), 55),
+        )
+        assert id_near == id_far
+
+    def test_the_tracker_reports_one_setup_across_a_sliding_window(self) -> None:
+        """The same idea, observed on forty successive bars, is one setup."""
+        pivot = _BASE + timedelta(hours=16)
+        tracker = IdentityTracker()
+        new_setups = 0
+        for bar in range(40):
+            origin = LevelOrigin(
+                index=40 - bar,
+                timestamp=pivot,
+                label=StructuralSwingLabel.HIGHER_HIGH,
+                confirmation_bars=2,
+            )
+            _, is_new, _ = tracker.observe(
+                "BTCUSDT",
+                Direction.LONG,
+                _trigger_confirmed(_level(105.0, LevelSide.UPPER, origin), bar),
+                SetupState.CANDIDATE,
+            )
+            new_setups += int(is_new)
+        assert new_setups == 1, f"40 bars of one idea reported {new_setups} new setups"
+
     def test_direction_flip_is_a_different_identity_even_at_the_same_level(self) -> None:
         # A LONG stop/UPPER level vs a SHORT confirming UPPER level: contrived,
         # but the point is only that direction participates in the key.

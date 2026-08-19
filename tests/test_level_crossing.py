@@ -1875,6 +1875,16 @@ def test_nothing_below_imports_level_crossing() -> None:
     `fmis.workspace` (ADR-0028): it reuses `PriceLevel`/`LevelSide` **by
     reference** as its own stop/target/trigger values, computing nothing new.
     The direction rule is unchanged.
+
+    Widened again for the `BG-D1` pipeline integration to admit
+    `fmis.setup_observation`, on the identical footing and for the identical
+    reason: it reads `PriceLevel`, `LevelSide` and `LevelOrigin` **by reference**
+    in order to re-express an already-built reading in the trading domain's own
+    vocabulary, and computes nothing — a separate test parses that package with
+    `ast` and asserts it contains no arithmetic operator at all. It derives no
+    level, moves no level, and names no direction. The rule this guard actually
+    protects — that nothing *below* this package reaches into it, and that no
+    consumer re-derives a level — is unchanged.
     """
     root = PACKAGE_DIR.parent
     permitted = {
@@ -1884,6 +1894,7 @@ def test_nothing_below_imports_level_crossing() -> None:
         root / "workspace",
         root / "decision_context",
         root / "swing_setup",
+        root / "setup_observation",
     }
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:

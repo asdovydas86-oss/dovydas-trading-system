@@ -248,6 +248,48 @@ the automation ladder remains unstarted.
 
 ## 4. Product milestones
 
+### 2026-08-20 · `BR` — `fmits evidence` — why a setup exists, and what argues against it
+
+**Status:** Released — `2059ca7` (production code + tests), with this product-docs commit recorded
+directly on top of it. **A new user-visible capability.**
+
+**What the owner can do that was impossible before: see the case against a setup, and learn that
+its corroboration is not what it looked like.**
+
+`fmits evidence SYMBOL` explains an assessment `fmits setup` already produced — why it exists, what
+supports it, what conflicts with it, what confirmation is outstanding, what could not be read, and
+whether enough deterministic information exists to decide. Nothing is recomputed; nothing is
+recommended; `WAIT` is a complete, successful page.
+
+**The section that changes how the owner reads a setup is FAMILY CONFLUENCE.** `fmits setup` reports
+three "independent evidence families" agreeing. That reading is too generous, and this milestone
+proves it:
+
+- the context **regime gate** and the context **trend factor** are the *same reading* — the gate is
+  TRENDING only when that trend is sustained, and a sustained trend is exactly what makes the factor
+  vote, so **passing the gate guarantees the vote**;
+- the two structural trends are one method at two intervals, not two families;
+- the setup-role trend and the evidence alignment read the same series;
+- upstream, `macd_vs_signal` and `macd_histogram` are one fact counted twice, because
+  `histogram = macd_line − signal_line`.
+
+So the page reports agreement over **families, not items**, and states plainly — on every live setup
+today — that **independent corroboration is NOT established**, naming which inputs are shared. On a
+live `ETHUSDT` CONFIRMED setup it shows two agreeing families, one *conflicting* family, and the
+caveat. That is a materially more honest picture of the same setup than was previously available.
+
+**What it deliberately does not do.** No score, no weight, no confidence, no calibrated probability,
+no 0–100 quality, no ranking. A four-level strength enum was specified for this milestone and
+dropped: a monotone ordinal with no deterministic rule behind each level is a score in an enum's
+clothing. `decision_ready` says only that enough information exists — never what to do, and a
+fully-informed `WAIT` is `decision_ready: yes`.
+
+**`fmits today`** gains one section-level evidence note carrying the same caveat. A per-row figure
+was declined: every line comes from the same three factors, so a per-row flag would be provably
+constant and would read as a ranking.
+
+---
+
 ### 2026-08-19 · `BG-D1c` — Stable setup identity on `fmits setup`
 
 **Status:** Released — `a4191f2` (production code + tests), with this product-docs commit recorded

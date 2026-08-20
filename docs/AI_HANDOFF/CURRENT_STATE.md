@@ -7,11 +7,46 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BG-D1c — Setup Identity Surface Integration (2026-08-19): `fmits setup SYMBOL`
-now prints the setup's **stable identity** — the line the owner compares between runs to tell *"the
-same idea, still there"* from *"a new idea"*. **The first user-visible capability of the BG-D1 line.**
-The existing page is byte-identical; the block is appended. Committed as `a4191f2`. Full
-record: [report 0026](../../reports/0026_2026-08-19_SETUP_IDENTITY_SURFACE_INTEGRATION.md).
+**Last updated for:** BR — Setup Evidence (2026-08-20): `fmits evidence SYMBOL` explains an
+already-produced `SetupAssessment` — why it exists, what supports it, what conflicts with it, what
+confirmation is outstanding, what could not be read, and whether enough deterministic information
+exists to decide. **Its most valuable output is the caveat**: family confluence reports agreement
+across evidence families and states plainly that the corroboration behind every live setup is *not*
+independent, naming which upstream inputs are shared. Committed as `2059ca7`. Full record:
+[report 0027](../../reports/0027_2026-08-20_SETUP_EVIDENCE_IMPLEMENTATION.md).
+
+---
+
+## Milestone BR — Setup Evidence
+
+- **New package `fmis.setup_evidence`**, at the `fmis.swing_setup` tier. A **projection**, not a
+  second decision engine: it re-decides nothing, computes no market quantity, and applies no
+  threshold. `decision_ready` is a **total function of `SetupAssessment.sufficiency` alone**.
+- **`fmis.evidence` was not modified.** ADR-0011 §4 explicitly rejected putting
+  supporting/conflicting vocabulary inside the taxonomy, and `fmis.decision_support` already owns
+  an `EvidenceReport`. This package is instead the taxonomy's **first real consumer** in the sense
+  ADR-0011 §7 intended — *shared vocabulary, separate interpretation*. Its report is named
+  `SetupEvidenceReport` so the two never collide.
+- **No strength, score, weight, confidence, probability or rank exists anywhere.** A four-level
+  strength enum was specified for this milestone and deliberately dropped: a monotone ordinal with
+  no deterministic rule per level is a score in an enum's clothing.
+- **Six upstream correlations are recorded, each proven against live code by a test.** The
+  consequential one: the context regime gate and the context structural-trend factor are the **same
+  reading** — passing the gate *guarantees* the vote — so `MINIMUM_AGREEING_FAMILIES = 2` is in
+  practice the gate's own family plus one other. `macd_vs_signal` and `macd_histogram` are one fact
+  counted twice upstream; the trigger and the confirmation are one sentence; the protective level
+  appears three times on an assessment and is projected once.
+- **Surfaces**: `fmits evidence SYMBOL`, registered after `setup`. `fmits today` gains one
+  section-level evidence note — a per-row figure was declined because it would be provably constant
+  and would read as a ranking.
+
+---
+
+**Previously updated for:** BG-D1c — Setup Identity Surface Integration (2026-08-19):
+`fmits setup SYMBOL` now prints the setup's **stable identity** — the line the owner compares
+between runs to tell *"the same idea, still there"* from *"a new idea"*. The existing page is
+byte-identical; the block is appended. Committed as `a4191f2`. Full record:
+[report 0026](../../reports/0026_2026-08-19_SETUP_IDENTITY_SURFACE_INTEGRATION.md).
 
 ---
 
@@ -1851,8 +1886,16 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**6,679 passing** (`.venv/bin/python -m pytest`, ~181 s including the network-touching backtest and
-research suites), identically with `-W error`. Measured at `BL` (2026-08-14); `BK` measured 6,311 and
+**8,693 passing** (`python -m pytest`, ~188 s including the network-touching backtest and research
+suites), identically with `-W error`. Measured at `BR` (2026-08-20); the baseline before `BR` was
+8,530 and `BR` added **163**.
+
+> **Invocation matters.** Several suites import fixtures as `from tests.test_x import ...`, which
+> needs the repository root on `sys.path`. Use `python -m pytest` (which adds the working directory);
+> a bare `pytest` fails at collection on ~17 files. This is pre-existing and unrelated to any
+> milestone.
+
+Previously **6,679 passing**, measured at `BL` (2026-08-14); `BK` measured 6,311 and
 `BL` added 368. Earlier: `BJ` measured 5,876 and `BK` added 435. Earlier: **5,263 passing** measured at `BH` (2026-08-12); `BC` measured 4,653 and
 `BH` added 610.
 

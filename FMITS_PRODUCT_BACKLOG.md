@@ -192,6 +192,20 @@ This is therefore an **outstanding action for the owner**, not a stable resting 
 item must be named before the next implementation task on this board begins.** §6 holds the sequenced
 work `AP` itself defined; §7 holds the epics still awaiting sequencing.
 
+**`BR` — Setup Evidence — is DONE (2026-08-20), and was an owner-directed implementation task, not a
+NOW selection.** It sits on the same footing as `AT`, `AU`, `AV`, `BH`–`BN` and the `BG-D1` line
+above: explicitly scoped by the owner, delivered against that scope, and **it does not satisfy the
+exactly-one-NOW rule**, which remains outstanding. Evidence: `src/fmis/setup_evidence/`,
+`fmits evidence SYMBOL`, 163 new tests, full suite 8,693 passing under `-W error`, and
+[report 0027](reports/0027_2026-08-20_SETUP_EVIDENCE_IMPLEMENTATION.md).
+
+> **`BR` recorded a finding that is a decision for the owner, not for the milestone.** The Swing
+> Setup policy requires `MINIMUM_AGREEING_FAMILIES = 2` independent families. `BR` proved that the
+> context regime gate and the context structural-trend factor are the **same reading** — passing the
+> gate guarantees the vote — so the effective bar is *the gate's own family plus one other*. `BR` is
+> a projection and deliberately changed no policy; it reports the correlation instead. Whether to
+> raise the bar, or to source a genuinely independent third family, is unsequenced work.
+
 ## 6. NEXT
 
 The forced sequence. Each item is blocked on the one above it. **Sequenced, not started** — none of

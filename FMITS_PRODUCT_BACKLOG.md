@@ -199,6 +199,18 @@ exactly-one-NOW rule**, which remains outstanding. Evidence: `src/fmis/setup_evi
 `fmits evidence SYMBOL`, 163 new tests, full suite 8,693 passing under `-W error`, and
 [report 0027](reports/0027_2026-08-20_SETUP_EVIDENCE_IMPLEMENTATION.md).
 
+**`BR` shipped with two defects, fixed in `f2cacf5` (2026-08-20).** An independent release gate run
+*after* `BR` was pushed found that `fmits evidence` crashed on live symbols where a single evidence
+item carried two families, and that one symbol's projection failure suppressed every symbol behind
+it in a multi-symbol run. Both are fixed, with eleven regressions that fail against the unfixed
+code; full suite 8,703 passing under `-W error`. See
+[report 0028](reports/0028_2026-08-20_BR_RELEASE_GATE_FIXES.md).
+
+> **The gate itself is the lesson worth keeping.** A green 8,693-test suite, 94% statement coverage
+> and fifteen killed mutation probes did not catch a crash on the first live symbol outside the
+> fixture set. Both defects were found by running the product, not by running the tests. A milestone
+> is not verified until its surface has been driven against live data across more than one symbol.
+
 > **`BR` recorded a finding that is a decision for the owner, not for the milestone.** The Swing
 > Setup policy requires `MINIMUM_AGREEING_FAMILIES = 2` independent families. `BR` proved that the
 > context regime gate and the context structural-trend factor are the **same reading** — passing the

@@ -248,6 +248,39 @@ the automation ladder remains unstarted.
 
 ## 4. Product milestones
 
+### 2026-08-20 · `BR` (fixes) — `fmits evidence` works on every symbol, and one bad symbol no longer hides the rest
+
+**Status:** Released — `f2cacf5` (production code + tests), with this product-docs commit recorded
+directly on top of it. **Materially improves the reliability of a user-visible capability, and
+removes a blocker to practical use.**
+
+**What the owner can do that was impossible before: run `fmits evidence` on any symbol, and on a
+list of symbols, without losing pages.**
+
+Two defects shipped with `BR` and were found by a release gate run after it was pushed. Both were
+live; neither was caught by the 8,693-test suite.
+
+- **`fmits evidence SYMBOL` crashed on some symbols.** `fmits evidence SOLUSDT` exited `1` with a
+  traceback. The evidence page counts agreement over *families*, and one legitimate evidence item —
+  the `setup_evidence_alignment` reading — belongs to two families at once, by design. When that
+  item was the only one agreeing, an internal consistency check that assumed "never more families
+  than items" rejected a page that was perfectly correct. One in twenty live symbols hit this on the
+  day it was found, and which symbols hit it changes with the market.
+- **One failing symbol suppressed every symbol after it.** `fmits evidence BTCUSDT SOLUSDT ETHUSDT`
+  printed BTCUSDT and then died, discarding a valid **CONFIRMED / LONG** ETHUSDT page. Each symbol
+  is now isolated: a symbol that cannot be explained reports that on stderr and the run continues.
+  The exit code still reflects a run where nothing could be produced.
+
+**Nothing about the analysis changed.** The SOLUSDT page that previously crashed now prints, and it
+still reports `independent corroboration: NOT established` with the same caveats — the fix let an
+honest page appear, it did not make any page more generous. No score, weight or probability was
+introduced, no strategy policy was touched, and `MINIMUM_AGREEING_FAMILIES` remains `2`. The
+regime-gate/vote dependency `BR` surfaced is still an open strategy decision, not silently fixed.
+
+Report: [0028](reports/0028_2026-08-20_BR_RELEASE_GATE_FIXES.md)
+
+---
+
 ### 2026-08-20 · `BR` — `fmits evidence` — why a setup exists, and what argues against it
 
 **Status:** Released — `2059ca7` (production code + tests), with this product-docs commit recorded

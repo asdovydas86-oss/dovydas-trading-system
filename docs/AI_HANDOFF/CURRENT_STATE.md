@@ -40,6 +40,29 @@ independent, naming which upstream inputs are shared. Committed as `2059ca7`. Fu
   section-level evidence note — a per-row figure was declined because it would be provably constant
   and would read as a ranking.
 
+### BR release-gate fixes (`f2cacf5`)
+
+An independent release gate run **after** `BR` was pushed found two live defects the full suite did
+not. Both are fixed; [report 0028](../../reports/0028_2026-08-20_BR_RELEASE_GATE_FIXES.md).
+
+- **`ConfluenceSummary` rejected a legitimate report.** It asserted
+  `independent_agreeing_families <= agreeing_item_count`, but `FACTOR_FAMILIES` maps
+  `setup_evidence_alignment` onto **two** families on purpose. One agreeing item carrying two
+  families is `1` item and `2` families, and `fmits evidence SOLUSDT` crashed with an unhandled
+  traceback. The bound is now `len(agreeing_families)`, plus a guard that families cannot be
+  reported with zero agreeing items. Confluence still counts families, never items, and no caveat
+  or independence rule changed.
+- **`_run_evidence` had no exception boundary around the projection.** Its docstring promised
+  per-symbol isolation but covered only `assessment is None`, so a projection failure aborted the
+  whole run and discarded valid pages behind it. Projection *and* render now sit in a per-symbol
+  guard catching `SetupEvidenceError` only — a `TypeError` or `AttributeError` still propagates —
+  and the exit code counts pages actually rendered.
+
+> **Worth remembering when judging a milestone "verified".** 8,693 green tests, 94% statement
+> coverage and fifteen killed mutation probes did not catch a crash on the first live symbol outside
+> the fixture set. Drive the surface against live data, across several symbols, before calling it
+> done.
+
 ---
 
 **Previously updated for:** BG-D1c — Setup Identity Surface Integration (2026-08-19):
@@ -1886,9 +1909,10 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**8,693 passing** (`python -m pytest`, ~188 s including the network-touching backtest and research
-suites), identically with `-W error`. Measured at `BR` (2026-08-20); the baseline before `BR` was
-8,530 and `BR` added **163**.
+**8,703 passing** (`python -m pytest`, ~189 s including the network-touching backtest and research
+suites), identically with `-W error`. Measured at the `BR` release-gate fixes (`f2cacf5`,
+2026-08-20): `BR` itself measured 8,693 against a pre-`BR` baseline of 8,530 (+163), and the fixes
+removed one test that pinned an invalid invariant and added eleven regressions (+10).
 
 > **Invocation matters.** Several suites import fixtures as `from tests.test_x import ...`, which
 > needs the repository root on `sys.path`. Use `python -m pytest` (which adds the working directory);

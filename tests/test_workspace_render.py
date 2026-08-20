@@ -279,15 +279,17 @@ def test_the_registry_carries_its_commands_in_the_declared_order() -> None:
     # against the portfolio the command before it values; for BO to admit
     # "simulate"; and for BP to admit the five statistics surfaces, registered
     # after "simulate" because a statistic is read over trades the commands
-    # before it produced. All additive, none a replacement for any existing
-    # command.
+    # before it produced; and for BR to admit "evidence", registered
+    # immediately after "setup" because it explains the assessment that command
+    # produces and is read directly after it. All additive, none a replacement
+    # for any existing command.
     #
     # The assertion is on the **list**, not the set: registration order is what
     # `--help` prints, and a command quietly moving to the end of it is a
     # user-visible change this should make somebody justify.
     names = [command.name for command in cli_module.COMMANDS]
     assert names == [
-        "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
+        "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
         "today", "portfolio", "approve", "trade", "simulate",
         "statistics", "performance", "expectancy", "equity", "trades",
         "archive",

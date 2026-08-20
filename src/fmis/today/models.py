@@ -555,6 +555,32 @@ class Opportunities:
         )
     )
 
+    #: One standing statement about the evidence behind **every** line above,
+    #: never a per-line value.
+    #:
+    #: **Why this is a section note and not a column.** A per-row evidence figure
+    #: would be read as a ranking however the header was worded — this class's
+    #: own docstring already refuses to sort by any property of the analysis for
+    #: exactly that reason. It would also carry no information: every line on
+    #: this page comes from the same three directional factors, which all draw
+    #: on the TREND family, so a per-row independence flag is provably constant
+    #: and a constant column reads as a defect or an invitation to rank.
+    #:
+    #: What *is* worth saying once is that the agreement behind these lines is
+    #: not independent corroboration, and where to see why. Set by the builder
+    #: from `fmis.setup_evidence`'s correlation registry rather than written
+    #: here, so it cannot drift from what `fmits evidence` prints.
+    evidence_note: str | NotAvailable = field(
+        default_factory=lambda: NotAvailable(
+            reason="no evidence summary was computed for this page",
+            owned_by="the setup-evidence layer (fmits evidence SYMBOL)",
+            forbidden_inference=(
+                "Do not read the absence as a finding that the evidence is "
+                "independent. Nothing was examined."
+            ),
+        )
+    )
+
     def __post_init__(self) -> None:
         _tuple_of(self.confirmed, OpportunityLine, "confirmed")
         _tuple_of(self.candidates, OpportunityLine, "candidates")
@@ -562,6 +588,8 @@ class Opportunities:
         _tuple_of(self.failed, FailedSymbol, "failed")
         if not isinstance(self.approval_note, NotAvailable):
             _text(self.approval_note, "approval_note")
+        if not isinstance(self.evidence_note, NotAvailable):
+            _text(self.evidence_note, "evidence_note")
 
     @property
     def actionable_count(self) -> int:

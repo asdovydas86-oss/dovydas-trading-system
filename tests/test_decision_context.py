@@ -485,6 +485,17 @@ def test_no_engine_below_imports_this_package() -> None:
     *"could not classify"*. It re-decides nothing — ADR-0026 forbids adding a
     threshold around this judgement, and `fmis.today` adds none. The direction
     rule is unchanged.
+
+    Widened again for Milestone BR to admit `fmis.setup_evidence`: a fifth
+    composition root, at the same tier as `fmis.swing_setup`, which projects an
+    already-produced `SetupAssessment` into an explanation. It imports exactly
+    one name from this package — `ContextState` — and uses it for exactly one
+    thing: `decision_ready` is a **total function of `sufficiency` alone**, so
+    the readiness this engine decided is carried rather than recomputed. That is
+    the strongest possible form of ADR-0026's rule: there is no input other than
+    the `ContextState` through which a second opinion could enter, and a test in
+    that package varies every other field on the assessment to prove the answer
+    never moves. The direction rule is unchanged.
     """
     root = PACKAGE_DIR.parent
     permitted = {
@@ -492,6 +503,7 @@ def test_no_engine_below_imports_this_package() -> None:
         root / "daily",
         root / "swing_setup",
         root / "today",  # BJ: the fourth composition root, above the other three
+        root / "setup_evidence",  # BR: carries sufficiency, never recomputes it
         PACKAGE_DIR,
     }
     for py in root.rglob("*.py"):

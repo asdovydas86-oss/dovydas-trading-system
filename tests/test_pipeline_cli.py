@@ -239,7 +239,7 @@ def test_verify_detects_corruption(
 #: statistics surfaces. The equality is the point — a command silently
 #: disappearing fails this exactly as a command silently appearing does.
 EXPECTED_COMMANDS = {
-    "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
+    "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
     "today", "portfolio", "approve", "trade", "simulate", "archive",
     "statistics", "performance", "expectancy", "equity", "trades",
 }

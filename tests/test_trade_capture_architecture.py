@@ -394,6 +394,20 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # the two assertions below are unaffected and still prove the store is
         # never reached from here.
         "fmis.setup_observation",
+        # Widened for Milestone BR, on the identical footing again.
+        # `fmis.setup_evidence` is an application-layer package at the same tier
+        # as the six above: it projects a `SetupAssessment` the CLI already has
+        # into the evidence page `fmits evidence` prints, and computes nothing.
+        # It is worth recording that the first draft of `fmits evidence` also
+        # reached for `fmis.proposal` — to stamp the setup vocabulary id and
+        # identity version onto `SetupIdentityRef` — and that this guard caught
+        # it. The fix was to drop the two fields, not to admit a domain root:
+        # the identity *string* the page shows comes from the already-permitted
+        # `fmis.setup_observation`, and the vocabulary provenance is printed by
+        # `fmits setup`, which is the surface that owns it. Nothing is
+        # persisted, and the two assertions below are unaffected and still prove
+        # the store is never reached from here.
+        "fmis.setup_evidence",
     )
     reached = {
         name

@@ -330,7 +330,7 @@ def test_the_registry_carries_its_commands_in_the_declared_order() -> None:
     # command.
     names = [command.name for command in cli_module.COMMANDS]
     assert names == [
-        "facts", "mtf", "regime", "swing", "setup", "scan", "backtest", "daily",
+        "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
         "today", "portfolio", "approve", "trade", "simulate",
         "statistics", "performance", "expectancy", "equity", "trades",
         "archive",

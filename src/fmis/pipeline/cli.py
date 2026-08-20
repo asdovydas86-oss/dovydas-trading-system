@@ -156,6 +156,11 @@ from fmis.trade_capture import (
     render_outcome,
     render_trade,
 )
+from fmis.setup_evidence import (
+    SetupIdentityRef,
+    project_setup_evidence,
+    render_setup_evidence,
+)
 from fmis.setup_observation import observe_setup_series, render_setup_identity
 from fmis.statistics import (
     DIMENSION_NAMES,
@@ -678,6 +683,102 @@ SETUP_COMMAND = Command(
     ),
     configure=_configure_setup,
     run=_run_setup,
+)
+
+
+def _configure_evidence(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "symbols",
+        nargs="+",
+        metavar="SYMBOL",
+        help="one or more symbols, explained in the order given",
+    )
+    _add_setup_style_arguments(parser)
+
+
+def _identity_ref_for(result: SetupRunResult) -> SetupIdentityRef | None:
+    """The stable identity of the assessed setup, or `None` when it has none.
+
+    **Reuses the identity `fmits setup` already prints**, through the same
+    `observe_setup_series` call, so the two surfaces can never disagree about
+    what a setup is called. `fmis.setup_evidence` derives no identity of its
+    own — `fmis.proposal.setup_identity` owns that rule.
+
+    `None` is returned for a symbol that cannot be resolved to a market, and for
+    a `WAIT` reading, which produces no occurrence because there is no
+    directional idea to name. Both are ordinary outcomes, not failures.
+    """
+    assessment = result.assessment
+    if assessment is None:  # pragma: no cover - guarded by the caller
+        return None
+    try:
+        market = market_from_symbol(assessment.symbol)
+    except (*CAPTURE_ERRORS, TypeError, ValueError):
+        return None
+    run = observe_setup_series(
+        [assessment],
+        market=market,
+        code_version=fmis.__version__,
+        occurrence_gap_bars=SETUP_IDENTITY_GAP_BARS,
+    )
+    if not run.occurrences:
+        return None
+    return SetupIdentityRef(setup_id=run.occurrences[-1].identity)
+
+
+def _run_evidence(args: argparse.Namespace) -> int:
+    """Print one evidence page per symbol, in requested order.
+
+    Runs exactly the live `fmits setup` path and explains what it produced —
+    the assessment is never recomputed under different arguments, so the page
+    always explains a setup the owner could have seen on `fmits setup`.
+
+    A symbol whose analysis failed prints a failure block and does not stop the
+    remaining symbols, matching `fmits setup`'s own isolation contract.
+    """
+    results = run_setup_for_symbols(
+        args.symbols,
+        timeframes={
+            TimeframeRole.CONTEXT: args.context,
+            TimeframeRole.SETUP: args.setup,
+            TimeframeRole.EXECUTION: args.execution,
+        },
+        limit=args.limit,
+        policy=_policy_from(args),
+        detection=_detection_from(args),
+    )
+    for position, result in enumerate(results):
+        if position:
+            print()
+        if result.assessment is not None:
+            report = project_setup_evidence(
+                result.assessment, setup_identity=_identity_ref_for(result)
+            )
+            print(render_setup_evidence(report))
+        else:
+            print(
+                f"fmits evidence: {result.requested_symbol}: {result.failure}",
+                file=sys.stderr,
+            )
+    return _exit_code_for(results)
+
+
+EVIDENCE_COMMAND = Command(
+    name="evidence",
+    help="explain why a swing setup exists, and what argues against it",
+    description=(
+        "Project the deterministic swing-setup assessment into structured "
+        "evidence: why the setup exists, what currently supports it, what "
+        "conflicts with it, what confirmation is still outstanding, what could "
+        "not be read, and whether enough deterministic information exists to "
+        "decide. Family confluence reports agreement across evidence families "
+        "and states plainly when correlated readings are not independent "
+        "corroboration. WAIT is a successful result. Nothing here is a "
+        "recommendation to trade, and no score, weight or calibrated "
+        "probability is produced."
+    ),
+    configure=_configure_evidence,
+    run=_run_evidence,
 )
 
 
@@ -2837,6 +2938,7 @@ COMMANDS: tuple[Command, ...] = (
     REGIME_COMMAND,
     SWING_COMMAND,
     SETUP_COMMAND,
+    EVIDENCE_COMMAND,
     SCAN_COMMAND,
     BACKTEST_COMMAND,
     DAILY_COMMAND,

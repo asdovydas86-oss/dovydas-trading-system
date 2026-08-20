@@ -368,6 +368,7 @@ def _opportunities_block(opportunities: Opportunities) -> list[str]:
         f"· error {len(opportunities.failed)}"
     )
     lines.extend(_value_or_absence(opportunities.approval_note, label="approval"))
+    lines.extend(_value_or_absence(opportunities.evidence_note, label="evidence"))
 
     for group, texts in (
         (opportunities.confirmed, ("reason", "confirmation", "invalidation")),

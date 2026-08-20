@@ -31,6 +31,7 @@ from typing import Any
 
 from fmis.money import Money, canonical_decimal_text
 from fmis.provenance import Absent
+from fmis.setup_evidence import standing_family_note
 from fmis.statistics import (
     closed_between,
     duration_text,
@@ -280,6 +281,14 @@ def opportunities_from_results(
             {}
             if approval_note is None
             else {"approval_note": approval_note}
+        ),
+        # Derived from the correlation registry, not written here, and stated
+        # once for the whole section rather than per line — see
+        # `Opportunities.evidence_note` for why a per-row figure was declined.
+        **(
+            {}
+            if (note := standing_family_note()) is None
+            else {"evidence_note": note}
         ),
     )
 

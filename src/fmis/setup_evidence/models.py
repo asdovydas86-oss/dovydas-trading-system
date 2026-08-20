@@ -230,6 +230,13 @@ class ConfluenceSummary:
     three — which is the entire reason this type reports families rather than a
     tally of items.
 
+    The converse also holds, and bounding this count by ``agreeing_item_count``
+    was a defect: `FACTOR_FAMILIES` deliberately maps `setup_evidence_alignment`
+    onto **two** families, so a single agreeing item can legitimately contribute
+    two. One such item is `1` item and `2` families, and the count is bounded by
+    the families actually listed in ``agreeing_families`` — never by how many
+    items happened to carry them.
+
     ``independence_established`` is `True` only when at least two agreeing items
     are **family-disjoint**. It is the honest answer to "is this corroboration
     or an echo", and it is `False` far more often than a naive item count would
@@ -260,10 +267,18 @@ class ConfluenceSummary:
                 raise TypeError(f"{name} must be an int")
             if value < 0:
                 raise SetupEvidenceError(f"{name} cannot be negative, got {value}")
-        if self.independent_agreeing_families > self.agreeing_item_count:
+        if self.independent_agreeing_families > len(self.agreeing_families):
             raise SetupEvidenceError(
-                "independent_agreeing_families cannot exceed agreeing_item_count; "
-                "distinct families are counted over the agreeing items themselves"
+                "independent_agreeing_families cannot exceed the number of "
+                "agreeing_families; it counts those families and inventing one "
+                "that is not listed would overstate the agreement"
+            )
+        if self.agreeing_item_count == 0 and (
+            self.agreeing_families or self.independent_agreeing_families
+        ):
+            raise SetupEvidenceError(
+                "agreeing families were reported with no agreeing items; a "
+                "family is only present because some item carried it"
             )
         if not isinstance(self.independence_established, bool):
             raise TypeError("independence_established must be a bool")

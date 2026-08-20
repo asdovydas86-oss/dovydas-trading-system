@@ -157,6 +157,7 @@ from fmis.trade_capture import (
     render_trade,
 )
 from fmis.setup_evidence import (
+    SetupEvidenceError,
     SetupIdentityRef,
     project_setup_evidence,
     render_setup_evidence,
@@ -735,6 +736,15 @@ def _run_evidence(args: argparse.Namespace) -> int:
 
     A symbol whose analysis failed prints a failure block and does not stop the
     remaining symbols, matching `fmits setup`'s own isolation contract.
+
+    **Projection failure is isolated the same way.** An assessment can be
+    produced and still not be projectable, and letting that abort the loop threw
+    away the valid pages of every symbol queued behind it. Only
+    `SetupEvidenceError` is caught, and only around the projection of one
+    symbol: that is the error the package raises for a report it refuses to
+    build. Anything else — a `TypeError`, an `AttributeError`, a bug in this
+    file — is a programmer error and still propagates, because a surface that
+    swallows those reports a clean page over broken code.
     """
     results = run_setup_for_symbols(
         args.symbols,
@@ -747,20 +757,33 @@ def _run_evidence(args: argparse.Namespace) -> int:
         policy=_policy_from(args),
         detection=_detection_from(args),
     )
+    rendered = 0
     for position, result in enumerate(results):
         if position:
             print()
-        if result.assessment is not None:
-            report = project_setup_evidence(
-                result.assessment, setup_identity=_identity_ref_for(result)
-            )
-            print(render_setup_evidence(report))
-        else:
+        if result.assessment is None:
             print(
                 f"fmits evidence: {result.requested_symbol}: {result.failure}",
                 file=sys.stderr,
             )
-    return _exit_code_for(results)
+            continue
+        try:
+            report = project_setup_evidence(
+                result.assessment, setup_identity=_identity_ref_for(result)
+            )
+            page = render_setup_evidence(report)
+        except SetupEvidenceError as failure:
+            # Rendered inside the guard too, so a half-written page is never
+            # printed above the error explaining that it could not be built.
+            print(
+                f"fmits evidence: {result.requested_symbol}: "
+                f"evidence could not be projected: {failure}",
+                file=sys.stderr,
+            )
+            continue
+        print(page)
+        rendered += 1
+    return EXIT_OK if rendered else EXIT_FAILURE
 
 
 EVIDENCE_COMMAND = Command(

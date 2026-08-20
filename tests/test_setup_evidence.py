@@ -639,17 +639,89 @@ def test_confluence_is_not_a_field_on_the_assessment() -> None:
     assert not any("confluence" in name for name in names)
 
 
-def test_confluence_cannot_claim_more_families_than_items() -> None:
+def test_confluence_cannot_claim_a_family_it_does_not_list() -> None:
+    """The count is bounded by `agreeing_families`, never by the item count.
+
+    An earlier form of this guard compared against `agreeing_item_count`, which
+    was wrong: `setup_evidence_alignment` maps to two families, so one agreeing
+    item legitimately contributes two. What must stay impossible is claiming
+    more families than are actually named.
+    """
     with pytest.raises(SetupEvidenceError, match="cannot exceed"):
         ConfluenceSummary(
-            agreeing_families=(EvidenceFamily.TREND, EvidenceFamily.VOLUME),
+            agreeing_families=(EvidenceFamily.TREND,),
             conflicting_families=(),
-            agreeing_item_count=1,
+            agreeing_item_count=3,
             independent_agreeing_families=2,
             independence_established=False,
             derived_from=(),
             caveats=(),
         )
+
+
+def test_confluence_cannot_report_families_with_no_agreeing_items() -> None:
+    """A family is present only because some item carried it."""
+    with pytest.raises(SetupEvidenceError, match="no agreeing items"):
+        ConfluenceSummary(
+            agreeing_families=(EvidenceFamily.TREND,),
+            conflicting_families=(),
+            agreeing_item_count=0,
+            independent_agreeing_families=1,
+            independence_established=False,
+            derived_from=(),
+            caveats=(),
+        )
+
+
+def test_one_agreeing_item_may_carry_two_families() -> None:
+    """The exact shape that crashed `fmits evidence SOLUSDT` on live data.
+
+    One supporting item, two mapped families. `FACTOR_FAMILIES` defines that
+    mapping deliberately, so the report must build — and must still count the
+    two families rather than the one item.
+    """
+    summary = ConfluenceSummary(
+        agreeing_families=(EvidenceFamily.TREND, EvidenceFamily.MOMENTUM),
+        conflicting_families=(),
+        agreeing_item_count=1,
+        independent_agreeing_families=2,
+        independence_established=False,
+        derived_from=(KEY_EVIDENCE_ALIGNMENT,),
+        caveats=("one item, two families",),
+    )
+    assert summary.agreeing_item_count == 1
+    assert summary.independent_agreeing_families == 2
+
+
+def test_confluence_builds_when_the_alignment_is_the_only_agreeing_item() -> None:
+    """The same shape end-to-end, through the real producer.
+
+    Built from the live mapping rather than a hand-written family tuple, so a
+    future change to `FACTOR_FAMILIES` cannot leave this passing vacuously.
+    """
+    from fmis.setup_evidence.project import _confluence
+
+    families = FACTOR_FAMILIES["setup_evidence_alignment"]
+    assert len(families) == 2, "this regression needs a genuinely multi-family item"
+
+    alignment = EvidenceItem(
+        key=KEY_EVIDENCE_ALIGNMENT,
+        families=families,
+        status=SetupEvidenceStatus.SUPPORTING,
+        statement="alignment leans long",
+        observed="upward",
+        source="fmis.decision_support",
+        inputs={"lean": "long"},
+    )
+    summary = _confluence((alignment,), (), frozenset({KEY_EVIDENCE_ALIGNMENT}))
+
+    assert summary.agreeing_item_count == 1
+    assert summary.independent_agreeing_families == 2
+    assert set(summary.agreeing_families) == set(families)
+    # One item cannot corroborate itself, so independence stays unestablished
+    # and the upstream double-count caveat still prints.
+    assert summary.independence_established is False
+    assert any("counted twice" in caveat for caveat in summary.caveats)
 
 
 # ============ 8. no score, weight, confidence or probability ================
@@ -1137,3 +1209,199 @@ def test_render_rejects_a_non_report() -> None:
 def test_project_rejects_a_non_assessment() -> None:
     with pytest.raises(TypeError):
         project_setup_evidence("BTCUSDT")
+
+
+# ============ 12. `fmits evidence` isolates one symbol's projection failure ==
+
+
+def _evidence_results():
+    """Three assessed symbols, in the order the isolation regression needs.
+
+    Each assessment carries its own symbol, because the page header is rendered
+    from the assessment rather than from the requested symbol — three fixtures
+    sharing one symbol would make "the later page rendered" unfalsifiable.
+    """
+    from fmis.swing_setup.compose import SetupRunResult
+
+    return tuple(
+        SetupRunResult(
+            requested_symbol=symbol,
+            assessment=dataclasses.replace(confirmed(), symbol=symbol),
+        )
+        for symbol in ("BTCUSDT", "SOLUSDT", "ETHUSDT")
+    )
+
+
+def _fail_projection_for(target, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the projection raise for exactly one assessment, by identity.
+
+    ``target`` must be the very object the CLI will be handed — the fixtures
+    build equal-but-distinct assessments, so identity is what selects one symbol
+    and leaves its neighbours on the real code path.
+
+    Driven through the CLI's own seam rather than a market shape, so the test
+    pins the *exception boundary* and cannot quietly stop exercising it when the
+    shape that originally triggered it stops occurring.
+    """
+    from fmis.pipeline import cli as cli_module
+
+    real = cli_module.project_setup_evidence
+
+    def projection(assessment, **kwargs):
+        if assessment is target:
+            raise SetupEvidenceError("independent_agreeing_families cannot exceed")
+        return real(assessment, **kwargs)
+
+    monkeypatch.setattr(cli_module, "project_setup_evidence", projection)
+
+
+def test_a_projection_failure_does_not_suppress_the_symbols_behind_it(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """BTCUSDT valid, SOLUSDT fails to project, ETHUSDT must still render.
+
+    The defect this pins lost every page queued behind the failing symbol.
+    """
+    from fmis.pipeline import cli as cli_module
+
+    ordered = _evidence_results()
+    monkeypatch.setattr(cli_module, "run_setup_for_symbols", lambda *a, **kw: ordered)
+    _fail_projection_for(ordered[1].assessment, monkeypatch)
+
+    exit_code = cli_module.main(["evidence", "BTCUSDT", "SOLUSDT", "ETHUSDT"])
+    captured = capsys.readouterr()
+
+    assert "SETUP EVIDENCE — BTCUSDT" in captured.out
+    assert "SETUP EVIDENCE — ETHUSDT" in captured.out, (
+        "the symbol behind the failure was suppressed"
+    )
+    assert "SETUP EVIDENCE — SOLUSDT" not in captured.out
+    assert "SOLUSDT" in captured.err
+    assert "evidence could not be projected" in captured.err
+    # Two symbols still produced a true report, so the run is not a failure.
+    assert exit_code == 0
+
+
+def test_a_projection_failure_reports_that_symbol_on_stderr_not_stdout(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A refusal must never look like a page, and never be half a page."""
+    from fmis.pipeline import cli as cli_module
+
+    ordered = _evidence_results()
+    monkeypatch.setattr(cli_module, "run_setup_for_symbols", lambda *a, **kw: ordered)
+    _fail_projection_for(ordered[1].assessment, monkeypatch)
+
+    cli_module.main(["evidence", "BTCUSDT", "SOLUSDT", "ETHUSDT"])
+    captured = capsys.readouterr()
+
+    assert captured.out.count("SETUP EVIDENCE") == 2
+    assert "could not be projected" not in captured.out
+
+
+def test_every_symbol_failing_to_project_is_a_non_zero_exit(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Isolation must not turn a total failure into a clean exit."""
+    from fmis.pipeline import cli as cli_module
+
+    ordered = _evidence_results()
+    monkeypatch.setattr(cli_module, "run_setup_for_symbols", lambda *a, **kw: ordered)
+
+    def always_fails(assessment, **kwargs):
+        raise SetupEvidenceError("nothing could be projected")
+
+    monkeypatch.setattr(cli_module, "project_setup_evidence", always_fails)
+
+    exit_code = cli_module.main(["evidence", "BTCUSDT", "SOLUSDT", "ETHUSDT"])
+    assert exit_code == 1
+    assert "SETUP EVIDENCE" not in capsys.readouterr().out
+
+
+def test_a_programmer_error_is_not_swallowed_by_the_isolation_guard(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only `SetupEvidenceError` is caught. A bug must still reach the operator."""
+    from fmis.pipeline import cli as cli_module
+
+    ordered = _evidence_results()
+    monkeypatch.setattr(cli_module, "run_setup_for_symbols", lambda *a, **kw: ordered)
+
+    def boom(assessment, **kwargs):
+        raise AttributeError("a bug in the projection, not a refusal")
+
+    monkeypatch.setattr(cli_module, "project_setup_evidence", boom)
+
+    with pytest.raises(AttributeError, match="a bug in the projection"):
+        cli_module.main(["evidence", "BTCUSDT", "SOLUSDT", "ETHUSDT"])
+
+
+def test_a_render_failure_is_isolated_the_same_way(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The guard covers the render too, so no partial page precedes the error."""
+    from fmis.pipeline import cli as cli_module
+
+    ordered = _evidence_results()
+    monkeypatch.setattr(cli_module, "run_setup_for_symbols", lambda *a, **kw: ordered)
+    real = cli_module.render_setup_evidence
+    seen: list[str] = []
+
+    def render(report):
+        seen.append(report.symbol)
+        if len(seen) == 2:
+            raise SetupEvidenceError("cannot render this report")
+        return real(report)
+
+    monkeypatch.setattr(cli_module, "render_setup_evidence", render)
+
+    exit_code = cli_module.main(["evidence", "BTCUSDT", "SOLUSDT", "ETHUSDT"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.count("SETUP EVIDENCE") == 2
+    assert "could not be projected" in captured.err
+
+
+def test_an_analysis_failure_is_isolated_alongside_a_projection_failure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other failure mode on this loop: no assessment was produced at all.
+
+    Restructuring the guard moved this branch, so it is pinned here rather than
+    left to the surfaces that happen to exercise `fmits setup`.
+    """
+    from fmis.pipeline import cli as cli_module
+    from fmis.swing_setup.compose import SetupRunResult
+
+    ordered = (
+        SetupRunResult(requested_symbol="BADUSDT", failure="provider rejected the symbol"),
+        SetupRunResult(
+            requested_symbol="ETHUSDT",
+            assessment=dataclasses.replace(confirmed(), symbol="ETHUSDT"),
+        ),
+    )
+    monkeypatch.setattr(cli_module, "run_setup_for_symbols", lambda *a, **kw: ordered)
+
+    exit_code = cli_module.main(["evidence", "BADUSDT", "ETHUSDT"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "SETUP EVIDENCE — ETHUSDT" in captured.out
+    assert "provider rejected the symbol" in captured.err
+    assert "could not be projected" not in captured.err
+
+
+def test_every_symbol_failing_analysis_is_a_non_zero_exit(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from fmis.pipeline import cli as cli_module
+    from fmis.swing_setup.compose import SetupRunResult
+
+    ordered = (
+        SetupRunResult(requested_symbol="AUSDT", failure="down"),
+        SetupRunResult(requested_symbol="BUSDT", failure="down"),
+    )
+    monkeypatch.setattr(cli_module, "run_setup_for_symbols", lambda *a, **kw: ordered)
+
+    assert cli_module.main(["evidence", "AUSDT", "BUSDT"]) == 1
+    assert "SETUP EVIDENCE" not in capsys.readouterr().out

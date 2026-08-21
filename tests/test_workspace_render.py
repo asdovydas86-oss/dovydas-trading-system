@@ -287,10 +287,14 @@ def test_the_registry_carries_its_commands_in_the_declared_order() -> None:
     # The assertion is on the **list**, not the set: registration order is what
     # `--help` prints, and a command quietly moving to the end of it is a
     # user-visible change this should make somebody justify.
+    # Milestone BS admits "workspace", registered immediately after "today": it
+    # is the same page's successor rather than a later step in the day, built
+    # from the identical run under the identical flags, so it belongs beside the
+    # command it supersedes and before every command that changes what is held.
     names = [command.name for command in cli_module.COMMANDS]
     assert names == [
         "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
-        "today", "portfolio", "approve", "trade", "simulate",
+        "today", "workspace", "portfolio", "approve", "trade", "simulate",
         "statistics", "performance", "expectancy", "equity", "trades",
         "archive",
     ]

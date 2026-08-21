@@ -119,7 +119,14 @@ def test_the_package_imports_no_network_clock_or_filesystem_module() -> None:
 #: are composition roots that already reach `fmis.swing_setup`, the tier this
 #: package sits at; neither is an engine, and nothing below either of them is
 #: admitted. Named one by one so a third arrival is a deliberate edit here.
-_PERMITTED_CONSUMERS = frozenset({"fmis.pipeline.cli", "fmis.today.sections"})
+#: A third arrival, Milestone BS: `fmis.swing_workspace.sections` projects one
+#: `SetupAssessment` per actionable row into the digest `fmits workspace` prints.
+#: It sits at the same application-layer tier as `fmis.today.sections`, above
+#: this package rather than below it, and it calls `project_setup_evidence` and
+#: nothing else — no group is re-derived and no count is recomputed.
+_PERMITTED_CONSUMERS = frozenset(
+    {"fmis.pipeline.cli", "fmis.today.sections", "fmis.swing_workspace.sections"}
+)
 
 
 def test_no_module_below_this_package_imports_it() -> None:

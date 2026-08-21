@@ -240,7 +240,7 @@ def test_verify_detects_corruption(
 #: disappearing fails this exactly as a command silently appearing does.
 EXPECTED_COMMANDS = {
     "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
-    "today", "portfolio", "approve", "trade", "simulate", "archive",
+    "today", "workspace", "portfolio", "approve", "trade", "simulate", "archive",
     "statistics", "performance", "expectancy", "equity", "trades",
 }
 

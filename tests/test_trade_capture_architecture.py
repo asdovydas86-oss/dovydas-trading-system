@@ -408,6 +408,16 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # persisted, and the two assertions below are unaffected and still prove
         # the store is never reached from here.
         "fmis.setup_evidence",
+        # Widened for Milestone BS, on the identical footing again.
+        # `fmis.swing_workspace` is an application-layer package at the same tier
+        # as the seven above: it arranges the page `fmits workspace` prints from
+        # the run `fmis.today` already assembled, and computes nothing. It is the
+        # *second* package to read both halves of FMITS, and it reaches the store
+        # exactly as the first one does — through `fmis.today`, never directly —
+        # so the two assertions below are unaffected and still prove the store is
+        # never reached from here. Nothing is persisted: every type the package
+        # produces is a rebuildable projection the store refuses.
+        "fmis.swing_workspace",
     )
     reached = {
         name

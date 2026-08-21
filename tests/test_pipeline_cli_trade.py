@@ -394,8 +394,15 @@ def test_the_registry_holds_the_trade_command_between_portfolio_and_archive() ->
     # values, and is evaluated before the command that records it. `trade` still
     # immediately precedes `archive`, which is the ordering this test was
     # written to pin.
+    # Milestone BS inserted "workspace" between "today" and "portfolio", and it
+    # is the one insertion that does not follow the "next thing you do" logic
+    # above: `fmits workspace` is the *same* page's successor rather than a
+    # later step, assembled from the identical run under the identical flags, so
+    # it belongs beside the command it supersedes and before every command that
+    # changes what is held. The chain below is otherwise unchanged.
     names = [command.name for command in cli_module.COMMANDS]
-    assert names[names.index("today") + 1] == "portfolio"
+    assert names[names.index("today") + 1] == "workspace"
+    assert names[names.index("workspace") + 1] == "portfolio"
     assert names[names.index("portfolio") + 1] == "approve"
     assert names[names.index("approve") + 1] == "trade"
     # Milestone BO inserted "simulate" between "trade" and "archive": the

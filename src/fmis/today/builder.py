@@ -91,7 +91,9 @@ __all__ = [
     "TODAY_LIMITATIONS",
     "OBJECTIVE",
     "StoreReading",
+    "TodayRun",
     "approvals_for",
+    "assemble_today",
     "build_today",
     "empty_reading",
     "read_store",
@@ -598,6 +600,122 @@ def build_today(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class TodayRun:
+    """One run's three artifacts, kept together rather than discarded.
+
+    `run_today` needs only the last of these, and for two milestones that is all
+    it returned — the scan results and the store reading were built, used and
+    dropped inside it. A **second** composition root above this one then needs
+    the same three things, and its only options were to re-run the scan (twenty
+    symbols, sixty timeframe fetches, a second and disagreeing set of prices) or
+    to re-implement this function's own sequence and drift from it the first time
+    a step is added here.
+
+    So the sequence is named once, returns everything it built, and `run_today`
+    keeps its exact signature and its exact result by taking the last field. No
+    behaviour changed when this type arrived; a caller that wants the inputs the
+    page was assembled from can now have them.
+    """
+
+    results: tuple[Any, ...]
+    reading: StoreReading
+    workspace: TodayWorkspace
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.results, tuple):
+            raise TypeError("results must be a tuple")
+        if not isinstance(self.reading, StoreReading):
+            raise TypeError(
+                f"reading must be a StoreReading, got {type(self.reading).__name__}"
+            )
+        if not isinstance(self.workspace, TodayWorkspace):
+            raise TypeError(
+                f"workspace must be a TodayWorkspace, got "
+                f"{type(self.workspace).__name__}"
+            )
+
+
+def assemble_today(
+    symbols: Sequence[str] = SCAN_UNIVERSE,
+    *,
+    reference_time: datetime,
+    store_root: Path | str | None = None,
+    archive_root: Path | str | None = None,
+    read_records: bool = True,
+    timeframes: Mapping[TimeframeRole, str] | None = None,
+    limit: int | None = None,
+    policy: RegimePolicy | None = None,
+    context_policy: ContextPolicy | None = None,
+    detection: DetectionSettings | None = None,
+    transport: Any | None = None,
+    read_marks: bool = True,
+    mark_interval: str | None = None,
+    sizing: SizingPolicy | None = None,
+    account: Any | None = None,
+    book: Any = DEFAULT_BOOK,
+    classification: Any | None = None,
+    timezone: str | None = None,
+) -> TodayRun:
+    """Run one evening's workspace end to end, keeping every input it used.
+
+    The whole of `run_today`, which is now one line over this. See `TodayRun` for
+    why it exists and `run_today` below for the contract, which is unchanged.
+    """
+    root = default_store_root() if store_root is None else Path(store_root)
+    results = run_market_scan(
+        symbols,
+        timeframes=timeframes,
+        limit=limit,
+        policy=policy,
+        context_policy=context_policy,
+        detection=detection,
+        transport=transport,
+    )
+    prices = (
+        _prices_for(
+            root,
+            at=reference_time,
+            transport=transport,
+            interval=mark_interval,
+        )
+        if read_records and read_marks
+        else None
+    )
+    reading = (
+        read_store(
+            root, at=reference_time, archive_root=archive_root, prices=prices
+        )
+        if read_records
+        else empty_reading(root)
+    )
+    approvals, note = approvals_for(
+        reading,
+        results,
+        policy=(
+            SizingPolicy(policy_id=DEFAULT_SIZING_POLICY_ID)
+            if sizing is None
+            else sizing
+        ),
+        account=account,
+        book=book,
+        classification=classification,
+        timezone=timezone,
+    )
+    return TodayRun(
+        results=tuple(results),
+        reading=reading,
+        workspace=build_today(
+            results,
+            reading,
+            reference_time=reference_time,
+            source=f"binance-public · store {root}",
+            approvals=approvals,
+            approval_note=note,
+        ),
+    )
+
+
 def run_today(
     symbols: Sequence[str] = SCAN_UNIVERSE,
     *,
@@ -641,51 +759,23 @@ def run_today(
     Raises:
         StoreUnreadableError: the store exists and cannot be read.
     """
-    root = default_store_root() if store_root is None else Path(store_root)
-    results = run_market_scan(
+    return assemble_today(
         symbols,
+        reference_time=reference_time,
+        store_root=store_root,
+        archive_root=archive_root,
+        read_records=read_records,
         timeframes=timeframes,
         limit=limit,
         policy=policy,
         context_policy=context_policy,
         detection=detection,
         transport=transport,
-    )
-    prices = (
-        _prices_for(
-            root,
-            at=reference_time,
-            transport=transport,
-            interval=mark_interval,
-        )
-        if read_records and read_marks
-        else None
-    )
-    reading = (
-        read_store(
-            root, at=reference_time, archive_root=archive_root, prices=prices
-        )
-        if read_records
-        else empty_reading(root)
-    )
-    approvals, note = approvals_for(
-        reading,
-        results,
-        policy=(
-            SizingPolicy(policy_id=DEFAULT_SIZING_POLICY_ID)
-            if sizing is None
-            else sizing
-        ),
+        read_marks=read_marks,
+        mark_interval=mark_interval,
+        sizing=sizing,
         account=account,
         book=book,
         classification=classification,
         timezone=timezone,
-    )
-    return build_today(
-        results,
-        reading,
-        reference_time=reference_time,
-        source=f"binance-public · store {root}",
-        approvals=approvals,
-        approval_note=note,
-    )
+    ).workspace

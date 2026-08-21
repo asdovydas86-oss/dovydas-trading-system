@@ -121,6 +121,11 @@ from fmis.pipeline.candles import (
     fetch_simulation_candles,
 )
 from fmis.today import TodayError, render_today, run_today
+from fmis.swing_workspace import (
+    SwingWorkspaceError,
+    render_swing_workspace,
+    run_swing_workspace,
+)
 from fmis.valuation import (
     DEFAULT_BASE_CURRENCY,
     DEFAULT_PORTFOLIO_ID,
@@ -1314,6 +1319,85 @@ TODAY_COMMAND = Command(
     ),
     configure=_configure_today,
     run=_run_today_command,
+)
+
+
+def _run_workspace_command(args: argparse.Namespace) -> int:
+    """Assemble and print the swing decision workspace.
+
+    **The same flags, the same fetch, the same store read as `fmits today`.**
+    `_configure_today` configures this command too, rather than a second copy of
+    twelve arguments that could drift from it, and `run_swing_workspace` forwards
+    every one of them to the identical composition root. The two commands
+    therefore cannot disagree about what the market did or what the store holds;
+    they disagree only about how the same facts are arranged.
+
+    Reads the store; never writes to it. A symbol whose analysis failed appears
+    under *could not be read* and does not stop the run, and the command exits
+    non-zero only when every symbol failed — the "at least one result is a true
+    report" contract `scan`, `daily` and `today` already hold.
+    """
+    reference = _reference_time(args.reference_time, omit=False)
+    assert reference is not None  # `omit=False` always yields an instant
+    scope = scope_from_text(account=args.account, book=args.book)
+    try:
+        workspace = run_swing_workspace(
+            args.symbols,
+            reference_time=reference,
+            store_root=args.store_root,
+            archive_root=args.archive_root,
+            read_records=not args.no_records,
+            timeframes={
+                TimeframeRole.CONTEXT: args.context,
+                TimeframeRole.SETUP: args.setup,
+                TimeframeRole.EXECUTION: args.execution,
+            },
+            limit=args.limit,
+            policy=_policy_from(args),
+            detection=_detection_from(args),
+            read_marks=not args.no_marks,
+            mark_interval=args.mark_interval,
+            sizing=sizing_policy_from_text(
+                policy_id=DEFAULT_SIZING_POLICY_ID,
+                risk_fraction=args.risk_fraction,
+                max_equity_age=args.max_equity_age,
+                max_mark_age=args.max_mark_age,
+                minimum_risk_reward=args.min_risk_reward,
+            ),
+            account=scope[0],
+            book=scope[1],
+            timezone=args.timezone,
+        )
+    except (SwingWorkspaceError, TodayError, *APPROVAL_ERRORS) as error:
+        print(f"fmits workspace: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_swing_workspace(workspace))
+    return (
+        EXIT_FAILURE
+        if workspace.summary.scanned == workspace.summary.unanalysed
+        else EXIT_OK
+    )
+
+
+WORKSPACE_COMMAND = Command(
+    name="workspace",
+    help="the swing decision workspace: one page, ordered for one decision",
+    description=(
+        "Assemble the operator's page from everything FMITS already knows, and "
+        "order the actionable setups by a stated key rather than leaving them "
+        "in scan order: readiness, then approval, then decision-context "
+        "sufficiency, then watchlist position. Every component of that key is "
+        "printed on the row it placed, so the reason one setup sits above "
+        "another can be reconstructed without reading any code. Risk/reward, "
+        "position size and evidence counts order nothing. Sections: global "
+        "market summary, top opportunities, wait list, no trade, active paper "
+        "trades, portfolio summary, statistics snapshot and warnings. Reads the "
+        "durable store and never writes to it; computes no market quantity, no "
+        "monetary quantity and no statistic. This command executes nothing and "
+        "places no orders."
+    ),
+    configure=_configure_today,
+    run=_run_workspace_command,
 )
 
 
@@ -2966,6 +3050,7 @@ COMMANDS: tuple[Command, ...] = (
     BACKTEST_COMMAND,
     DAILY_COMMAND,
     TODAY_COMMAND,
+    WORKSPACE_COMMAND,
     PORTFOLIO_COMMAND,
     APPROVE_COMMAND,
     TRADE_COMMAND,

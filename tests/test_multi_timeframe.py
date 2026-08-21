@@ -850,8 +850,8 @@ def test_registry_names_are_unique() -> None:
     # property this test holds is uniqueness plus an exact roster; both survive.
     assert set(names) == {
         "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
-        "today", "portfolio", "approve", "trade", "simulate", "statistics", "performance",
-        "expectancy", "equity", "trades", "archive",
+        "today", "workspace", "portfolio", "approve", "trade", "simulate",
+        "statistics", "performance", "expectancy", "equity", "trades", "archive",
     }
 
 

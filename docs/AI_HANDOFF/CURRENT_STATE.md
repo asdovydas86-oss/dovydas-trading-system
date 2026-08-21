@@ -7,7 +7,74 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BR — Setup Evidence (2026-08-20): `fmits evidence SYMBOL` explains an
+**Last updated for:** BS — Swing Decision Workspace v1 (2026-08-20): `fmits workspace` assembles the
+operator's page — global market summary, top opportunities, wait list, no trade, active paper
+trades, portfolio, statistics, warnings — and **orders the actionable setups**, which no surface in
+this repository had done before. The order is a stated lexicographic key over four engine states,
+printed on every row it places. Committed as `b6a456c`. Full record:
+[report 0029](../../reports/0029_2026-08-20_SWING_DECISION_WORKSPACE_IMPLEMENTATION.md).
+
+---
+
+## Milestone BS — Swing Decision Workspace v1
+
+- **New package `fmis.swing_workspace`** (5 modules), the **second** package that reads both halves
+  of FMITS and the first that reads them *through* another one: its composition root calls
+  `fmis.today.assemble_today` — the exact sequence `fmits today` runs — and rearranges what it
+  returns. **One scan, one store read, one valuation, one approval pass.** No engine was created and
+  no deterministic computation was duplicated; three tests assert **object identity** between this
+  page's market, portfolio and statistics sections and the day's page's own.
+
+- **The ordering is the milestone, and it is a key rather than a score.** Four components, compared
+  left to right — readiness (`SetupState`) → approval (`ApprovalStatus`) → sufficiency
+  (`ContextState`) → watchlist position — each an ordinal over a written-out vocabulary, each
+  printed on the row with its value and its source. `ranking.py` holds no division, no
+  multiplication and **no float literal at all**. Nine quantities are named as excluded and printed
+  under the rule; **risk/reward is the first of them**, because this repository measured higher
+  displayed R:R with a *worse* outcome, not a better one.
+
+- **Section membership is the engine's own three states**, with no new policy: `CONFIRMED` → TOP
+  OPPORTUNITIES, `CANDIDATE` → WAIT LIST (*"a thesis exists, its confirmation has not"*), `WAIT` →
+  NO TRADE, no assessment → COULD NOT BE READ (never a market statement).
+
+- **Three questions are answerable on a row for the first time**: is this the same idea as
+  yesterday (the stable identity `fmits setup` prints), what argues against it (the evidence digest,
+  with independence *reported* rather than assumed), and am I already in this (the paper book and
+  any recorded position, separately and never totalled).
+
+- **`fmis.today` gained a seam and lost nothing.** `TodayRun` and `assemble_today` are new;
+  `run_today` is one delegation over the latter and keeps its exact signature and result, asserted
+  byte-identical by a test. `fmits today` is unchanged and shares its `configure` function with the
+  new command, so the two cannot drift on flags.
+
+- **Verification.** 251 focused tests; 8,703 → **8,954 passing** under `-W error`; **100 % statement
+  and branch coverage** of all 5 new modules *and* of the modified `fmis/today/builder.py`;
+  **two independent mutation harnesses, 45/45 and 45/45 detected, zero survivors**; 0 record kinds,
+  0 repositories, 0 write paths, 0 new dependencies, 0 ADRs, 0 guards weakened (six extended with
+  justification, four *not* widened — the imports that tripped them were removed instead).
+  Live-verified against Binance: a real CONFIRMED LONG, a real CANDIDATE SHORT with its awaiting
+  condition, two no-trade groups, a pending paper trade whose excursions are absent with the
+  simulator's own reason, a byte-identical store before and after, and byte-identical pages from two
+  separate processes.
+
+- **An independent release gate re-derived every claim on 2026-08-21** rather than accepting the
+  milestone's own account (report 0029 §8a). It proved the seam behaviour-preserving at the AST
+  level, proved `fmits today` **byte-identical against the real pre-change code loaded from `HEAD`**,
+  instrumented one invocation to show every expensive step runs exactly once, exhausted the ordering's
+  state space, fuzzed nine excluded quantities, and checked conservation over 400 randomized scans.
+  It found **five assertion gaps and one guard hole** — the *"writes nothing"* guard listed only the
+  store's verbs, so a raw `write_text` survived; and risk/reward could still decide a **tie**. All
+  six are fixed with regressions that fail against the unfixed code.
+
+> **Two defects were found by attacking the surface, not by the tests.** `fmits workspace BTCUSDT
+> BTCUSDT` lost the entire page to a duplicate guard that could not tell *"asked twice"* from
+> *"claimed by two sections"*; and a row printed `paper: none` beside a real open position, which
+> answers *"am I already in this?"* with the wrong half of the truth. Both are fixed. `BR`'s lesson
+> held again: drive the surface, adversarially, before calling it done.
+
+---
+
+**Previously updated for:** BR — Setup Evidence (2026-08-20): `fmits evidence SYMBOL` explains an
 already-produced `SetupAssessment` — why it exists, what supports it, what conflicts with it, what
 confirmation is outstanding, what could not be read, and whether enough deterministic information
 exists to decide. **Its most valuable output is the caveat**: family confluence reports agreement

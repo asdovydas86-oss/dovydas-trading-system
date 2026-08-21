@@ -67,10 +67,13 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of Milestone `BP` (Statistics & Performance Engine) — what the owner can
+**As of Milestone `BS` (Swing Decision Workspace v1) — what the owner can
 do today.**
 
 ```
+fmits workspace                                 # the operator's page, ordered by a stated key
+fmits workspace BTCUSDT ETHUSDT ARBUSDT         # a watchlist you name, in the order you named it
+fmits workspace --no-records                    # fetch the market, read no store, name every gap
 fmits statistics                                # does this system have an edge: every measured figure
 fmits statistics --as-of 2026-06-30T00:00:00+00:00  # the same figures as they stood at a past instant
 fmits statistics --minimum-sample 50            # refuse every rate below a floor you set
@@ -247,6 +250,81 @@ the automation ladder remains unstarted.
 ---
 
 ## 4. Product milestones
+
+### 2026-08-20 · `BS` — `fmits workspace` — the operator's page, and the first ordering FMITS has ever produced
+
+**Status:** Released — `b6a456c` (production code + tests) on top of `cc4e748`, with this
+product-docs commit recorded directly on top of it. **A new user-visible capability.**
+
+**What the owner can do that was impossible before: open one page and be told what to look at
+first — and be told, on the page, exactly why that order and not another.**
+
+```
+fmits workspace                                 # the whole page, ordered: market, opportunities,
+                                                #   wait list, no trade, paper, portfolio, stats
+fmits workspace BTCUSDT ETHUSDT ARBUSDT         # a watchlist you name, in the order you named it
+fmits workspace --risk-fraction 0.01            # every actionable row sized and approved on the page
+fmits workspace --no-records                    # fetch the market, read no store, name every gap
+fmits workspace --reference-time 2026-08-20T21:00:00+00:00   # a reproducible page
+```
+
+Every flag `fmits today` takes, `fmits workspace` takes, and they are configured by one function —
+the two commands fetch the same data and cannot disagree about it. `fmits today` is unchanged.
+
+**The ordering, and what it is not.** Until now no FMITS surface ordered setups at all: the day's
+page listed them in watchlist order and said so, because a top row reads as the best idea. This page
+orders them and pays for it in public. The order is a **key**, compared left to right, and every part
+of it is printed on the row it placed:
+
+```
+rank key   readiness=confirmed(0) · approval=approved(0) ·
+           sufficiency=sufficient(0) · watchlist=#2(1)
+```
+
+- **readiness** — the setup engine's own state: confirmed before candidate.
+- **approval** — the sizing engine's own verdict: approved, then blocked, then indeterminate, then
+  never checked. *"It breaks a limit you set"* is more settled than *"we could not check"*, and this
+  page orders by how settled a row is.
+- **sufficiency** — the decision-context state behind the analysis.
+- **watchlist** — where you asked for it. This makes the order total: two runs over one scan produce
+  the identical page, byte for byte.
+
+**Nine things order nothing here, and the page names all nine**: risk/reward, stop distance, target
+distance, recommended size, open risk after entry, evidence counts, agreeing family counts,
+direction, and paper-trade result. **Risk/reward is first on that list on purpose** — the one
+measurement this system has published found higher displayed R:R associated with a *worse* outcome,
+not a better one, so a page sorted by it would put the least likely row at the top under a heading
+reading TOP. The geometry is still printed on every row; it is simply not allowed to decide what you
+read first. And the page states, under the rule: *readiness is not desirability.*
+
+**Three questions are answered on the row itself, for the first time.**
+
+- *Is this the same idea I saw yesterday?* — the stable identity `fmits setup` prints, on the row.
+- *What argues against it?* — the evidence digest: supporting, conflicting and awaited counts, the
+  families on each side, and whether the corroboration is **independent**. It usually is not, and the
+  reasons are printed once, in full, under `EVIDENCE INDEPENDENCE`.
+- *Am I already in this?* — the paper book and any recorded position, **separately**. A row that
+  reported only simulated exposure would answer that question with the wrong half of the truth.
+
+**What is on the rest of the page.** A global summary (scanned, confirmed, candidates, no trade,
+unreadable, open positions, paper positions, breadth, risk state, exposure); a **wait list** of
+setups with a thesis and no confirmation yet, each carrying the engine's own sentence about what it
+is waiting for; a **no trade** section grouping the rest on the engine's verbatim reason, split
+between *read and declined* and *could not be classified*; **active paper trades** with entry, risk,
+R, MFE, MAE, bars and state; a **portfolio summary** with exposure, risk used, risk remaining and one
+row per book, never totalled across them; a **statistics snapshot** with every rate refused below its
+sample floor; and every **warning** this run raised — including, for the first time on a page, the
+paper simulator's own warnings about trades waiting on *you* rather than on the market.
+
+**Nothing here computes anything.** Every figure was produced by an engine that already existed or
+folded from a record that already existed; the page runs one scan, one store read, one valuation and
+one approval pass, and rearranges what they returned. It reads the durable store and **writes
+nothing** — a live run leaves it byte-identical. No score, no probability, no recommendation, and
+no order is ever placed.
+
+Report: [0029](reports/0029_2026-08-20_SWING_DECISION_WORKSPACE_IMPLEMENTATION.md)
+
+---
 
 ### 2026-08-20 · `BR` (fixes) — `fmits evidence` works on every symbol, and one bad symbol no longer hides the rest
 

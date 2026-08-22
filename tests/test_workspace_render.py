@@ -291,10 +291,15 @@ def test_the_registry_carries_its_commands_in_the_declared_order() -> None:
     # is the same page's successor rather than a later step in the day, built
     # from the identical run under the identical flags, so it belongs beside the
     # command it supersedes and before every command that changes what is held.
+    # Milestone BT admits "pulse" between "workspace" and "portfolio", and the
+    # position is the argument: orientation across the markets is what the owner
+    # reads *before* choosing an asset to study, so it sits at the end of the
+    # analysis commands and before the first command that concerns their own
+    # money. It changes no existing command and shares no flag with one.
     names = [command.name for command in cli_module.COMMANDS]
     assert names == [
         "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
-        "today", "workspace", "portfolio", "approve", "trade", "simulate",
+        "today", "workspace", "pulse", "portfolio", "approve", "trade", "simulate",
         "statistics", "performance", "expectancy", "equity", "trades",
         "archive",
     ]

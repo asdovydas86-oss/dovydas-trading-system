@@ -400,9 +400,15 @@ def test_the_registry_holds_the_trade_command_between_portfolio_and_archive() ->
     # later step, assembled from the identical run under the identical flags, so
     # it belongs beside the command it supersedes and before every command that
     # changes what is held. The chain below is otherwise unchanged.
+    # Milestone BT inserted "pulse" between "workspace" and "portfolio". It is
+    # the last of the analysis commands rather than the first of the ownership
+    # ones: orientation across the markets is what the owner reads before
+    # choosing an asset, and it reads no position, plan or account at all. The
+    # chain from "portfolio" onward is unchanged, which is what this test pins.
     names = [command.name for command in cli_module.COMMANDS]
     assert names[names.index("today") + 1] == "workspace"
-    assert names[names.index("workspace") + 1] == "portfolio"
+    assert names[names.index("workspace") + 1] == "pulse"
+    assert names[names.index("pulse") + 1] == "portfolio"
     assert names[names.index("portfolio") + 1] == "approve"
     assert names[names.index("approve") + 1] == "trade"
     # Milestone BO inserted "simulate" between "trade" and "archive": the

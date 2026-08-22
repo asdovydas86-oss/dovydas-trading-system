@@ -120,6 +120,13 @@ from fmis.pipeline.candles import (
     SIMULATION_INTERVAL,
     fetch_simulation_candles,
 )
+from fmis.market_pulse import (
+    DEFAULT_PULSE_UNIVERSE,
+    MarketPulseError,
+    render_market_pulse,
+    universe_subset,
+)
+from fmis.pipeline.pulse import run_market_pulse
 from fmis.today import TodayError, render_today, run_today
 from fmis.swing_workspace import (
     SwingWorkspaceError,
@@ -1398,6 +1405,113 @@ WORKSPACE_COMMAND = Command(
     ),
     configure=_configure_today,
     run=_run_workspace_command,
+)
+
+
+def _configure_pulse(parser: argparse.ArgumentParser) -> None:
+    """Four arguments, and the default is the useful one.
+
+    `fmits pulse` with no argument is the command the owner actually runs. Every
+    flag below earns its place by answering a question the default cannot: which
+    markets (a subset), which instant (replay), how old is too old (the owner's
+    own bound), and where from (a test's fake endpoint).
+    """
+    parser.add_argument(
+        "benchmarks",
+        nargs="*",
+        metavar="BENCHMARK",
+        help=(
+            "benchmark ids to read, in the order given (default: the whole "
+            "configured universe). Ids, not provider symbols — e.g. BTC, not "
+            "BTCUSDT"
+        ),
+    )
+    parser.add_argument(
+        "--as-of",
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "the instant to describe (default: now). Bars opening after it are "
+            "excluded, so supplying it makes the page reproducible"
+        ),
+    )
+    parser.add_argument(
+        "--max-age",
+        default=None,
+        metavar="HOURS",
+        type=float,
+        help=(
+            "your staleness bound, in hours. With no bound every age is stated "
+            "and nothing is called stale: a bound this system chose for you "
+            "would be a threshold it invented"
+        ),
+    )
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        metavar="URL",
+        help=argparse.SUPPRESS,
+    )
+
+
+def _run_pulse(args: argparse.Namespace) -> int:
+    """Fetch the configured universe and print the orientation page.
+
+    **One unavailable market never costs the page.** `run_market_pulse` isolates
+    each market's provider failure onto its own row, so the exit code reflects
+    whether *anything* could be read rather than whether *everything* could —
+    the "at least one result is a true report" contract `scan`, `daily`, `today`
+    and `workspace` already hold.
+    """
+    reference = _reference_time(args.as_of, omit=False)
+    assert reference is not None  # `omit=False` always yields an instant
+    if args.max_age is not None and args.max_age <= 0:
+        print(
+            "fmits pulse: --max-age must be positive; a non-positive bound "
+            "marks every reading stale, including one taken this second",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    max_age = (
+        None if args.max_age is None else timedelta(hours=args.max_age)
+    )
+    try:
+        universe = (
+            DEFAULT_PULSE_UNIVERSE
+            if not args.benchmarks
+            else universe_subset(
+                DEFAULT_PULSE_UNIVERSE, tuple(args.benchmarks), name="selected"
+            )
+        )
+        pulse = run_market_pulse(
+            as_of=reference, universe=universe, base_url=args.base_url
+        )
+    except MarketPulseError as error:
+        print(f"fmits pulse: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_market_pulse(pulse, max_age=max_age))
+    return EXIT_FAILURE if pulse.is_empty else EXIT_OK
+
+
+PULSE_COMMAND = Command(
+    name="pulse",
+    help="global market pulse: what the tracked markets are doing right now",
+    description=(
+        "One deterministic orientation across the configured market universe, "
+        "for the question that comes before choosing an asset to study: what "
+        "are these markets doing, and what can this system not tell me? Prints "
+        "each market's move over named horizons, the same moves ordered by one "
+        "stated quantity, measured volatility, co-movement against one named "
+        "reference, every market that could not be read with its reason, and "
+        "the age and provenance of every figure. Horizons are counts of closed "
+        "bars, not durations, because this build holds no trading calendar. "
+        "Volatility is measured and deliberately not classified. Nothing here "
+        "is a view, a signal or a suggested action; no setup, plan, position "
+        "or approval is read, and none is changed. This command executes "
+        "nothing and places no orders."
+    ),
+    configure=_configure_pulse,
+    run=_run_pulse,
 )
 
 
@@ -3051,6 +3165,7 @@ COMMANDS: tuple[Command, ...] = (
     DAILY_COMMAND,
     TODAY_COMMAND,
     WORKSPACE_COMMAND,
+    PULSE_COMMAND,
     PORTFOLIO_COMMAND,
     APPROVE_COMMAND,
     TRADE_COMMAND,

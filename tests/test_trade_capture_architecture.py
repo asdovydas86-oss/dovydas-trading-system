@@ -418,6 +418,23 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # never reached from here. Nothing is persisted: every type the package
         # produces is a rebuildable projection the store refuses.
         "fmis.swing_workspace",
+        # Widened for Milestone BT, on the identical footing again — and this one
+        # crosses *less* than any of the eight above. `fmis.market_pulse` is a
+        # market-half package: it reads no store, imports no domain root, names
+        # no provider and holds no owner state, so the rule this guard actually
+        # protects — that `fmis.pipeline` never reaches `fmis.persistence` — is
+        # not merely unaffected but unreachable from here. What the CLI does with
+        # it is parse benchmark ids, resolve a universe subset and print; the
+        # provider terminates in `fmis.pipeline.pulse`, exactly as it terminates
+        # in `fmis.pipeline.prices` for a mark.
+        #
+        # It is worth recording what this guard did *not* have to be widened for.
+        # `fmis.market_pulse.universe` documents that its provider label matches
+        # the fact-sheet root's, and the first draft named that module by path in
+        # a docstring — which tripped `test_structural_facts.py`'s raw-text scan.
+        # The fix was to name it in prose, not to widen that guard, following the
+        # note `fmis.pipeline.prices` already carries for the same situation.
+        "fmis.market_pulse",
     )
     reached = {
         name

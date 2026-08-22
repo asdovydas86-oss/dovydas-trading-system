@@ -251,6 +251,70 @@ the automation ladder remains unstarted.
 
 ## 4. Product milestones
 
+### 2026-08-22 · `BT` — `fmits pulse` — what the markets are doing, and what FMITS cannot see
+
+**Status:** Released — `1b56069` (production code + tests) on top of `8ecd822`, with this
+product-docs commit recorded directly on top of it. **A new user-visible capability.**
+
+**What the owner can do that was impossible before: open one page and be oriented across the
+markets — before deciding which asset to investigate — and be told, on the same page, exactly which
+markets this system cannot read and why.**
+
+```
+fmits pulse                                     # the whole configured universe
+fmits pulse ETH BTC                             # only these, in the order you typed them
+fmits pulse --as-of 2026-08-22T06:00:00+00:00   # a reproducible page
+fmits pulse --max-age 6                         # mark anything older than six hours stale
+```
+
+Every prior FMITS surface answered *"what about this asset?"* — `facts`, `mtf`, `regime`, `setup`,
+`evidence`, `swing`. `fmits scan` answered *"which of my twenty symbols has a setup?"*, which is a
+search. None answered the question that comes first.
+
+**The most valuable thing on the page is what is missing from it.** Six crypto markets are read
+live; five more — the S&P 500, the dollar index, gold, the US 10-year yield and VIX — are carried in
+the universe and reported as unreadable, each naming the kind of adapter it would need:
+
+```
+never asked for — no provider is configured:
+  US Dollar Index [DXY]: no provider is configured for this market in this
+    build; the only market data adapter that exists here serves public crypto
+    spot candles, and a currency index is not reachable through it
+```
+
+A page that listed only what it can fetch would answer *"what is happening across the markets"* with
+a crypto-shaped silence, and the reader would not know the silence was there.
+
+**Five kinds of absence are kept apart**, because a page that collapses them teaches its reader to
+ignore all of them: *no provider configured* · *a configured provider failed* · *fewer closed bars
+than the horizon needs* · *mathematically undefined* · *not comparable*. **A market that did not
+move is none of those** — it prints `+0.00%`.
+
+**What the page will not say.** No BUY, SELL, LONG, SHORT, bullish, bearish, risk-on or risk-off
+appears anywhere, and none was invented for this milestone. Volatility is printed as a measured
+number and is **deliberately not classified** — calling a reading elevated needs a baseline
+distribution this build does not compute, so the page prints the number and says so. Correlation is
+printed under a standing caveat that it is a description of one window and not causation.
+
+**The ordering is an ordering, not a score.** Markets are placed by one measured quantity —
+`period_return` over one named horizon, among markets in one quote unit — and seven other quantities
+are printed as explicitly *not* part of it, realized volatility first among them. Two markets priced
+in different currencies are never placed in one list, because a return in EUR contains the EUR/USD
+move.
+
+**Horizons are counts of closed bars, not durations**, because FMITS holds no trading calendar. A
+continuously traded market may additionally print *"(7 days)"* beside *168 bars* — but only when the
+window it measured actually covered seven days. A provider that omitted bars produces 168 bars over
+eleven days, and the page falls back to the bar count rather than overclaim.
+
+**Nothing about trading changed.** No setup, plan, position, approval or paper trade is read, and no
+`CONFIRMED`/`CANDIDATE`/`WAIT` state can be affected by this command. It executes nothing, places no
+orders, writes nothing, and uses no credential.
+
+Full record: [report 0030](reports/0030_2026-08-22_GLOBAL_MARKET_PULSE_IMPLEMENTATION.md).
+
+---
+
 ### 2026-08-20 · `BS` — `fmits workspace` — the operator's page, and the first ordering FMITS has ever produced
 
 **Status:** Released — `b6a456c` (production code + tests) on top of `cc4e748`, with this

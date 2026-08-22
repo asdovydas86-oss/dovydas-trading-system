@@ -107,6 +107,10 @@ fmits portfolio --mark-interval 4h         # price every holding from a coarser 
 fmits workspace                            # the operator's page, ordered by a stated key
 fmits workspace BTCUSDT ETHUSDT ARBUSDT    # a watchlist you name, in the order you named it
 fmits workspace --no-records               # fetch the market, read no store, name every gap
+fmits pulse                                # what the tracked markets are doing, and what is unreadable
+fmits pulse ETH BTC                        # only these markets, in the order you typed them
+fmits pulse --as-of ISO8601                # a reproducible page
+fmits pulse --max-age 6                    # mark any reading older than six hours stale
 fmits today                                # the daily trading workspace: one page, seven sections
 fmits today --risk-fraction 0.01           # every actionable candidate sized and approved on the page
 fmits today BTCUSDT --store-root PATH      # a chosen watchlist, against a chosen store (read-only)
@@ -222,6 +226,24 @@ and **it does not satisfy the exactly-one-NOW rule**, which remains outstanding.
 `src/fmis/swing_workspace/`, `fmits workspace`, 251 new tests, full suite 8,954 passing under
 `-W error`, and [report 0029](reports/0029_2026-08-20_SWING_DECISION_WORKSPACE_IMPLEMENTATION.md).
 Committed as `b6a456c` (production code + tests) with the documentation commit directly on top.
+
+**`BT` — Global Market Pulse Foundation — is DONE (2026-08-22), and was an owner-directed
+implementation task, not a NOW selection.** It sits on the same footing as `AT`, `AU`, `AV`,
+`BH`–`BN`, the `BG-D1` line, `BR` and `BS`: explicitly scoped by the owner, delivered against that
+scope, and **it does not satisfy the exactly-one-NOW rule**, which remains outstanding. It is
+nevertheless the first milestone since `AK` to open a *new product direction* rather than deepen the
+swing slice: it describes markets, not an asset and not the owner's money, and it is deliberately
+usable with no reference to swing trading. Evidence: `src/fmis/market_pulse/`,
+`src/fmis/pipeline/pulse.py`, `fmits pulse`, 366 new tests, full suite **9,320 passing** under
+`-W error`, 100 % statement and branch coverage of all seven new modules, 38/38 development and
+20/20 release-gate mutation probes detected, and [report 0030](reports/0030_2026-08-22_GLOBAL_MARKET_PULSE_IMPLEMENTATION.md).
+Committed as `1b56069`.
+
+> The milestone's own boundary is worth carrying forward: `BT` builds the deterministic foundation
+> that Macro, News, Geopolitics, On-chain and Derivatives will later attach to, and it built **none
+> of them**. It also declined the Swing Workspace integration §17 of its brief permitted only if
+> clean, and documented the seam instead — a guard test asserts neither `fmis.today` nor
+> `fmis.swing_workspace` imports it, so wiring it later is a deliberate edit rather than a drift.
 
 > **`BS` is the first FMITS surface that orders setups, and the order is a key rather than a
 > score.** Every previous surface refused to order at all, on the stated ground that a top row reads

@@ -7,12 +7,68 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BS — Swing Decision Workspace v1 (2026-08-20): `fmits workspace` assembles the
-operator's page — global market summary, top opportunities, wait list, no trade, active paper
-trades, portfolio, statistics, warnings — and **orders the actionable setups**, which no surface in
-this repository had done before. The order is a stated lexicographic key over four engine states,
-printed on every row it places. Committed as `b6a456c`. Full record:
-[report 0029](../../reports/0029_2026-08-20_SWING_DECISION_WORKSPACE_IMPLEMENTATION.md).
+**Last updated for:** BT — Global Market Pulse Foundation (2026-08-22): `fmits pulse` answers the
+question that comes *before* choosing an asset — **what are the tracked markets doing, and what can
+this system not tell me?** The second half is the product: the page reports five markets it cannot
+read, each naming the adapter it would need. Committed as `1b56069`. Full record:
+[report 0030](../../reports/0030_2026-08-22_GLOBAL_MARKET_PULSE_IMPLEMENTATION.md).
+
+---
+
+## Milestone BT — Global Market Pulse Foundation
+
+- **New package `fmis.market_pulse`** (5 modules) plus `fmis.pipeline.pulse`, a third sibling of
+  `pipeline/prices.py` and `pipeline/candles.py`. It is the first surface in this repository that
+  describes **markets** rather than an asset, a setup or the owner's money — and the first that is
+  deliberately usable with no reference to swing trading at all.
+
+- **It computes nothing.** Every number is `fmis.relative_value`'s — `period_return`,
+  `realized_volatility`, `pearson_correlation` — over observation series from
+  `fmis.data.reduction`. `measure.py`, `pulse.py` and the composition root hold **zero arithmetic
+  operators**, with no exception list. The package holds **two float literals in total**, both the
+  `[-1, 1]` bound a Pearson correlation cannot leave. `fmis.features.indicators.atr` was
+  deliberately *not* used: an absolute range in a market's own quote currency is not comparable
+  across markets, and comparability is the only reason the page prints volatility at all.
+
+- **A horizon is a count of closed bars, never a duration.** *"The last 24 closed 1h bars"* is well
+  defined for any market; *"the last 24 hours"* is only well defined for one that never closes.
+  `TradingSchedule` (`CONTINUOUS`/`SESSION_BOUND`/`UNKNOWN`) is the minimum session vocabulary and
+  is **not** a calendar — no holiday table, no exchange timezone, no open/closed computation exists.
+  `UNKNOWN` answers exactly as `SESSION_BOUND` does: a schedule nobody established is not a schedule
+  that happens to be 24/7.
+
+- **The ordering is an ordering, not a score**: `period_return` over one named horizon, among
+  markets in one quote unit, higher first, ties by id. Produced by two stable sorts so no market
+  quantity is ever negated. Seven quantities are named as excluded and printed under it, and a guard
+  forbids any field named `score`, `weight`, `rank`, `confidence`, `probability` or `strength`.
+  An ordering **refuses to mix quote units** — a return priced in EUR contains the EUR/USD move.
+
+- **Five distinct absences, kept distinct**: no configured provider · a provider that failed · a
+  window shorter than the horizon · a mathematically undefined result · a comparison the units or
+  bars refuse. **A zero move is none of them** and prints as `+0.00%`; the constructor makes a
+  value-and-a-reason, or neither, unrepresentable.
+
+- **Freshness follows the repository's existing policy rather than inventing one.** Age is always
+  reported; *stale* is said only against an owner-supplied `--max-age`, because
+  `fmis.position_sizing.SizingPolicy` already records that a bound this build picked would be a
+  threshold invented where the specification says not to.
+
+- **Verification.** 366 focused tests; 8,954 → **9,320 passing** under `-W error`; **100 % statement
+  and branch coverage** of all 7 new modules *and* of every BT-added line of `fmis/pipeline/cli.py`;
+  **38/38 development and 20/20 independent release-gate mutation probes detected, zero survivors**;
+  0 record kinds, 0 repositories, 0 write paths, 0 ADRs, 0 new dependencies. Live-verified against
+  Binance: six real markets over three horizons, real volatility and co-movement, all five dark
+  markets reported, byte-identical pages from two processes, and a live partial provider failure
+  isolated onto its own row while both real markets still printed.
+
+> **The hostile review found a page that overclaimed.** A `CandleSeries` permits forward gaps, so a
+> provider that omitted bars returns 168 hourly bars spanning **eleven days** — and the page printed
+> `168_bars (7 days)` over it. `Horizon` now carries the span its phrase asserts and refuses to hold
+> one without the other; the renderer prints the phrase only when the measured window actually
+> equals it, and falls back to the bar count otherwise. A second defect — a horizon shorter than an
+> engine's own minimum reaching the engine as an unhandled traceback — is caught before the call and
+> reported as *a configuration fault rather than a missing reading*, so it can never read as an
+> outage.
 
 ---
 

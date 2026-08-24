@@ -245,6 +245,42 @@ Committed as `1b56069`.
 > clean, and documented the seam instead — a guard test asserts neither `fmis.today` nor
 > `fmis.swing_workspace` imports it, so wiring it later is a deliberate edit rather than a drift.
 
+**`BU` — Macro & Cross-Asset Context Foundation — is DONE (2026-08-23), and was an owner-directed
+implementation task, not a NOW selection.** It sits on the same footing as `AT`, `AU`, `AV`,
+`BH`–`BN`, the `BG-D1` line, `BR`, `BS` and `BT`: explicitly scoped by the owner, delivered against
+that scope, and **it does not satisfy the exactly-one-NOW rule**, which remains outstanding. It is
+the first milestone to attach a real second data source to FMITS and the first to describe markets
+outside crypto. Evidence: `src/fmis/macro/`, `src/fmis/providers/fred.py`,
+`src/fmis/pipeline/market_data.py`, `src/fmis/pipeline/macro.py`, `fmits macro`, 496 new tests, full
+suite **9,824 passing** under `-W error`, 99 % statement coverage over the BU scope, 36/36 semantic
+mutation probes killed, 32 hostile-review attacks kept as permanent tests, and
+[report 0031](reports/0031_2026-08-23_MACRO_AND_CROSS_ASSET_CONTEXT_IMPLEMENTATION.md).
+Committed as `2b30e38` (production code + tests) with the documentation commit directly on top.
+
+> **`BU`'s honest result is as much what it declined to read as what it read.** Five of `BT`'s five
+> dark markets are now measured from a public Federal Reserve download that needs no key. Two stay
+> dark — the ICE Dollar Index because it is licensed, and spot gold because the source's series were
+> discontinued — and the page names each reason. The Fed's broad dollar index *is* read, under its
+> own name and its own unit, and is never printed as DXY: they are different measures over different
+> baskets, and substituting one would have been the most plausible-looking error the page could
+> make.
+
+> **The milestone's central engineering result is that a yield is no longer representable as a
+> price.** `QuantityKind` was added to the shared benchmark vocabulary, a rate-like market produces
+> no percentage move and no realized volatility at all, and `fmis.macro.rates` states a yield's move
+> as three separately-named quantities with no field called *the* change. That last guard was added
+> because the live demonstration — run after the whole suite was green — printed
+> `US10Y latest_observation: +0.86%` on `fmits pulse`. The suite had asserted the *comparison* rule
+> and not the *display* rule. Recorded in §17 of report 0031 rather than quietly fixed.
+
+> **`BU` stopped before interpretation, deliberately.** No AI, no prompt, no regime, no
+> risk-on/risk-off, no causal claim, no forecast. Two limitations are carried forward rather than
+> hidden: a macro observation carries a *date* and not an instant, so every age is overstated by up
+> to one period and never understated; and this build still holds no trading calendar, so no window
+> is described in days or weeks. It also declined the swing-workspace integration:
+> a guard test asserts `fmis.swing_workspace`, `fmis.today` and `fmis.setup_evidence` consume none
+> of it, so attaching macro as a separate evidence domain later is a deliberate edit.
+
 > **`BS` is the first FMITS surface that orders setups, and the order is a key rather than a
 > score.** Every previous surface refused to order at all, on the stated ground that a top row reads
 > as the best idea. `BS` orders by four named engine states, prints every component on the row it

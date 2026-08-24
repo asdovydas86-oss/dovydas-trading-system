@@ -7,11 +7,83 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BT — Global Market Pulse Foundation (2026-08-22): `fmits pulse` answers the
-question that comes *before* choosing an asset — **what are the tracked markets doing, and what can
-this system not tell me?** The second half is the product: the page reports five markets it cannot
-read, each naming the adapter it would need. Committed as `1b56069`. Full record:
-[report 0030](../../reports/0030_2026-08-22_GLOBAL_MARKET_PULSE_IMPLEMENTATION.md).
+**Last updated for:** BU — Macro & Cross-Asset Context Foundation (2026-08-23): `fmits macro`
+answers **what are equities, the dollar, yields and volatility doing, and what can this system not
+tell me?** Five of BT's five dark markets are now measured from a real public source; the two that
+remain dark name a missing *licence* rather than a missing adapter. Committed as `2b30e38`.
+Full record:
+[report 0031](../../reports/0031_2026-08-23_MACRO_AND_CROSS_ASSET_CONTEXT_IMPLEMENTATION.md).
+
+---
+
+## Milestone BU — Macro & Cross-Asset Context Foundation
+
+- **New package `fmis.macro`** (5 modules) plus `fmis.pipeline.macro`, `fmis.pipeline.market_data`
+  and a second adapter `fmis.providers.fred`. `fmits macro` is the first surface describing markets
+  outside crypto, and it is deliberately not named or shaped for trading: the same facts are meant
+  to serve an equity thesis, an ETF or sector review and a portfolio risk review. A guard asserts no
+  type here is named for swing trading, and that `fmis.swing_workspace`, `fmis.today` and
+  `fmis.setup_evidence` consume none of it.
+
+- **A second provider: public FRED CSV downloads**, no API key and no credential. Five markets went
+  live — `SPX` (S&P 500), `USDBROAD` (Fed nominal broad dollar index), `US2Y`, `US10Y`, `VIX`.
+
+- **`DXY` and `XAU` stay dark, and the reason is not an adapter.** ICE's DXY is a licensed index and
+  the broad dollar index is a genuinely different measure — 26 currencies with revised weights
+  against six fixed in 1973 — so it is carried under its own name as `USDBROAD` and never under
+  DXY's. The LBMA gold series the source used to publish are discontinued and return 404. Printing
+  a substitute under either name would have been the most plausible-looking lie this page could
+  tell, and a test asserts it cannot happen.
+
+- **A yield is not a price, and the type system now knows it.** `QuantityKind` (`PRICE_LIKE` /
+  `RATE_LIKE`) was added to `fmis.market_pulse` — it belongs there because `fmits pulse` itself
+  needs it. `fmis.macro.rates` is a new engine computing a yield move as **three named quantities**
+  — basis points, percentage points and the relative change — with no field called *the* change.
+  A rate-like market produces **no percentage move and no realized volatility at all**, so the
+  wrong number cannot reach a page by accident. This was caught by the live demonstration after the
+  whole suite was green; see §17 of report 0031.
+
+- **Macro gets its own horizons.** `latest_observation` / `5_observations` / `21_observations`,
+  distinct from BT's hourly `latest_bar` / `24_bars` / `168_bars`. 168 hourly bars is one week and
+  168 daily observations is eight months; one label over both would have been indefensible. No
+  macro window is ever described in days or weeks, because five business days span seven calendar
+  days normally and nine over a holiday weekend, and this build still has no calendar.
+
+- **Comparability is a computed refusal, not a renderer convention.** Two measurements are compared
+  only when quantity kind, unit, observation interval, horizon and metric all match, and a refusal
+  names *every* component that differs. Correlation drops the unit — and only the unit — because a
+  correlation of simple returns is scale-invariant; dropping the quantity kind with it would put a
+  ratio-of-rates beside a price return in one number.
+
+- **Freshness is judged per source, never by one bound.** `FreshnessPolicy(publication_period,
+  tolerance, basis)` — every policy must state where its figures came from. A daily macro series is
+  not late because it did not update in an hour, and an hourly series is not current because it
+  updated within a week. The states are `on_schedule` / `behind_schedule` / `unknown`, deliberately
+  not fresh/stale.
+
+- **Alignment is `fmis.alignment`'s**, reused rather than rewritten. A market trading seven days a
+  week and one trading five are correlated over their shared observation dates, with the total
+  shared count and what each side lost both reported — two numbers the type refuses to conflate.
+
+- **BU stops before interpretation.** No AI, no LLM client, no prompt, no prediction, no causal
+  claim, no regime, no risk-on/risk-off and no signal — asserted by guard tests over both imports
+  and field names. It changes nothing about `CONFIRMED`/`CANDIDATE`/`WAIT`, setup ranking, position
+  sizing or approval, and a guard asserts `fmis.swing_workspace`, `fmis.today` and
+  `fmis.setup_evidence` consume none of it.
+
+- **A FRED observation carries a date, not an instant**, and is timestamped at 00:00 UTC of that
+  date. Ages are therefore overstated by up to one period and **never understated** — the safe
+  direction. The cost is real for historical replay and is documented in
+  `OBSERVATION_DATING_LIMITATION`.
+
+- **`fmits pulse` gained the five markets as measured rows** and lost nothing. Three BT behaviours
+  changed deliberately (§14 of report 0031): yields produce no percentage move, an ordering is
+  emitted only when it places two or more markets, and a market prints rows only for the windows it
+  was actually measured over.
+
+- **9824 tests pass** (from 9320), including under `-W error`; 99% statement coverage over the BU
+  scope; 36 of 36 semantic mutation probes killed; 32 hostile-review attacks are permanent tests.
+  No new runtime dependency — `pyproject.toml` still declares `dependencies = []`.
 
 ---
 

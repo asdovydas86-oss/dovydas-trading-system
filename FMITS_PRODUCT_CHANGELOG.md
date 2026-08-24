@@ -251,6 +251,70 @@ the automation ladder remains unstarted.
 
 ## 4. Product milestones
 
+### 2026-08-23 · `BU` — `fmits macro` — what the macro markets are doing, in the units they are actually measured in
+
+**Status:** Released — `2b30e38` (production code + tests) on top of `7fbe611`, with this
+product-docs commit recorded directly on top of it. **A new user-visible capability.**
+
+**What the owner can do that was impossible before: ask what US equities, the dollar, Treasury
+yields and volatility are doing, and get measured answers — with a yield's move stated in basis
+points rather than as a percentage, and with the markets FMITS still cannot see named alongside the
+reason.**
+
+```
+fmits macro
+```
+
+**Five markets that were dark are now measured**, from a public Federal Reserve data download that
+needs no API key and no credential:
+
+| Market | What the page states |
+|---|---|
+| S&P 500 | level in index points, move over 1 / 5 / 21 completed observations, realized volatility |
+| US Dollar Index (Fed nominal broad) | the same, in index points based January 2006 = 100 |
+| US 2-year Treasury yield | level in percent per annum, move **in basis points** |
+| US 10-year Treasury yield | the same |
+| CBOE Volatility Index | level in volatility points, move, realized volatility |
+
+**Two markets are still dark, and the page says why each one is.** The ICE Dollar Index (DXY) is a
+licensed index; the broad dollar index FMITS *does* read is a different measure over a different
+basket, so it is carried under its own name and never under DXY's. Spot gold has no configured
+source at all — the series the provider used to publish were discontinued. Neither is substituted,
+and neither is quietly dropped.
+
+**A yield's move is a difference, not a return.** When the 10-year goes from 4.65% to 4.69% the page
+says **+4 bp**. It will also show `+0.86%` — but only under the label *relative change*, never as
+the move. That distinction is the milestone: both numbers are arithmetically correct and only one
+answers the question a rates column asks.
+
+**Bitcoin against the macro markets.** The page states the correlation of each macro market's
+returns with Bitcoin's over the dates both of them observe, with the number of shared dates and how
+many observations each side lost to lining them up. Where a comparison is not valid — a yield
+against a price — it is refused and the reason is named, rather than answered with a plausible
+number.
+
+**Freshness is judged against each source's own publication schedule.** A daily macro series is not
+reported late because it did not update in an hour; an hourly crypto series is not reported current
+because it updated within a week.
+
+**Ages are conservative by construction.** A macro observation carries a *date*, not a time of day,
+so FMITS timestamps it at the start of that date. Every age on the page is therefore overstated by
+up to one observation period and is **never** understated — the page will tell you a reading is
+older than it is, never fresher. FMITS also holds no trading calendar, so no window is described in
+days or weeks; every one is a count of completed observations.
+
+**`fmits pulse` gained the same five markets** as measured rows. Its dark section shrank from five
+markets to two.
+
+**What this does not do**, deliberately: it makes no interpretation. There is **no AI** involved —
+no model call, no prompt, no prediction. It will not say markets are risk-on or risk-off, that a
+stronger dollar pressures risk assets, or that rising yields are bearish. It changes nothing about setups, ranking, sizing or approval, and reads no trading
+decision. There is no regime, no score and no forecast anywhere on the page.
+
+Full record: [report 0031](reports/0031_2026-08-23_MACRO_AND_CROSS_ASSET_CONTEXT_IMPLEMENTATION.md).
+
+---
+
 ### 2026-08-22 · `BT` — `fmits pulse` — what the markets are doing, and what FMITS cannot see
 
 **Status:** Released — `1b56069` (production code + tests) on top of `8ecd822`, with this

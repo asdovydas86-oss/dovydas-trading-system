@@ -24,6 +24,7 @@ from fmis.market_pulse import (
     Horizon,
     HorizonMove,
     MarketCategory,
+    MarketPulse,
     MarketReading,
     MarketUnavailable,
     TradingSchedule,
@@ -409,7 +410,9 @@ def test_a_non_continuous_market_prints_bars_and_claims_no_elapsed_time(
 
 
 def test_an_ordering_names_a_horizon_by_bars_because_it_may_span_schedules() -> None:
-    text = flat(render(reading("BTC")))
+    # Two markets, because Milestone BU stopped emitting an ordering that
+    # places fewer than two: a leaderboard of one is a heading, not a comparison.
+    text = flat(render(reading("BTC"), reading("ETH", 0.02)))
     ordering = text.split("RELATIVE ORDERING")[1].split("VOLATILITY")[0]
     assert "h1 (1 bar)" in ordering
     assert "1 hour" not in ordering
@@ -531,7 +534,13 @@ def test_an_unmeasured_move_never_claims_a_wall_clock_window() -> None:
 
 
 def test_bar_counts_are_pluralised() -> None:
-    text = flat(render(reading("BTC", horizons=(ONE, FOUR)), horizons=(ONE, FOUR)))
+    text = flat(
+        render(
+            reading("BTC", horizons=(ONE, FOUR)),
+            reading("ETH", 0.02, horizons=(ONE, FOUR)),
+            horizons=(ONE, FOUR),
+        )
+    )
     assert "(1 bar)" in text and "(4 bars)" in text
     assert "(1 bars)" not in text
 
@@ -547,7 +556,7 @@ def test_the_ordering_prints_the_quantity_that_produced_it() -> None:
 
 
 def test_the_ordering_prints_what_it_excluded_from_itself() -> None:
-    text = flat(render(reading("BTC", 0.05)))
+    text = flat(render(reading("BTC", 0.05), reading("ETH", 0.01)))
     assert "not part of any ordering above" in text
     assert "realized volatility" in text
     assert "traded volume" in text
@@ -566,13 +575,56 @@ def test_a_single_market_ordering_names_no_highest_and_lowest() -> None:
     assert "highest measured move" not in text
 
 
-def test_an_ordering_with_nothing_to_place_says_so() -> None:
+def test_a_page_that_read_nothing_says_no_ordering_was_produced() -> None:
+    """Milestone BU: an ordering placing nothing is no longer *emitted*, so the
+    page says the section is absent rather than printing a heading over a list
+    of absences. The absence itself is still reported, in the section a reader
+    looks for it in."""
     failed = crypto_benchmark("BTC", symbol="BTCUSDT")
-    text = render(
+    text = flat(
+        render(
+            universe=universe_of(failed),
+            unavailable=(MarketUnavailable(benchmark=failed, reason="down"),),
+        )
+    )
+    assert "No ordering was produced" in text
+    assert "down" in text
+
+
+def test_an_ordering_with_nothing_to_place_still_says_so_when_one_is_supplied() -> None:
+    """The renderer's empty-ordering branch, exercised directly.
+
+    `build_market_pulse` no longer produces such an ordering, but `MarketPulse`
+    still accepts one, so the branch stays reachable and stays tested — a
+    renderer that crashed on a model state the model permits would be a defect
+    waiting for the first caller that assembled a page by hand.
+    """
+    from fmis.market_pulse import HorizonRanking
+
+    failed = crypto_benchmark("BTC", symbol="BTCUSDT")
+    built = page(
         universe=universe_of(failed),
         unavailable=(MarketUnavailable(benchmark=failed, reason="down"),),
     )
-    assert "no market in this unit could be ordered" in flat(text)
+    hand_made = MarketPulse(
+        as_of=built.as_of,
+        universe=built.universe,
+        readings=built.readings,
+        unavailable=built.unavailable,
+        rankings=(
+            HorizonRanking(
+                horizon_id=ONE.horizon_id,
+                quote_unit="USDT",
+                ordering_quantity="period_return",
+                ordered=(),
+                excluded=(("BTC", "no reading was produced for this market"),),
+            ),
+        ),
+        horizons=built.horizons,
+    )
+    assert "no market in this unit could be ordered" in flat(
+        render_market_pulse(hand_made)
+    )
 
 
 # --------------------------------------------------------------------------
@@ -713,3 +765,126 @@ def test_a_co_movement_prints_its_window_and_observation_count() -> None:
 def test_a_page_with_no_reference_says_no_co_movement_was_measured() -> None:
     text = flat(render(reading("BTC")))
     assert "established no reference market" in text
+
+
+# --------------------------------------------------------------------------
+# Milestone BU's per-market row rules
+# --------------------------------------------------------------------------
+
+
+def test_moves_unavailable_for_different_reasons_are_printed_row_by_row() -> None:
+    """The collapse is only safe when every row would say the same thing.
+
+    A yield's rows all carry one reason and are collapsed; a market whose
+    windows failed for *different* reasons carries different information per
+    row, and each must survive.
+    """
+    benchmark = crypto_benchmark("BTC", symbol="BTCUSDT")
+    mixed = MarketReading(
+        benchmark=benchmark,
+        source="binance-spot",
+        interval="1h",
+        last_bar_open=instant(5),
+        closed_bar_count=6,
+        moves=(
+            HorizonMove(
+                horizon_id="h1",
+                bars=1,
+                value=None,
+                unavailable_reason="the window was too short",
+                metric="period_return",
+                observation_count=1,
+            ),
+            HorizonMove(
+                horizon_id="h4",
+                bars=4,
+                value=None,
+                unavailable_reason="the result is mathematically undefined",
+                metric="period_return",
+                observation_count=5,
+            ),
+        ),
+        volatility=volatility(0.01),
+    )
+    text = flat(
+        render_market_pulse(
+            page(mixed, universe=universe_of(benchmark), horizons=(ONE, FOUR))
+        )
+    )
+    assert "h1 (1 bar): the window was too short" in text
+    assert "h4 (4 bars): the result is mathematically undefined" in text
+
+
+def test_a_reading_with_one_measured_and_one_absent_move_is_not_collapsed() -> None:
+    benchmark = crypto_benchmark("BTC", symbol="BTCUSDT")
+    partial = MarketReading(
+        benchmark=benchmark,
+        source="binance-spot",
+        interval="1h",
+        last_bar_open=instant(5),
+        closed_bar_count=6,
+        moves=(
+            move(0.05, horizon=ONE),
+            HorizonMove(
+                horizon_id="h4",
+                bars=4,
+                value=None,
+                unavailable_reason="the window was too short",
+                metric="period_return",
+                observation_count=2,
+            ),
+        ),
+        volatility=volatility(0.01),
+    )
+    text = flat(
+        render_market_pulse(
+            page(partial, universe=universe_of(benchmark), horizons=(ONE, FOUR))
+        )
+    )
+    # `h1` prints its wall-clock equivalent because this market trades
+    # continuously and the measured span matches — BT's rule, unchanged.
+    assert "h1 (1 hour): +5.00%" in text
+    assert "h4 (4 bars): the window was too short" in text
+
+
+def test_a_move_over_a_horizon_the_page_did_not_declare_still_gets_a_row() -> None:
+    """*Dropping it would hide a measurement.* The window is named by its own
+    bar count when the page has no declaration to name it by."""
+    benchmark = crypto_benchmark("BTC", symbol="BTCUSDT")
+    stray = MarketReading(
+        benchmark=benchmark,
+        source="binance-spot",
+        interval="1h",
+        last_bar_open=instant(5),
+        closed_bar_count=6,
+        moves=(move(0.05, horizon=ONE), move(0.07, horizon=FOUR)),
+        volatility=volatility(0.01),
+    )
+    # The page declares only ONE; the h4 move is still printed.
+    text = flat(
+        render_market_pulse(
+            page(stray, universe=universe_of(benchmark), horizons=(ONE,))
+        )
+    )
+    assert "h1 (1 hour): +5.00%" in text
+    assert "h4 (4 bars): +7.00%" in text
+
+
+def test_a_reading_with_no_moves_at_all_still_prints_its_provenance() -> None:
+    benchmark = crypto_benchmark("BTC", symbol="BTCUSDT")
+    silent = MarketReading(
+        benchmark=benchmark,
+        source="binance-spot",
+        interval="1h",
+        last_bar_open=instant(5),
+        closed_bar_count=6,
+        moves=(),
+        volatility=volatility(0.01),
+    )
+    text = flat(
+        render_market_pulse(
+            page(silent, universe=universe_of(benchmark), horizons=(ONE,))
+        )
+    )
+    assert "[BTC]" in text
+    assert "measured from: binance-spot" in text

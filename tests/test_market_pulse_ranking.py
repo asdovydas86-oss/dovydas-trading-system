@@ -251,29 +251,67 @@ def test_a_market_in_another_unit_is_neither_placed_nor_excluded() -> None:
     assert "E" not in dict(ranking.excluded)
 
 
-def test_a_two_unit_universe_produces_two_orderings_per_horizon() -> None:
-    usdt = reading("A", 0.01)
-    euro = reading("E", 0.99, quote_unit="EUR")
+def test_a_two_unit_universe_produces_one_ordering_per_unit_that_has_two() -> None:
+    """*Each unit is ordered separately* — and only where there is an order.
+
+    Milestone BU added `MINIMUM_ORDERED_MARKETS`: an ordering that places one
+    market is a heading over a single row, claiming a comparison nobody made.
+    The unit separation this test was written for is unchanged and is asserted
+    below with two markets in each unit; the single-market case now produces no
+    ordering, and that market's move is still on its own row on the page.
+    """
+    usdt_a = reading("A", 0.01)
+    usdt_b = reading("B", 0.02)
+    euro_e = reading("E", 0.99, quote_unit="EUR")
+    euro_f = reading("F", 0.98, quote_unit="EUR")
     page = build_market_pulse(
         as_of=instant(10),
-        universe=universe_of(usdt.benchmark, euro.benchmark),
-        readings=(usdt, euro),
+        universe=universe_of(
+            usdt_a.benchmark, usdt_b.benchmark, euro_e.benchmark, euro_f.benchmark
+        ),
+        readings=(usdt_a, usdt_b, euro_e, euro_f),
         unavailable=(),
         horizons=(ONE,),
     )
     units = [ranking.quote_unit for ranking in page.rankings]
     assert units == ["USDT", "EUR"]
-    assert all(len(ranking.ordered) == 1 for ranking in page.rankings)
+    assert all(len(ranking.ordered) == 2 for ranking in page.rankings)
+    # No ordering ever mixes two units, which is the rule this file exists for.
+    for ranking in page.rankings:
+        assert len({row.benchmark_id for row in ranking.ordered}) == 2
+
+
+def test_a_unit_holding_one_market_produces_no_ordering() -> None:
+    """`MINIMUM_ORDERED_MARKETS`, stated directly.
+
+    The market is not hidden: its move is on its own row, and this only refuses
+    to print a leaderboard of one.
+    """
+    usdt_a = reading("A", 0.01)
+    usdt_b = reading("B", 0.02)
+    lone = reading("E", 0.99, quote_unit="EUR")
+    page = build_market_pulse(
+        as_of=instant(10),
+        universe=universe_of(usdt_a.benchmark, usdt_b.benchmark, lone.benchmark),
+        readings=(usdt_a, usdt_b, lone),
+        unavailable=(),
+        horizons=(ONE,),
+    )
+    assert [ranking.quote_unit for ranking in page.rankings] == ["USDT"]
+    assert page.reading_for("E") is not None
 
 
 def test_a_unit_with_no_supported_market_produces_no_ordering() -> None:
     """*A section header over a list of the same absences the page already
     reports once.*"""
     usdt = reading("A", 0.01)
+    other = reading("B", 0.02)
     page = build_market_pulse(
         as_of=instant(10),
-        universe=universe_of(usdt.benchmark, dark_benchmark("D", quote_unit="JPY")),
-        readings=(usdt,),
+        universe=universe_of(
+            usdt.benchmark, other.benchmark, dark_benchmark("D", quote_unit="JPY")
+        ),
+        readings=(usdt, other),
         unavailable=(),
         horizons=(ONE,),
     )
@@ -282,12 +320,16 @@ def test_a_unit_with_no_supported_market_produces_no_ordering() -> None:
 
 def test_unit_order_follows_the_universe_and_not_a_set() -> None:
     """Determinism across processes: a set's iteration order must not leak in."""
-    euro = reading("E", 0.99, quote_unit="EUR")
-    usdt = reading("A", 0.01)
+    euro_e = reading("E", 0.99, quote_unit="EUR")
+    euro_f = reading("F", 0.98, quote_unit="EUR")
+    usdt_a = reading("A", 0.01)
+    usdt_b = reading("B", 0.02)
     page = build_market_pulse(
         as_of=instant(10),
-        universe=universe_of(euro.benchmark, usdt.benchmark),
-        readings=(euro, usdt),
+        universe=universe_of(
+            euro_e.benchmark, euro_f.benchmark, usdt_a.benchmark, usdt_b.benchmark
+        ),
+        readings=(euro_e, euro_f, usdt_a, usdt_b),
         unavailable=(),
         horizons=(ONE,),
     )
@@ -300,11 +342,12 @@ def test_unit_order_follows_the_universe_and_not_a_set() -> None:
 
 
 def test_one_ordering_is_produced_per_horizon_and_unit_pair() -> None:
-    usdt = reading("A", None, moves=(move(0.01), move(0.02, horizon=OTHER)))
+    first = reading("A", None, moves=(move(0.01), move(0.02, horizon=OTHER)))
+    second = reading("B", None, moves=(move(0.03), move(0.04, horizon=OTHER)))
     page = build_market_pulse(
         as_of=instant(10),
-        universe=universe_of(usdt.benchmark),
-        readings=(usdt,),
+        universe=universe_of(first.benchmark, second.benchmark),
+        readings=(first, second),
         unavailable=(),
         horizons=(ONE, OTHER),
     )
@@ -323,8 +366,14 @@ def test_a_page_with_every_market_failing_still_assembles() -> None:
         horizons=(ONE,),
     )
     assert page.is_empty
-    assert page.rankings[0].is_empty
-    assert dict(page.rankings[0].excluded)["A"] == NOT_READ_REASON
+    # Milestone BU stopped emitting an ordering that places nothing: it would be
+    # a heading over a list of absences the page already reports. The absence
+    # itself is not lost — it is on the page as an unavailable market, carrying
+    # the provider's own words, which is where a reader looks for it.
+    assert page.rankings == ()
+    assert page.unavailable[0].benchmark_id == "A"
+    assert page.unavailable[0].reason == "down"
+    assert NOT_READ_REASON  # still the reason a read market is excluded
 
 
 def test_observations_without_a_horizon_are_refused() -> None:

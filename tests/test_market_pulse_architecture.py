@@ -131,7 +131,21 @@ def test_only_the_composition_root_and_the_cli_import_it_from_the_pipeline() -> 
         for module_name in _modules_of("fmis.pipeline")
         if _reaches(module_name, PULSE)
     }
-    assert importers == {ROOT, "fmis.pipeline.cli"}
+    # **Extended by Milestone BU, and the underlying rule is unchanged.** BT's
+    # rule was *"the vocabulary crosses into the pipeline in as few places as
+    # possible"*, spelled as two because two was all it took. BU added a second
+    # market-data provider and a second surface, and each needs the registry:
+    # `market_data` to dispatch a benchmark to its adapter, `macro` to compose
+    # the macro page. Both are composition-layer modules of exactly the kind
+    # `pulse` already was. What is still asserted, and is the thing that
+    # matters, is that the set is closed and small — no engine, no model, no
+    # renderer and no domain module is in it.
+    assert importers == {
+        ROOT,
+        "fmis.pipeline.cli",
+        "fmis.pipeline.macro",
+        "fmis.pipeline.market_data",
+    }
 
 
 def test_the_swing_workspace_does_not_consume_the_pulse() -> None:
@@ -224,12 +238,35 @@ def test_the_package_imports_no_ai_or_llm_machinery() -> None:
 
 def test_the_composition_root_imports_exactly_the_seams_it_needs() -> None:
     reached = {name for name in _imports_of(ROOT) if name.startswith("fmis")}
+    # Milestone BU moved provider dispatch out of this module into
+    # `fmis.pipeline.market_data`, so the root no longer names an ingestion
+    # boundary and reaches the adapter only for its injectable transport type.
+    # The seam count did not grow, and the rule it protects — this module knows
+    # *what* to read and nothing about *how* — is stronger than before.
     assert reached == {
         "fmis.data.observation",
-        "fmis.ingest",
         "fmis.market_pulse",
+        "fmis.pipeline.market_data",
         "fmis.providers.binance",
     }
+
+
+def test_the_dispatch_layer_is_the_only_pipeline_module_naming_two_providers() -> None:
+    """*Provider choice happens once.* The rule BU's second adapter created.
+
+    A composition root may name the transport type it forwards, but only the
+    dispatch layer may reach two adapters — otherwise every future surface grows
+    its own chain of ``if provider ==`` branches and they drift.
+    """
+    adapters = ("fmis.providers.binance", "fmis.providers.fred")
+    for module_name in _modules_of("fmis.pipeline"):
+        reached = {
+            adapter
+            for adapter in adapters
+            if _reaches(module_name, adapter)
+        }
+        if len(reached) > 1:
+            assert module_name == "fmis.pipeline.market_data", module_name
 
 
 # --------------------------------------------------------------------------
@@ -296,6 +333,11 @@ def test_the_model_module_computes_only_counts_and_a_duration() -> None:
         '_utc(moment, "moment") - self.last_bar_open',
         "self.window_end - self.window_start",
         "expected - answered",
+        # Milestone BU: a publication schedule's own bound, which is the sum of
+        # two durations. Not a market quantity — no price, return, volatility,
+        # correlation or yield difference is computed anywhere in this package
+        # outside the engines, and that is the rule this test exists for.
+        "self.publication_period + self.tolerance",
     }
     source = _source_of("fmis.market_pulse.models")
     found = {
@@ -670,7 +712,9 @@ def test_every_command_that_existed_before_bt_is_still_registered() -> None:
         "equity", "trades", "archive",
     ]
     assert set(before) <= set(names)
-    assert set(names) - set(before) == {"pulse"}
+    # BT added `pulse`; Milestone BU added `macro` beside it. Both are additive
+    # and neither replaced anything, which is what this test exists to prove.
+    assert set(names) - set(before) == {"pulse", "macro"}
     assert len(names) == len(set(names))
 
 

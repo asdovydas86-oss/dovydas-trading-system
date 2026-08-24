@@ -64,6 +64,7 @@ from fmis.market_pulse.models import (
     MarketReading,
     MarketUnavailable,
     MarketUniverse,
+    QuantityKind,
     RankedMove,
 )
 
@@ -72,6 +73,8 @@ __all__ = [
     "ORDERING_UNIT_SCOPE",
     "EXCLUDED_FROM_ORDERING",
     "NOT_READ_REASON",
+    "RATE_LIKE_EXCLUSION",
+    "MINIMUM_ORDERED_MARKETS",
     "rank_by_horizon",
     "co_movements_against",
     "build_market_pulse",
@@ -108,6 +111,46 @@ ORDERING_UNIT_SCOPE = (
 
 #: Why a market has no position in an ordering when it produced no reading.
 NOT_READ_REASON = "no reading was produced for this market"
+
+#: Why a yield is never placed in an ordering, however many other yields share
+#: its unit.
+#:
+#: **Added by Milestone BU, and it closes the one hole the unit rule left open.**
+#: Scoping an ordering by quote unit keeps a USD return away from a USDT return,
+#: but two Treasury yields share the unit *percent per annum* exactly — so
+#: without this they would have been ordered against each other by
+#: `period_return`, and a page would have reported the 10-year as having "moved"
+#: +2.38% when what happened was +10 basis points. That figure is arithmetically
+#: correct and answers a question nobody asked. A yield's move belongs to
+#: `fmits macro`, which states it in basis points.
+RATE_LIKE_EXCLUSION = (
+    "this market is a rate, not a price: its move is a difference in basis "
+    "points rather than a percentage return, so it is not ordered against "
+    "price-like markets or against other rates here — see `fmits macro`"
+)
+
+#: How many markets an ordering must place to be one.
+#:
+#: **Two, because a comparison needs two things.** An ordering that placed a
+#: single market would print a leaderboard with one row under a heading claiming
+#: a comparison had been made, and an ordering that placed none would print a
+#: heading over a list of absences.
+#:
+#: **Milestone BU is what made this necessary rather than tidy.** Before BU every
+#: readable market was crypto quoted in USDT on one cadence, so a universe of six
+#: markets over three horizons produced three orderings of six. BU's universe
+#: spans two observation cadences and five quote units, and the full cross
+#: product is thirty (horizon, unit) pairs of which twenty-seven place nothing —
+#: a market is not measured over the other cadence's horizons, and a unit with
+#: one market has nothing to order it against. Emitting all thirty buried the
+#: three real orderings under twelve sections reading *"no market in this unit
+#: could be ordered"*.
+#:
+#: **Nothing is hidden by this.** A market absent from every ordering still
+#: carries its own move on its own row, and a market that could not be read is
+#: still reported — with its reason — in the page's unavailable section. What is
+#: dropped is a heading, never a fact.
+MINIMUM_ORDERED_MARKETS = 2
 
 
 def _ordering_units(universe: MarketUniverse) -> tuple[str, ...]:
@@ -155,6 +198,9 @@ def rank_by_horizon(
     excluded: list[tuple[str, str]] = []
     for benchmark in universe.benchmarks:
         if benchmark.quote_unit != quote_unit:
+            continue
+        if benchmark.quantity_kind is QuantityKind.RATE_LIKE:
+            excluded.append((benchmark.benchmark_id, RATE_LIKE_EXCLUSION))
             continue
         if not benchmark.is_supported:
             excluded.append((benchmark.benchmark_id, benchmark.unsupported_reason))
@@ -260,11 +306,20 @@ def build_market_pulse(
             universe and the results disagree about which markets exist.
     """
     ordered_readings = tuple(readings)
-    rankings = tuple(
-        rank_by_horizon(universe, ordered_readings, horizon, quote_unit=unit)
-        for horizon in horizons
-        for unit in _ordering_units(universe)
-    )
+    placed: list[HorizonRanking] = []
+    for horizon in horizons:
+        for unit in _ordering_units(universe):
+            ranking = rank_by_horizon(
+                universe, ordered_readings, horizon, quote_unit=unit
+            )
+            # An ordering that compares fewer than two markets is not an
+            # ordering; see `MINIMUM_ORDERED_MARKETS`. The markets it would have
+            # held are not lost — each already appears on its own row above, with
+            # the same move, and in the unavailable section if it failed.
+            if len(ranking.ordered) < MINIMUM_ORDERED_MARKETS:
+                continue
+            placed.append(ranking)
+    rankings = tuple(placed)
     movements: tuple[CoMovement, ...] = ()
     reference_id: str | None = None
     if observations is not None:
@@ -279,8 +334,20 @@ def build_market_pulse(
                 reference_id = benchmark_id
                 break
         if reference_id is not None:
+            # **Only markets sampled at the reference's own cadence.** A daily
+            # series and an hourly one share no bar opens, so every such pair
+            # would be reported unavailable for a misalignment that is a fact
+            # about two calendars rather than about the markets. Those pairs are
+            # not silently dropped from the product: `fmits macro` measures them
+            # over shared observation dates and states what alignment cost.
+            cadence = observations[reference_id].frequency
+            comparable = {
+                benchmark_id: series
+                for benchmark_id, series in observations.items()
+                if series.frequency == cadence
+            }
             movements = co_movements_against(
-                reference_id, observations, order, co_movement_horizon
+                reference_id, comparable, order, co_movement_horizon
             )
             if not movements:
                 # A reference with nothing to compare against is not a

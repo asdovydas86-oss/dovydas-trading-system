@@ -40,124 +40,151 @@ from datetime import datetime
 from typing import Callable
 
 from fmis.data.observation import ObservationSeries
-from fmis.ingest import IngestError
 from fmis.market_pulse import (
-    CO_MOVEMENT_HORIZON,
-    DEFAULT_HORIZONS,
     DEFAULT_PULSE_UNIVERSE,
-    VOLATILITY_HORIZON,
-    Benchmark,
     Horizon,
     MarketPulse,
     MarketReading,
     MarketUnavailable,
     MarketUniverse,
-    NoObservationsError,
-    PULSE_CANDLE_LIMIT,
     build_market_pulse,
+    horizons_for,
     measure_from_observations,
-    observations_for,
 )
-from fmis.providers.binance import BinanceError, Transport, fetch_klines
+from fmis.pipeline.market_data import (
+    DATA_SOURCE_ERRORS,
+    MarketDataSources,
+    observations_for_benchmark,
+)
+from fmis.providers.binance import Transport
 
-__all__ = ["PULSE_SOURCE", "run_market_pulse"]
-
-#: The provenance label carried onto every reading. Read from the universe's own
-#: provider name rather than re-spelled, so a benchmark's configured provider and
-#: the source printed beside its figures cannot disagree.
-PULSE_SOURCE = "binance-spot"
+__all__ = ["run_market_pulse"]
 
 
-def _fetch_series(
-    benchmark: Benchmark,
-    *,
-    limit: int,
-    transport: Transport | None,
-    clock: Callable[[], datetime] | None,
-    base_url: str | None,
-):
-    """One market's candles, straight from the adapter. No interpretation."""
-    instrument = benchmark.instrument
-    return fetch_klines(
-        instrument.symbol,
-        instrument.interval,
-        limit=limit,
-        transport=transport,
-        clock=clock,
-        **({} if base_url is None else {"base_url": base_url}),
-    )
+def _declared_horizons(universe: MarketUniverse) -> tuple[Horizon, ...]:
+    """Every horizon any market in ``universe`` is measured over, in first-seen order.
+
+    The page declares the union rather than one family, because Milestone BU made
+    the universe span two cadences and a market measured over a horizon the page
+    did not declare would produce an ordering nobody could reconstruct. Order is
+    the universe's, so the declared set is a function of the configuration rather
+    than of a set's iteration order.
+    """
+    declared: list[Horizon] = []
+    seen: set[str] = set()
+    for benchmark in universe.supported:
+        family, _, _ = horizons_for(benchmark)
+        for horizon in family:
+            if horizon.horizon_id not in seen:
+                seen.add(horizon.horizon_id)
+                declared.append(horizon)
+    return tuple(declared)
+
+
+#: Distinguishes *"the caller said nothing"* from *"the caller said `None`"*.
+#: `co_movement_horizon=None` is a request to omit the cross-asset section, and
+#: omitting the argument is a request to pick the window from the reference
+#: market's own cadence — two different instructions that `None` alone cannot
+#: tell apart.
+_UNSET: object = object()
 
 
 def run_market_pulse(
     *,
     as_of: datetime,
     universe: MarketUniverse = DEFAULT_PULSE_UNIVERSE,
-    horizons: Sequence[Horizon] = DEFAULT_HORIZONS,
-    volatility_horizon: Horizon = VOLATILITY_HORIZON,
-    co_movement_horizon: Horizon | None = CO_MOVEMENT_HORIZON,
-    limit: int = PULSE_CANDLE_LIMIT,
+    horizons: Sequence[Horizon] | None = None,
+    volatility_horizon: Horizon | None = None,
+    co_movement_horizon: Horizon | None | object = _UNSET,
+    limit: int | None = None,
+    sources: MarketDataSources | None = None,
     transport: Transport | None = None,
     clock: Callable[[], datetime] | None = None,
     base_url: str | None = None,
 ) -> MarketPulse:
     """Fetch every supported market in ``universe`` and assemble one pulse.
 
+    **Each market is measured over the horizons its own cadence names.** An
+    hourly crypto series and a daily macro series are measured over different
+    windows with different ids, chosen by `fmis.market_pulse.horizons_for`, so
+    the page can hold both without ever putting a week and eight months under one
+    label. The pulse declares the union of the families present.
+
     Args:
         as_of: the instant the page describes. Supplied rather than read, so a
             run is reproducible; the CLI is where the clock lives.
         universe: the stated scope. Its unsupported members are reported without
             being fetched.
-        horizons: the windows to measure, in the order to print them.
-        volatility_horizon: the window realized volatility is measured over.
-        co_movement_horizon: the window co-movement is measured over, or `None`
-            to omit the cross-asset section rather than fill it with absences.
-        limit: candles requested per market.
-        transport, clock, base_url: the provider's own injection points,
-            forwarded unchanged so a caller can run this network-free — the same
-            three arguments every composition root in this repository uses.
+        horizons: override the per-market horizon families with one set applied
+            to every market. Omitted, each market is measured over the family its
+            own cadence names, which is the production path. Supplying one is for
+            a caller that wants a specific window from every market and accepts
+            that a shared label then spans different durations.
+        volatility_horizon: likewise, for the volatility window.
+        co_movement_horizon: the window co-movement is measured over. Omitted, it
+            is the reference market's own cadence's window; `None` omits the
+            cross-asset section entirely rather than filling it with absences.
+        limit: candles requested per crypto market. Omitted, `CANDLE_LIMIT`.
+        sources: the adapters' injection points, as one record. Defaults to real
+            transports for every provider.
+        transport, clock, base_url: Milestone BT's Binance-only injection points,
+            kept so every existing caller and test continues to work unchanged.
+            They are folded into ``sources``; supplying both a populated
+            ``sources`` and one of these is refused rather than silently
+            resolved, because which one won would be invisible in the output.
 
     Returns:
         A `MarketPulse` in which every supported benchmark appears exactly once,
         as a reading or as a stated failure.
 
     Raises:
-        Anything other than a provider, ingestion, argument or empty-window
-        failure. Those families become `MarketUnavailable` rows; an internal
-        defect propagates.
+        ValueError: both ``sources`` and a legacy injection point were supplied.
+        Anything outside `DATA_SOURCE_ERRORS`. Those families become
+        `MarketUnavailable` rows; an internal defect propagates.
     """
+    legacy = (transport, clock, base_url)
+    if sources is not None and any(entry is not None for entry in legacy):
+        raise ValueError(
+            "run_market_pulse was given both a MarketDataSources and one of the "
+            "individual transport/clock/base_url arguments; supply one or the "
+            "other, because which of the two won would not be visible in the "
+            "page that came out"
+        )
+    if sources is None:
+        sources = MarketDataSources(
+            binance_transport=transport,
+            binance_base_url=base_url,
+            clock=clock,
+            candle_limit=limit,
+        )
+
     readings: list[MarketReading] = []
     failures: list[MarketUnavailable] = []
     observations: dict[str, ObservationSeries] = {}
+    declared: list[Horizon] = []
+    seen: set[str] = set()
     for benchmark in universe.supported:
         instrument = benchmark.instrument
         try:
-            series = _fetch_series(
-                benchmark,
-                limit=limit,
-                transport=transport,
-                clock=clock,
-                base_url=base_url,
-            )
-            # Reduced once, here, and handed to both the reading and the
-            # co-movement step. Two reductions would be two places a window
-            # could be selected differently.
-            reduced = observations_for(
-                series, as_of=as_of, series_id=instrument.label
+            family, volatility, _ = horizons_for(benchmark)
+            if horizons is not None:
+                family = tuple(horizons)
+            if volatility_horizon is not None:
+                volatility = volatility_horizon
+            # Read once, here, and handed to both the reading and the
+            # co-movement step. Two reads would be two requests for one fact,
+            # and two places a window could be selected differently.
+            reduced = observations_for_benchmark(
+                benchmark, as_of=as_of, sources=sources
             )
             reading = measure_from_observations(
                 benchmark,
                 reduced,
-                source=PULSE_SOURCE,
-                horizons=horizons,
-                volatility_horizon=volatility_horizon,
+                source=instrument.provider,
+                horizons=family,
+                volatility_horizon=volatility,
             )
-        except (
-            BinanceError,
-            IngestError,
-            NoObservationsError,
-            ValueError,
-            TypeError,
-        ) as error:
+        except DATA_SOURCE_ERRORS as error:
             failures.append(
                 MarketUnavailable(
                     benchmark=benchmark,
@@ -169,12 +196,25 @@ def run_market_pulse(
             continue
         readings.append(reading)
         observations[benchmark.benchmark_id] = reduced
+        for horizon in family:
+            if horizon.horizon_id not in seen:
+                seen.add(horizon.horizon_id)
+                declared.append(horizon)
+
+    window: Horizon | None
+    if co_movement_horizon is _UNSET:
+        # The reference is the first market read, and the co-movement window is
+        # the one *its* cadence names — the section compares like with like, and
+        # `build_market_pulse` keeps other cadences out of it.
+        window = horizons_for(readings[0].benchmark)[2] if readings else None
+    else:
+        window = co_movement_horizon
     return build_market_pulse(
         as_of=as_of,
         universe=universe,
         readings=readings,
         unavailable=failures,
-        horizons=horizons,
-        observations=None if co_movement_horizon is None else observations,
-        co_movement_horizon=co_movement_horizon,
+        horizons=tuple(declared) if declared else _declared_horizons(universe),
+        observations=None if window is None else observations,
+        co_movement_horizon=window,
     )

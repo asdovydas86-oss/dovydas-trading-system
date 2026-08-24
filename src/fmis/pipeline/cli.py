@@ -127,6 +127,8 @@ from fmis.market_pulse import (
     universe_subset,
 )
 from fmis.pipeline.pulse import run_market_pulse
+from fmis.macro import MacroError, render_macro_context
+from fmis.pipeline.macro import macro_universe, run_macro_context
 from fmis.today import TodayError, render_today, run_today
 from fmis.swing_workspace import (
     SwingWorkspaceError,
@@ -1512,6 +1514,96 @@ PULSE_COMMAND = Command(
     ),
     configure=_configure_pulse,
     run=_run_pulse,
+)
+
+
+def _configure_macro(parser: argparse.ArgumentParser) -> None:
+    """Three arguments, and the default is the useful one.
+
+    `fmits macro` with no argument is the command the owner actually runs. Each
+    flag answers a question the default cannot: which markets (a subset), which
+    instant (replay), and whether to spend the extra request the cross-asset
+    section costs.
+    """
+    parser.add_argument(
+        "benchmarks",
+        nargs="*",
+        metavar="BENCHMARK",
+        help=(
+            "benchmark ids to report, in the order given (default: every macro "
+            "market). Ids, not source series — e.g. US10Y, not DGS10"
+        ),
+    )
+    parser.add_argument(
+        "--as-of",
+        default=None,
+        metavar="ISO8601",
+        help=(
+            "the instant to describe (default: now). Observations dated after "
+            "it are excluded, so supplying it makes the page reproducible"
+        ),
+    )
+    parser.add_argument(
+        "--no-relationships",
+        action="store_true",
+        help=(
+            "omit the cross-asset section. It costs one extra request for the "
+            "reference market; this skips both the section and the request"
+        ),
+    )
+
+
+def _run_macro(args: argparse.Namespace) -> int:
+    """Read the macro universe and print the context page.
+
+    **One unavailable market never costs the page.** `run_macro_context`
+    isolates each market's source failure onto its own row, so the exit code
+    reflects whether *anything* could be read rather than whether *everything*
+    could — the same contract `pulse`, `scan`, `daily` and `workspace` hold.
+    """
+    reference = _reference_time(args.as_of, omit=False)
+    assert reference is not None  # `omit=False` always yields an instant
+    try:
+        universe = (
+            macro_universe()
+            if not args.benchmarks
+            else universe_subset(
+                DEFAULT_PULSE_UNIVERSE, tuple(args.benchmarks), name="selected"
+            )
+        )
+        report = run_macro_context(
+            as_of=reference,
+            universe=universe,
+            with_relationships=not args.no_relationships,
+        )
+    except (MacroError, MarketPulseError) as error:
+        print(f"fmits macro: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_macro_context(report))
+    return EXIT_FAILURE if report.is_empty else EXIT_OK
+
+
+MACRO_COMMAND = Command(
+    name="macro",
+    help="macro & cross-asset context: what the non-crypto markets are doing",
+    description=(
+        "One deterministic page of macro and cross-asset facts, for the "
+        "question that sits behind every other one: what are equities, the "
+        "dollar, yields and volatility doing, and what can this system not tell "
+        "me? Prints each market's level with its unit, its move over named "
+        "windows, yields as basis-point differences rather than percentage "
+        "returns, measured volatility, correlations against one named reference "
+        "with the alignment they required, every market that could not be read "
+        "with its reason, and the age and source of every figure. Windows are "
+        "counts of completed observations, not durations, because this build "
+        "holds no trading calendar. Volatility is measured and deliberately not "
+        "classified. Nothing here is interpretation: there is no regime, no "
+        "risk-on or risk-off, no causal claim and no view. No setup, plan, "
+        "position or approval is read, and none is changed. This command "
+        "executes nothing and places no orders."
+    ),
+    configure=_configure_macro,
+    run=_run_macro,
 )
 
 
@@ -3166,6 +3258,7 @@ COMMANDS: tuple[Command, ...] = (
     TODAY_COMMAND,
     WORKSPACE_COMMAND,
     PULSE_COMMAND,
+    MACRO_COMMAND,
     PORTFOLIO_COMMAND,
     APPROVE_COMMAND,
     TRADE_COMMAND,

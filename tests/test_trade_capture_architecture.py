@@ -435,6 +435,14 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # The fix was to name it in prose, not to widen that guard, following the
         # note `fmis.pipeline.prices` already carries for the same situation.
         "fmis.market_pulse",
+        # Widened for Milestone BU, on the same footing as BT and for a package
+        # that crosses no further. `fmis.macro` is a market-half package too: it
+        # reads no store, imports no domain root, names no provider and holds no
+        # owner state, so the rule this guard protects — that `fmis.pipeline`
+        # never reaches `fmis.persistence` — remains unreachable from here. What
+        # the CLI does with it is render a report it was handed; both providers
+        # terminate in `fmis.pipeline.market_data`.
+        "fmis.macro",
     )
     reached = {
         name

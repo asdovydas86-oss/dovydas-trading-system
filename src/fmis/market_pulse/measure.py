@@ -49,6 +49,7 @@ from fmis.market_pulse.models import (
     Horizon,
     HorizonMove,
     MarketReading,
+    QuantityKind,
     VolatilityReading,
 )
 from fmis.relative_value import (
@@ -66,6 +67,7 @@ __all__ = [
     "MOVE_MINIMUM_OBSERVATIONS",
     "VOLATILITY_MINIMUM_OBSERVATIONS",
     "CO_MOVEMENT_MINIMUM_OBSERVATIONS",
+    "RATE_LIKE_MEASURE_REASON",
     "NoObservationsError",
     "observations_for",
     "measure_move",
@@ -84,6 +86,30 @@ VOLATILITY_METRIC = "realized_volatility"
 
 #: The engine function behind every co-movement figure.
 CO_MOVEMENT_METRIC = "pearson_correlation"
+
+#: Why a rate-like market produces no percentage move and no realized volatility.
+#:
+#: **Added by Milestone BU, and it makes the milestone's central error
+#: unrepresentable rather than merely unrendered.** A yield's `period_return` is
+#: arithmetically computable — 4.65% to 4.69% is +0.86% — and it is the wrong
+#: answer to *"what did the ten-year do"*, which is +4 basis points. BU's first
+#: fix excluded yields from the orderings, and a live run showed the figure still
+#: reaching the page on the market's own row, unlabelled, where a reader would
+#: read it as the move. The number is therefore not produced at all: a rate-like
+#: market's moves carry this reason instead of a value, so no consumer of a
+#: `MarketReading` can print one by accident.
+#:
+#: **Realized volatility is refused for the same reason and not by extension.**
+#: It is the sample standard deviation of *simple returns* — the identical ratio
+#: construction — so a yield's volatility figure would be the dispersion of
+#: ratios of rates, which is not the dispersion of the yield.
+#:
+#: `fmis.macro` states what a yield actually did, in basis points.
+RATE_LIKE_MEASURE_REASON = (
+    "this market is a rate, not a price: a percentage return of a yield is the "
+    "ratio between two rates rather than the move a reader means, so it is not "
+    "computed here. `fmits macro` states this market's move in basis points"
+)
 
 #: The Relative Value Engine's own minimum observation counts, restated here so
 #: a horizon too short for a metric is caught **before** the engine is called.
@@ -324,6 +350,28 @@ def measure_volatility(
     )
 
 
+def _refused_move(horizon: Horizon, available: int) -> HorizonMove:
+    """One horizon's move for a rate-like market: the reason, never a number."""
+    return HorizonMove(
+        horizon_id=horizon.horizon_id,
+        bars=horizon.bars,
+        value=None,
+        unavailable_reason=RATE_LIKE_MEASURE_REASON,
+        metric=MOVE_METRIC,
+        observation_count=available,
+    )
+
+
+def _refused_volatility(available: int) -> VolatilityReading:
+    """Realized volatility for a rate-like market: the reason, never a number."""
+    return VolatilityReading(
+        value=None,
+        unavailable_reason=RATE_LIKE_MEASURE_REASON,
+        metric=VOLATILITY_METRIC,
+        observation_count=available,
+    )
+
+
 def measure_from_observations(
     benchmark: Benchmark,
     observations: ObservationSeries,
@@ -361,14 +409,24 @@ def measure_from_observations(
             "an empty window is produced by observations_for as "
             "NoObservationsError and never reaches this function"
         )
+    rate_like = benchmark.quantity_kind is QuantityKind.RATE_LIKE
     return MarketReading(
         benchmark=benchmark,
         source=source,
         interval=benchmark.instrument.interval,
         last_bar_open=observations.timestamps[-1],
         closed_bar_count=len(observations.values),
-        moves=tuple(measure_move(observations, horizon) for horizon in horizons),
-        volatility=measure_volatility(observations, volatility_horizon),
+        moves=tuple(
+            _refused_move(horizon, len(observations.values))
+            if rate_like
+            else measure_move(observations, horizon)
+            for horizon in horizons
+        ),
+        volatility=(
+            _refused_volatility(len(observations.values))
+            if rate_like
+            else measure_volatility(observations, volatility_horizon)
+        ),
     )
 
 

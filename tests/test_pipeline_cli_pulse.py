@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from fmis.pipeline import cli
+from tests.macro_helpers import fred_transport_for, not_found, series_ending
 from tests.market_pulse_helpers import (
     error_response,
     instant,
@@ -29,15 +30,40 @@ def fake_provider(monkeypatch):
     so the command exercises the real fetch path, the real decoder and the real
     canonical boundary.
     """
-    from fmis.market_pulse import DEFAULT_PULSE_UNIVERSE
+    from fmis.market_pulse import DEFAULT_PULSE_UNIVERSE, MACRO_PROVIDER
+    from fmis.pipeline.market_data import MarketDataSources
 
+    crypto = [
+        entry
+        for entry in DEFAULT_PULSE_UNIVERSE.supported
+        if entry.instrument.provider != MACRO_PROVIDER
+    ]
+    macro = [
+        entry
+        for entry in DEFAULT_PULSE_UNIVERSE.supported
+        if entry.instrument.provider == MACRO_PROVIDER
+    ]
     responses = {
         benchmark.instrument.symbol: ok_response(
             linear_klines(100.0, float(index + 1), 200)
         )
-        for index, benchmark in enumerate(DEFAULT_PULSE_UNIVERSE.supported)
+        for index, benchmark in enumerate(crypto)
     }
-    state = {"responses": responses, "calls": []}
+    # Milestone BU put a second provider in the default universe. The fixture
+    # fakes both, because a test that reached the network for the macro half
+    # would be neither hermetic nor deterministic — and would have quietly
+    # passed while measuring live data.
+    macro_bodies = {
+        benchmark.instrument.symbol: series_ending(
+            benchmark.instrument.symbol,
+            instant(500),
+            base=100.0,
+            step=float(index + 1),
+            count=60,
+        )
+        for index, benchmark in enumerate(macro)
+    }
+    state = {"responses": responses, "calls": [], "macro_bodies": macro_bodies}
 
     def send(url: str):
         symbol = url.split("symbol=")[1].split("&")[0]
@@ -47,8 +73,14 @@ def fake_provider(monkeypatch):
     real = cli.run_market_pulse
 
     def patched(**kwargs):
-        kwargs.setdefault("transport", send)
-        kwargs.setdefault("clock", lambda: instant(500))
+        kwargs.pop("transport", None)
+        kwargs.pop("clock", None)
+        kwargs.pop("base_url", None)
+        kwargs["sources"] = MarketDataSources(
+            binance_transport=send,
+            fred_transport=fred_transport_for(state["macro_bodies"]),
+            clock=lambda: instant(500),
+        )
         return real(**kwargs)
 
     monkeypatch.setattr(cli, "run_market_pulse", patched)
@@ -187,6 +219,11 @@ def test_every_market_failing_still_prints_a_page_and_exits_non_zero(
 ) -> None:
     for symbol in list(fake_provider["responses"]):
         fake_provider["responses"][symbol] = error_response()
+    # Milestone BU put a second provider in the default universe, so "every
+    # market failing" now means both of them failing. Leaving the macro half
+    # answering would have made this test assert nothing.
+    for series_id in list(fake_provider["macro_bodies"]):
+        fake_provider["macro_bodies"][series_id] = not_found()
     code, out, _ = run(["pulse", "--as-of", AS_OF], capsys)
     assert code == cli.EXIT_FAILURE
     assert "No market could be read" in " ".join(out.split())

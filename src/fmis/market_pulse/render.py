@@ -43,7 +43,7 @@ and are printed beside that number, never alone.
 from __future__ import annotations
 
 import textwrap
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fmis.market_pulse.models import (
     CO_MOVEMENT_CAVEAT,
@@ -51,6 +51,7 @@ from fmis.market_pulse.models import (
     SCHEDULE_LIMITATION,
     VOLATILITY_CLASSIFICATION_NOTE,
     CoMovement,
+    FreshnessState,
     Horizon,
     HorizonMove,
     HorizonRanking,
@@ -240,10 +241,44 @@ def _moves_section(pulse: MarketPulse) -> list[str]:
             )
         )
         wall_clock = reading.benchmark.claims_wall_clock_horizons
-        for horizon in pulse.horizons:
+        # **Only the windows this market was actually measured over.** Milestone
+        # BU put two observation cadences on one page, and a market is measured
+        # over the family its own cadence names — so iterating every horizon the
+        # page declares printed three rows per market reading *"not measured on
+        # this run"*, which says the measurement was attempted and failed. It was
+        # not attempted: a daily series has no twenty-four-hourly-bar window, and
+        # never will. A horizon a reading holds no move for is now simply not its
+        # row. Every move the reading *does* hold is printed, measured or not.
+        horizons = _horizons_of(pulse, reading)
+        shared = _one_reason_for_every_move(reading)
+        if shared is not None:
+            # **One reason, stated once.** When every window a market holds is
+            # unavailable for the *same* reason — a yield, whose move is a
+            # basis-point difference rather than a return — repeating that
+            # sentence per row buries the page in one paragraph printed three
+            # times. The windows are still named, so nothing is hidden.
+            named = ", ".join(
+                _horizon_label(horizon, wall_clock=wall_clock) for horizon in horizons
+            )
+            lines.extend(_label_and_body(named, shared))
+            lines.extend(
+                _label_and_body(
+                    "measured from", reading.provenance, indent=_INDENT
+                )
+            )
+            lines.extend(
+                _label_and_body(
+                    "market",
+                    f"{reading.benchmark.category.value} · "
+                    f"{reading.benchmark.schedule.value}",
+                    indent=_INDENT,
+                )
+            )
+            continue
+        for horizon in horizons:
             move = reading.move_for(horizon.horizon_id)
             label = _horizon_label(horizon, wall_clock=wall_clock, move=move)
-            if move is None:
+            if move is None:  # pragma: no cover - `_horizons_of` yields only held moves
                 lines.extend(_label_and_body(label, "not measured on this run"))
             elif move.is_measured:
                 lines.extend(_label_and_body(label, _percent(move.value)))
@@ -436,6 +471,75 @@ def _absent_section(pulse: MarketPulse) -> list[str]:
     return lines
 
 
+def _horizons_of(pulse: MarketPulse, reading: MarketReading) -> list[Horizon]:
+    """The windows this reading holds a move for, in the page's declared order.
+
+    A reading's own moves decide *which* rows appear; the page's declared
+    horizons decide how each is **named**, so a window is described identically
+    wherever it appears. A move over a window the page did not declare still gets
+    a row, named by its own bar count — dropping it would hide a measurement.
+    """
+    declared = {horizon.horizon_id: horizon for horizon in pulse.horizons}
+    found: list[Horizon] = []
+    for move in reading.moves:
+        horizon = declared.get(move.horizon_id)
+        if horizon is None:
+            horizon = Horizon(
+                horizon_id=move.horizon_id,
+                bars=move.bars,
+                description=f"{move.bars} completed bars",
+            )
+        found.append(horizon)
+    return found
+
+
+def _one_reason_for_every_move(reading: MarketReading) -> str | None:
+    """The single reason every one of this market's moves is unavailable.
+
+    `None` when any move was measured, when the reasons differ, or when there
+    are no moves at all — in each of those cases the rows carry different
+    information and must be printed separately. Collapsing is only safe when
+    every row would say exactly the same thing.
+    """
+    if not reading.moves:
+        return None
+    reasons = {move.unavailable_reason for move in reading.moves}
+    if len(reasons) != 1:
+        return None
+    only = reasons.pop()
+    return None if only is None else only
+
+
+def _overdue_body(
+    reading: MarketReading, as_of: datetime, max_age: timedelta
+) -> str:
+    """Why one reading exceeded the owner's bound, and what its source says.
+
+    **The bound is one duration; the sources are not one cadence.** Milestone BU
+    put daily macro series on this page beside hourly crypto ones, so a bound
+    chosen for the latter marks the former overdue on every run — and that
+    reading is not late, it is *daily*. Reporting only *"stale"* would teach the
+    owner that the macro half of the page is permanently broken, and they would
+    stop reading the section that tells them when it genuinely is.
+
+    So the source's own schedule is stated **beside** the owner's bound rather
+    than replacing it. The bound stays the owner's to set and is never
+    overridden; this only stops it being read as a fault in the data.
+    """
+    age = f"age {_duration(reading.age_at(as_of))} exceeds the bound you set"
+    state = reading.freshness_at(as_of)
+    if state is FreshnessState.BEHIND_SCHEDULE:
+        return f"{age}, and it is also behind its source's own publication schedule"
+    if state is FreshnessState.ON_SCHEDULE:
+        cadence = _duration(reading.benchmark.freshness_policy.publication_period)
+        return (
+            f"{age}; its source publishes every {cadence} and this reading is on "
+            "schedule for it, so it is older than you asked for rather than "
+            "later than its source is"
+        )
+    return f"{age}; no publication schedule is established for this source"
+
+
 def _data_quality_section(
     pulse: MarketPulse, *, max_age: timedelta | None
 ) -> list[str]:
@@ -481,8 +585,7 @@ def _data_quality_section(
                 lines.extend(
                     _label_and_body(
                         f"stale · {reading.benchmark_id}",
-                        f"age {_duration(reading.age_at(pulse.as_of))} exceeds "
-                        f"the bound you set",
+                        _overdue_body(reading, pulse.as_of, max_age),
                         indent=_INDENT + _INDENT,
                     )
                 )

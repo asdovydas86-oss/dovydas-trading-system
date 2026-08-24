@@ -408,7 +408,10 @@ def test_the_registry_holds_the_trade_command_between_portfolio_and_archive() ->
     names = [command.name for command in cli_module.COMMANDS]
     assert names[names.index("today") + 1] == "workspace"
     assert names[names.index("workspace") + 1] == "pulse"
-    assert names[names.index("pulse") + 1] == "portfolio"
+    # Milestone BU inserted "macro" after "pulse": the two orientation pages sit
+    # together, before the position-and-risk commands.
+    assert names[names.index("pulse") + 1] == "macro"
+    assert names[names.index("macro") + 1] == "portfolio"
     assert names[names.index("portfolio") + 1] == "approve"
     assert names[names.index("approve") + 1] == "trade"
     # Milestone BO inserted "simulate" between "trade" and "archive": the

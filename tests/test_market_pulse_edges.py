@@ -270,10 +270,12 @@ def test_a_lookup_returns_the_reading_it_finds() -> None:
 
 
 def test_a_lookup_returns_the_ordering_it_finds() -> None:
+    first = crypto_benchmark("BTC", symbol="BTCUSDT")
+    second = crypto_benchmark("ETH", symbol="ETHUSDT")
     page = build_market_pulse(
         as_of=instant(10),
-        universe=universe_of(crypto_benchmark()),
-        readings=(reading(),),
+        universe=universe_of(first, second),
+        readings=(reading(first), reading(second)),
         unavailable=(),
         horizons=(ONE,),
     )
@@ -283,10 +285,15 @@ def test_a_lookup_returns_the_ordering_it_finds() -> None:
 def test_an_ordering_lookup_walks_past_the_ones_that_do_not_match() -> None:
     """Two horizons produce two orderings; asking for the second must not
     return the first. The loop's continue branch, exercised."""
+    first = crypto_benchmark("BTC", symbol="BTCUSDT")
+    second = crypto_benchmark("ETH", symbol="ETHUSDT")
     page = build_market_pulse(
         as_of=instant(10),
-        universe=universe_of(crypto_benchmark()),
-        readings=(reading(moves=(move(0.05, ONE), move(0.09, TWO))),),
+        universe=universe_of(first, second),
+        readings=(
+            reading(first, moves=(move(0.05, ONE), move(0.09, TWO))),
+            reading(second, moves=(move(0.01, ONE), move(0.02, TWO))),
+        ),
         unavailable=(),
         horizons=(ONE, TWO),
     )
@@ -405,9 +412,22 @@ def test_measuring_from_observations_refuses_an_unsupported_market() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_a_reading_missing_a_horizon_prints_that_it_was_not_measured() -> None:
-    """The page declares a horizon the reading has no row for. It says so
-    rather than leaving a gap where a number belongs."""
+def test_a_reading_prints_rows_only_for_the_windows_it_actually_holds() -> None:
+    """Milestone BU: a market's rows are its own measurements.
+
+    BT declared one horizon family for the whole page, so a reading lacking one
+    of them was an anomaly worth printing as *"not measured on this run"*. BU's
+    universe spans two observation cadences and each market is measured over the
+    family its own cadence names, so that row appeared three times per market
+    saying a measurement had been attempted and failed — when it had not been
+    attempted, and never will be: a daily series has no twenty-four-hourly-bar
+    window.
+
+    **Nothing is hidden by the change.** Every move a reading holds is printed,
+    measured or not, with its reason; and under the composition root a reading
+    always holds exactly its own family, so there is no measurement a page can
+    now omit.
+    """
     page = build_market_pulse(
         as_of=instant(10),
         universe=universe_of(crypto_benchmark()),
@@ -416,7 +436,9 @@ def test_a_reading_missing_a_horizon_prints_that_it_was_not_measured() -> None:
         horizons=(ONE, TWO),
     )
     text = " ".join(render_market_pulse(page).split())
-    assert "h2 (2 bars): not measured on this run" in text
+    assert "h1 (1 bar): +5.00%" in text
+    assert "h2 (2 bars)" not in text
+    assert "not measured on this run" not in text
 
 
 def test_an_unmeasured_co_movement_prints_its_reason() -> None:

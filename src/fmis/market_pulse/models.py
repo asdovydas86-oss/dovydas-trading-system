@@ -55,6 +55,9 @@ __all__ = [
     "PulseUniverseError",
     "MarketCategory",
     "TradingSchedule",
+    "QuantityKind",
+    "FreshnessState",
+    "FreshnessPolicy",
     "ProviderInstrument",
     "Benchmark",
     "MarketUniverse",
@@ -258,6 +261,134 @@ class TradingSchedule(Enum):
     UNKNOWN = "unknown"
 
 
+class QuantityKind(Enum):
+    """Whether a benchmark's value is a **price** or a **rate**.
+
+    Added by Milestone BU, and it is the distinction that makes a yield safe to
+    put on the same page as an equity index. Before BU every tracked market was
+    price-like, so the question never arose; the moment a Treasury yield became
+    readable it did, because *"US10Y +2.38%"* and *"US10Y +10 bp"* describe the
+    same move and only one of them is what a reader means by a yield move.
+
+    **What each kind licenses:**
+
+      * `PRICE_LIKE` — a level whose change is naturally a *ratio*. A percentage
+        return is the meaningful move; the level's unit cancels out, which is why
+        two price-like markets in the same quote unit can be ordered against each
+        other.
+      * `RATE_LIKE` — a level that **is already a rate**, quoted in percent per
+        annum. Its change is naturally a *difference*: 4.20% → 4.30% is ten basis
+        points. A ratio is computable (+2.38%) and is a different fact with a
+        different name, and this repository refuses to let either wear the
+        other's label. See `fmis.macro.rates`.
+
+    **A kind carries no direction and no judgement.** Nothing branches on it to
+    decide whether a move is good; it decides only which arithmetic is honest and
+    which comparisons are refused.
+    """
+
+    PRICE_LIKE = "price_like"
+    RATE_LIKE = "rate_like"
+
+
+class FreshnessState(Enum):
+    """Whether a reading is as recent as its source's own schedule explains.
+
+    **Deliberately not named fresh/stale.** *"Stale"* is a judgement about
+    whether a number is still usable, and that judgement depends on what the
+    reader is doing with it. What this repository can state objectively is
+    narrower and more useful: whether the reading is older than the publication
+    schedule of the series it came from can account for.
+    """
+
+    #: No older than the source's publication schedule explains.
+    ON_SCHEDULE = "on_schedule"
+    #: Older than the source's publication schedule explains. **Not** an
+    #: accusation that the number is wrong — a source can be late, and a market
+    #: can be closed longer than a policy's tolerance allows for.
+    BEHIND_SCHEDULE = "behind_schedule"
+    #: No publication schedule is established for this series, so no
+    #: classification is made. The age is still stated; only the verdict is not.
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class FreshnessPolicy:
+    """How often a source publishes, and how late it is allowed to be.
+
+    **This is the answer to "one universal stale threshold is dangerous".** An
+    hourly crypto series and a weekly-lagged dollar index cannot share a bound:
+    three hours is an outage for the first and perfectly normal for the second.
+    So the bound is a property of the *series*, derived from two facts about the
+    source rather than from a preference about markets.
+
+    **Neither number is invented, and `basis` is what proves it.** A policy must
+    state where its figures came from — the source's documented cadence, and what
+    its observed lateness plus the calendar gaps this repository cannot model add
+    up to. A policy with no basis would be exactly the invented threshold
+    `fmis.market_pulse.render` refuses to choose on the owner's behalf, wearing a
+    respectable name.
+
+    **Tolerance is doing real work, and it is not a fudge.** This build holds no
+    trading calendar (`SCHEDULE_LIMITATION`), so a daily business-day series read
+    on a Sunday is legitimately three days old and a Monday holiday makes it
+    four. Tolerance is where that unmodelled calendar is accounted for, out loud,
+    instead of a weekend quietly reading as an outage.
+    """
+
+    publication_period: timedelta
+    tolerance: timedelta
+    basis: str
+
+    def __post_init__(self) -> None:
+        for name in ("publication_period", "tolerance"):
+            value = getattr(self, name)
+            if not isinstance(value, timedelta):
+                raise TypeError(
+                    f"{name} must be a timedelta, got {type(value).__name__}"
+                )
+        if self.publication_period <= _ZERO:
+            raise ValueError(
+                f"publication_period is {self.publication_period}; a source that "
+                "publishes every zero or negative interval is not a schedule"
+            )
+        if self.tolerance < _ZERO:
+            raise ValueError(
+                f"tolerance is {self.tolerance}; a source cannot be allowed to "
+                "be late by a negative amount"
+            )
+        object.__setattr__(self, "basis", _text(self.basis, "basis"))
+
+    @property
+    def behind_schedule_after(self) -> timedelta:
+        """The age beyond which the source's own schedule stops explaining it.
+
+        Computed, never stored, so it cannot drift from the two figures it is
+        made of — the same rule `HorizonMove.measured_span` follows.
+        """
+        return self.publication_period + self.tolerance
+
+    def classify(self, age: timedelta) -> FreshnessState:
+        """Classify an age against this policy. Never `UNKNOWN` — a policy exists.
+
+        Raises:
+            TypeError: ``age`` is not a `timedelta`.
+            ValueError: ``age`` is negative. An observation from the future is a
+                clock defect rather than an unusually fresh reading, and calling
+                it on-schedule would hide the defect behind a reassuring word.
+        """
+        if not isinstance(age, timedelta):
+            raise TypeError(f"age must be a timedelta, got {type(age).__name__}")
+        if age < _ZERO:
+            raise ValueError(
+                f"age is {age}; an observation dated after the instant being "
+                "described is a clock problem, not a fresh reading"
+            )
+        if age > self.behind_schedule_after:
+            return FreshnessState.BEHIND_SCHEDULE
+        return FreshnessState.ON_SCHEDULE
+
+
 #: Printed on every page. The session limitation stated once, in full, where a
 #: reader cannot miss it — rather than implied by the absence of an open/closed
 #: indicator, which a reader would reasonably read as *"everything is open"*.
@@ -352,6 +483,12 @@ class Benchmark:
     points"`, `"percent"`). It is not decoration: it is what
     `fmis.market_pulse.pulse` uses to refuse a comparison between markets whose
     returns are not denominated in the same thing.
+
+    `quantity_kind` says whether the level is a price or a rate, and defaults to
+    `PRICE_LIKE` because every market that existed before Milestone BU was one.
+    `freshness_policy` says how often the source publishes, and is `None` when no
+    schedule has been established — in which case the age is stated and no
+    verdict is given, rather than a bound being invented for it.
     """
 
     benchmark_id: str
@@ -361,6 +498,8 @@ class Benchmark:
     quote_unit: str
     instrument: ProviderInstrument | None = None
     unsupported_reason: str | None = None
+    quantity_kind: QuantityKind = QuantityKind.PRICE_LIKE
+    freshness_policy: FreshnessPolicy | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -403,6 +542,24 @@ class Benchmark:
                 self,
                 "unsupported_reason",
                 _text(self.unsupported_reason, "unsupported_reason"),
+            )
+        if not isinstance(self.quantity_kind, QuantityKind):
+            raise TypeError(
+                f"quantity_kind must be a QuantityKind, got "
+                f"{type(self.quantity_kind).__name__}"
+            )
+        if self.freshness_policy is not None and not isinstance(
+            self.freshness_policy, FreshnessPolicy
+        ):
+            raise TypeError(
+                f"freshness_policy must be a FreshnessPolicy or None, got "
+                f"{type(self.freshness_policy).__name__}"
+            )
+        if self.freshness_policy is not None and self.instrument is None:
+            raise PulseUniverseError(
+                f"{self.benchmark_id} carries a freshness policy but no provider "
+                "instrument; a publication schedule describes a source, and a "
+                "market with no source has no schedule to be judged against"
             )
 
     @property
@@ -803,6 +960,19 @@ class MarketReading:
     def age_at(self, moment: datetime) -> timedelta:
         """How old this reading is at an instant — computed, never stored."""
         return _utc(moment, "moment") - self.last_bar_open
+
+    def freshness_at(self, moment: datetime) -> FreshnessState:
+        """Whether this reading is as recent as its source's schedule explains.
+
+        `UNKNOWN` when the benchmark carries no policy — which is a statement
+        that no schedule was established, never a quiet pass. The one place this
+        classification happens, so a page and a report cannot answer it
+        differently for the same reading.
+        """
+        policy = self.benchmark.freshness_policy
+        if policy is None:
+            return FreshnessState.UNKNOWN
+        return policy.classify(self.age_at(moment))
 
     def move_for(self, horizon_id: str) -> HorizonMove | None:
         """One horizon's move, or `None` when this reading has none for it."""

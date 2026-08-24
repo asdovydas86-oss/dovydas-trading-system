@@ -23,7 +23,7 @@ from fmis.market_pulse import (
     Horizon,
     render_market_pulse,
 )
-from fmis.pipeline.pulse import PULSE_SOURCE, run_market_pulse
+from fmis.pipeline.pulse import run_market_pulse
 from fmis.providers.binance import HttpResponse
 from tests.market_pulse_helpers import (
     crypto_benchmark,
@@ -105,9 +105,17 @@ def test_an_unsupported_market_is_never_fetched() -> None:
 
 
 def test_the_source_label_travels_onto_every_reading() -> None:
+    """Milestone BU replaced the root's own `PULSE_SOURCE` constant with the
+    provider named on the benchmark's own instrument. The property this test
+    protects is unchanged and is now structural: the label printed beside a
+    figure is read from the registry entry that produced it, so a market's
+    configured provider and its stated source cannot disagree."""
+    from fmis.market_pulse import PULSE_PROVIDER
+
     send = transport_for({"BTCUSDT": rising()})
     page = run(universe_of(crypto_benchmark("BTC", symbol="BTCUSDT")), send)
-    assert page.readings[0].source == PULSE_SOURCE
+    assert page.readings[0].source == PULSE_PROVIDER
+    assert page.readings[0].source == page.readings[0].benchmark.instrument.provider
 
 
 def test_the_page_is_measured_against_the_supplied_instant_not_a_clock() -> None:
@@ -316,9 +324,16 @@ def test_the_default_universe_runs_end_to_end_against_a_fake_provider() -> None:
         transport=transport_for(responses),
         clock=lambda: instant(500),
     )
-    assert page.read_count == 6
-    assert page.unsupported_count == 5
+    assert page.read_count == 11
+    assert page.unsupported_count == 2
+    # One ordering per hourly horizon, over the six USDT markets. The macro
+    # markets produce none: each is alone in its quote unit, and an ordering
+    # that places one market is not a comparison. The yields produce none for a
+    # second reason — a rate is never ordered by percentage return.
     assert len(page.rankings) == len(DEFAULT_HORIZONS)
+    for ranking in page.rankings:
+        assert ranking.quote_unit == "USDT"
+        assert len(ranking.ordered) == 6
     text = render_market_pulse(page)
     for benchmark in DEFAULT_PULSE_UNIVERSE.benchmarks:
         assert benchmark.benchmark_id in text

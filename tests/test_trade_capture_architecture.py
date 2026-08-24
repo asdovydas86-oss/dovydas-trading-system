@@ -443,6 +443,21 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # the CLI does with it is render a report it was handed; both providers
         # terminate in `fmis.pipeline.market_data`.
         "fmis.macro",
+        # Widened for Milestone BV, on the same footing as BS.
+        # `fmis.operator_dashboard` is an application-layer package at the same
+        # tier as the ones above: it composes the pages the dashboard serves
+        # from `fmis.swing_workspace`, `fmis.market_pulse`, `fmis.macro` and
+        # `fmis.statistics`, and computes nothing of its own. It reaches the
+        # store exactly as `fmis.today` and `fmis.swing_workspace` do — through
+        # them, never directly — so the two assertions below are unaffected and
+        # still prove the store is never reached from here.
+        #
+        # It crosses *less* than the packages above in one respect worth
+        # recording: it is strictly read-only, and its own guards assert the
+        # absence of every store write verb, every raw filesystem write verb and
+        # every execution verb across the whole package. What the CLI does with
+        # it is bind a socket and hand it a snapshot holder.
+        "fmis.operator_dashboard",
     )
     reached = {
         name

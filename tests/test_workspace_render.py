@@ -302,6 +302,13 @@ def test_the_registry_carries_its_commands_in_the_declared_order() -> None:
         "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
         "today", "workspace", "pulse", "macro", "portfolio", "approve", "trade", "simulate",
         "statistics", "performance", "expectancy", "equity", "trades",
+        # Milestone BV admits "dashboard" as the last of the read surfaces and
+        # immediately before "archive", which stays last. The position is the
+        # argument: the dashboard is a *window* over every command above it —
+        # it computes nothing of its own and adds no step to the sequence — so
+        # it belongs after the surfaces it presents rather than among them. It
+        # changes no existing command and shares no flag with one.
+        "dashboard",
         "archive",
     ]
     assert len(set(names)) == len(names)

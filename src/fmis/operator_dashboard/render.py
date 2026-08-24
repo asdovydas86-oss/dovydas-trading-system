@@ -1,0 +1,1461 @@
+"""Read models → HTML. Presentation only, and presentation is a narrow word here.
+
+**What this module is allowed to do:** escape, format, group, label, lay out,
+link. Turning `0.0231` into ``+2.31%`` is formatting. Putting confirmed setups
+above the wait list is *reading the order the workspace already produced*.
+
+**What it is not allowed to do, and what a guard asserts it does not:** compute
+a market or monetary quantity, sort rows by a property of the analysis, sum,
+divide, or compare two figures to decide which is better. There is no
+`sorted()`, no `sum()`, and no arithmetic on any engine value in this file. The
+one exception is the equity chart, which scales values to pixel coordinates —
+and pixels are not financial observations. That is stated on the chart.
+
+**Every string reaching the page goes through `_e`.** A provider's error message
+is text this repository did not write, and a symbol could in principle be
+anything; both are escaped. There is no template engine and no interpolation of
+raw values into markup anywhere below.
+
+**Absence never renders as a blank or a bare dash.** `_absent` produces the
+reason beside the gap, because a blank cell where a risk figure belongs is read
+as *no risk* rather than as *not measured*, and that misreading is the specific
+thing this dashboard exists to prevent.
+
+**Nothing on any page submits anything.** No `<form>`, no `<button>`, no
+`<input>`, no script. Every interactive element is a link to another read-only
+view, and a guard asserts the absence of the write-capable elements.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from html import escape
+from typing import Any, Iterable, Sequence
+from urllib.parse import quote
+
+from fmis.operator_dashboard.models import (
+    BenchmarkRow,
+    DataHealthView,
+    MacroView,
+    MoveCell,
+    OperatorDashboardSnapshot,
+    PaperView,
+    PerformanceView,
+    PortfolioView,
+    PulseView,
+    DashboardSection,
+    DashboardSectionStatus,
+    SetupRow,
+    SourceState,
+    SwingView,
+    WarningRow,
+)
+from fmis.operator_dashboard.theme import (
+    EQUITY_CHART_HEIGHT,
+    EQUITY_CHART_WIDTH,
+    STYLESHEET,
+)
+
+__all__ = ["PAGES", "render_page", "page_titles"]
+
+#: Every route the server serves, in navigation order. The server refuses any
+#: path not in this mapping, so the route table and the navigation cannot drift.
+PAGES: tuple[tuple[str, str], ...] = (
+    ("/", "Overview"),
+    ("/markets", "Markets"),
+    ("/swing", "Swing"),
+    ("/portfolio", "Portfolio"),
+    ("/paper", "Paper"),
+    ("/performance", "Performance"),
+    ("/system", "System"),
+)
+
+
+def page_titles() -> tuple[str, ...]:
+    return tuple(title for _, title in PAGES)
+
+
+# ---------------------------------------------------------------------------
+# Escaping and formatting
+# ---------------------------------------------------------------------------
+
+
+def _e(value: Any) -> str:
+    """Escape anything for HTML text. The only way a value reaches the page."""
+    return escape("" if value is None else str(value), quote=True)
+
+
+def _percent(value: float) -> str:
+    """A fraction as a signed percentage. Explicit ``+`` so sign is never lost."""
+    return f"{value * 100:+.2f}%"
+
+
+def _plain(value: float) -> str:
+    """A unitless measured number — a volatility, a correlation — at 4 decimals."""
+    return f"{value:.4f}"
+
+
+def _basis_points(value: float) -> str:
+    return f"{value:+.1f} bp"
+
+
+def _sign_class(value: float) -> str:
+    """The class marking a measured number's sign. **Not** a recommendation.
+
+    Zero is its own class rather than borrowing the positive one: a move of
+    exactly nothing is a real observation and should not be tinted as a gain.
+    """
+    if value > 0:
+        return "pos"
+    if value < 0:
+        return "neg"
+    return "zero"
+
+
+def _duration(span: timedelta) -> str:
+    """An age in a compact form. Seconds are dropped above an hour."""
+    total = int(span.total_seconds())
+    sign = "-" if total < 0 else ""
+    total = abs(total)
+    days, rest = divmod(total, 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes, seconds = divmod(rest, 60)
+    if days:
+        return f"{sign}{days}d {hours}h"
+    if hours:
+        return f"{sign}{hours}h {minutes}m"
+    if minutes:
+        return f"{sign}{minutes}m {seconds}s"
+    return f"{sign}{seconds}s"
+
+
+def _stamp(moment: datetime | None) -> str:
+    if moment is None:
+        return _absent("no instant is recorded for this value")
+    return f"<span title=\"{_e(moment.isoformat())}\">{_e(moment.strftime('%Y-%m-%d %H:%M'))}Z</span>"
+
+
+def _absent(reason: str | None) -> str:
+    """A gap and the reason for it, never a bare dash.
+
+    The word *unavailable* is spelled out beside the reason. A dash alone is
+    read as a zero by anybody scanning a column of numbers, and one misread
+    zero in a risk column is worth more than the space this costs.
+    """
+    if not reason:
+        return '<span class="absent">unavailable</span>'
+    return (
+        '<span class="absent">unavailable'
+        f'<span class="why">{_e(reason)}</span></span>'
+    )
+
+
+def _measured(
+    value: float | None, reason: str | None, formatter: Any = _percent
+) -> str:
+    """A measured number with its sign class, or its absence with the reason."""
+    if value is None:
+        return _absent(reason)
+    return f'<span class="{_sign_class(value)}">{_e(formatter(value))}</span>'
+
+
+def _text(value: str | None, reason: str | None = None) -> str:
+    """Engine text, or the stated absence. Empty string counts as absent."""
+    if value is None or value == "":
+        return _absent(reason)
+    return _e(value)
+
+
+def _chip(label: str, kind: str) -> str:
+    slug = str(kind).strip().lower().replace(" ", "-")
+    return f'<span class="chip state-{_e(slug)}">{_e(label)}</span>'
+
+
+def _state_chip(state: SourceState) -> str:
+    return _chip(state.value.replace("_", " "), state.value)
+
+
+def _setup_chip(state: str) -> str:
+    """A setup's state as the engine spelled it.
+
+    WAIT and NO TRADE reach the neutral classes in `theme`, not the fault ones:
+    both are conclusions this system reached on purpose, and painting a correct
+    refusal in the colour of an error teaches the owner to distrust it.
+    """
+    return _chip(state, state.strip().lower().replace(" ", "-").replace("_", "-"))
+
+
+def _list(items: Sequence[str]) -> str:
+    if not items:
+        return ""
+    rows = "".join(f"<li>{_e(item)}</li>" for item in items)
+    return f'<ul class="plain">{rows}</ul>'
+
+
+def _kv(pairs: Iterable[tuple[str, str]]) -> str:
+    rows = "".join(f"<dt>{_e(key)}</dt><dd>{value}</dd>" for key, value in pairs)
+    return f'<dl class="kv">{rows}</dl>'
+
+
+def _details(summary: str, body: str, *, open_: bool = False) -> str:
+    if not body:
+        return ""
+    flag = " open" if open_ else ""
+    return f"<details{flag}><summary>{_e(summary)}</summary>{body}</details>"
+
+
+def _tile(key: str, value: str, *, small: bool = False) -> str:
+    cls = "v small" if small else "v"
+    return f'<div class="tile"><div class="k">{_e(key)}</div><div class="{cls}">{value}</div></div>'
+
+
+def _table(headers: Sequence[tuple[str, str]], rows: Sequence[str]) -> str:
+    """A table, or nothing. ``headers`` pairs a label with its column class."""
+    if not rows:
+        return ""
+    head = "".join(
+        f'<th class="{_e(cls)}">{_e(label)}</th>' for label, cls in headers
+    )
+    return (
+        '<div class="scroll"><table><thead><tr>'
+        f"{head}</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _empty(message: str) -> str:
+    return f'<p class="empty">{_e(message)}</p>'
+
+
+# ---------------------------------------------------------------------------
+# Section envelopes
+# ---------------------------------------------------------------------------
+
+
+def _panel(title: str, body: str, *, meta: str = "") -> str:
+    tail = f'<span class="meta">{meta}</span>' if meta else ""
+    return (
+        f'<section class="panel"><h2>{_e(title)}{tail}</h2>'
+        f'<div class="body">{body}</div></section>'
+    )
+
+
+def _section_meta(section: DashboardSection[Any]) -> str:
+    """The provenance line every panel carries: data instant, then source.
+
+    This is the answer to *"can the owner see as_of, source and freshness
+    without opening code"*. It sits on every panel, at small size, always.
+    """
+    parts: list[str] = []
+    if section.as_of is not None:
+        parts.append(f"as of {_stamp(section.as_of)}")
+    if section.source:
+        parts.append(_e(section.source))
+    return " · ".join(parts)
+
+
+def _failed(section: DashboardSection[Any]) -> str:
+    """A section that could not be read. Loud, specific, and isolated.
+
+    The other sections on the page render normally around this. That is the
+    whole point of per-section isolation: FRED being down must not cost the
+    owner the swing page.
+    """
+    return (
+        f'<div class="failed"><div class="t">{_e(section.name)} unavailable</div>'
+        f'<div class="m">{_e(section.unavailable_reason)}</div></div>'
+    )
+
+
+def _guarded(section: DashboardSection[Any], title: str, body: Any) -> str:
+    """Render a section's body, or its failure, or its emptiness."""
+    meta = _section_meta(section)
+    if section.failed:
+        return _panel(title, _failed(section), meta=meta)
+    if section.status is DashboardSectionStatus.EMPTY or section.data is None:
+        return _panel(
+            title,
+            _empty(_empty_message(section.name)),
+            meta=meta,
+        )
+    return _panel(title, body(section.data), meta=meta)
+
+
+def _empty_message(name: str) -> str:
+    """Emptiness, stated as the fact it is rather than as a failure.
+
+    *"No trades recorded"* and *"the store could not be read"* are different
+    facts and must never share a message. An owner who has not traded has not
+    suffered an outage.
+    """
+    return {
+        # Like the paper message below, this keeps the *paper is never counted
+        # here* framing on an empty page. A separation that only appears once
+        # there is data to separate teaches the reader it is a property of the
+        # data rather than of the page.
+        "portfolio": "No durable store is present, so no position, limit or "
+        "capital figure was read. Nothing failed — there is nothing recorded "
+        "yet. Simulated trades are never added into any figure on this page; "
+        "they are on the Paper page.",
+        # The *simulated, never real exposure* framing belongs on this page even
+        # when it is empty. It lives in the populated body too, and a section
+        # that drops it when the table is empty teaches the framing as something
+        # that appears with the data rather than as a property of the page.
+        "paper": "No paper trade is recorded. Nothing failed. Paper trades are "
+        "simulated: none of them is real exposure, and none appears in any "
+        "portfolio figure.",
+        "performance": "No closed trade is recorded, so there is no statistic "
+        "to state. Nothing failed.",
+        "pulse": "No market was read on this refresh.",
+        "macro": "No macro market was read on this refresh.",
+        "health": "No source was touched on this refresh.",
+        "swing": "No symbol was scanned on this refresh.",
+    }.get(name, "Nothing was read for this section.")
+
+
+# ---------------------------------------------------------------------------
+# Markets
+# ---------------------------------------------------------------------------
+
+
+class _Footnotes:
+    """Distinct absence reasons for one table, numbered and printed once.
+
+    **Why a table needs this and a paragraph does not.** A yield holds no
+    percentage move over any of its three windows, and the reason is the same
+    long sentence for all three. The terminal renderer collapses that case —
+    *"one reason, stated once"* — because repeating it three times buries the
+    page. A table cannot collapse three columns into one, so the reason moves
+    beneath the table and the cells carry a marker to it.
+
+    Nothing is hidden and nothing is truncated: every distinct reason appears in
+    full, on the page, exactly once, and the full text is also on each cell's
+    `title` for a reader who hovers rather than scrolls.
+    """
+
+    def __init__(self) -> None:
+        self._reasons: dict[str, int] = {}
+
+    def mark(self, reason: str | None) -> str:
+        if not reason:
+            return '<span class="absent">unavailable</span>'
+        number = self._reasons.setdefault(reason, len(self._reasons) + 1)
+        return (
+            f'<span class="absent" title="{_e(reason)}">unavailable'
+            f"<sup>{number}</sup></span>"
+        )
+
+    def render(self) -> str:
+        if not self._reasons:
+            return ""
+        items = "".join(
+            f"<li><sup>{number}</sup> {_e(reason)}</li>"
+            for reason, number in self._reasons.items()
+        )
+        return (
+            '<ul class="footnotes">'
+            f"{items}</ul>"
+        )
+
+
+def _move_cell(
+    move: MoveCell, formatter: Any = _percent, notes: _Footnotes | None = None
+) -> str:
+    if move.value is None and notes is not None:
+        return notes.mark(move.unavailable_reason)
+    return _measured(move.value, move.unavailable_reason, formatter)
+
+
+def _horizon_families(
+    rows: Sequence[BenchmarkRow],
+) -> tuple[tuple[tuple[str, ...], list[BenchmarkRow]], ...]:
+    """Group markets by the set of windows they were actually measured over.
+
+    **One table per cadence, not one table with every column.** An hourly crypto
+    series and a daily macro series are measured over different windows with
+    different ids, and a single table spanning both puts three empty cells on
+    every row. Milestone BU removed exactly that from the terminal renderer —
+    *"a daily series has no twenty-four-hourly-bar window, and never will"* — so
+    printing *unavailable* there says a measurement was attempted and failed
+    when none was attempted. This grouping is the table-shaped form of that
+    same fix.
+
+    Grouping is presentation. Families appear in the order their first market
+    appears, and markets keep their order within a family; nothing is sorted.
+    """
+    families: dict[tuple[str, ...], list[BenchmarkRow]] = {}
+    for row in rows:
+        key = tuple(move.horizon_id for move in row.moves)
+        families.setdefault(key, []).append(row)
+    return tuple(families.items())
+
+
+def _pulse_family_table(
+    horizon_ids: Sequence[str], rows: Sequence[BenchmarkRow], labels: dict[str, str]
+) -> str:
+    headers: list[tuple[str, str]] = [
+        ("Market", "sym"),
+        ("Category", ""),
+        ("State", ""),
+    ]
+    headers.extend((labels.get(hid, hid), "num") for hid in horizon_ids)
+    headers.extend(
+        [("Volatility", "num"), ("Age", "num"), ("Source", ""), ("Last bar", "")]
+    )
+    notes = _Footnotes()
+    body: list[str] = []
+    for row in rows:
+        moves = {move.horizon_id: move for move in row.moves}
+        cells = [
+            f'<td class="sym">{_e(row.benchmark_id)}<br>'
+            f'<span class="sub">{_e(row.display_name)}</span></td>',
+            f"<td>{_e(row.category)}</td>",
+            f"<td>{_state_chip(row.state)}</td>",
+        ]
+        for horizon_id in horizon_ids:
+            move = moves[horizon_id]
+            cells.append(f'<td class="num">{_move_cell(move, _percent, notes)}</td>')
+        cells.append(
+            f'<td class="num">{_measured(row.volatility, row.volatility_reason, _plain) if row.volatility is not None else notes.mark(row.volatility_reason)}</td>'
+        )
+        cells.append(
+            f'<td class="num">{_e(_duration(row.age)) if row.age is not None else notes.mark("no age is stated")}</td>'
+        )
+        cells.append(f"<td>{_text(row.source, 'no source is named')}</td>")
+        cells.append(f"<td>{_stamp(row.last_bar_open)}</td>")
+        body.append(f"<tr>{''.join(cells)}</tr>")
+    return _table(headers, body) + notes.render()
+
+
+def _unreadable_markets_table(rows: Sequence[Any]) -> str:
+    """Markets with no reading, each with the reason it has none — stated once.
+
+    **One row, one reason cell.** A market with no reading has nothing for the
+    level, move, volatility, age or source columns, and putting it in the main
+    table repeats one long paragraph six times across one row. So these markets
+    get their own table with a single reason column, which is also how the
+    terminal renderer's *NOT AVAILABLE* section reads.
+
+    *Unsupported* and *unavailable* both land here and keep their own chips: one
+    means this build has no provider for that market at all — permanent, and
+    true again tomorrow — while the other means a provider that exists did not
+    answer on this run.
+    """
+    return _table(
+        [("Market", "sym"), ("Category", ""), ("State", ""), ("Reason", "")],
+        [
+            "<tr>"
+            f'<td class="sym">{_e(row.benchmark_id)}<br>'
+            f'<span class="sub">{_e(row.display_name)}</span></td>'
+            f'<td>{_e(getattr(row, "category", ""))}</td>'
+            f"<td>{_state_chip(row.state)}</td>"
+            f"<td>{_text(row.unavailable_reason, 'no reason was stated')}</td>"
+            "</tr>"
+            for row in rows
+        ],
+    )
+
+
+def _pulse_rows(view: PulseView) -> str:
+    labels = dict(view.horizons)
+    parts: list[str] = []
+    unreadable: list[BenchmarkRow] = []
+    for horizon_ids, rows in _horizon_families(view.rows):
+        if not horizon_ids:
+            unreadable.extend(rows)
+            continue
+        parts.append(_pulse_family_table(horizon_ids, rows, labels))
+    if unreadable:
+        parts.append(_unreadable_markets_table(unreadable))
+    return "".join(parts) or _empty("No market was read on this refresh.")
+
+
+def _pulse_body(view: PulseView) -> str:
+    legend = ", ".join(
+        f"{horizon_id} = {description}" for horizon_id, description in view.horizons
+    )
+    parts = [_pulse_rows(view)]
+    parts.append(
+        f'<p class="note">{_e(view.read_count)} of {_e(view.requested_count)} '
+        f"markets read; {_e(view.unsupported_count)} unsupported in this build. "
+        "Windows are counts of closed bars, not durations — this build holds no "
+        "trading calendar.</p>"
+    )
+    if legend:
+        parts.append(f'<p class="note">{_e(legend)}</p>')
+    if view.co_movement_reference:
+        co_rows = [
+            f"<tr><td class=\"sym\">{_e(row.benchmark_id)}</td>"
+            f'<td class="num">{_measured(row.co_movement, row.co_movement_reason, _plain)}</td></tr>'
+            for row in view.rows
+            if row.co_movement is not None or row.co_movement_reason
+        ]
+        parts.append(
+            _details(
+                f"co-movement against {view.co_movement_reference}",
+                _table([("Market", "sym"), ("Correlation", "num")], co_rows),
+            )
+        )
+    return "".join(parts)
+
+
+def _macro_body(view: MacroView) -> str:
+    headers: list[tuple[str, str]] = [
+        ("Market", "sym"),
+        ("State", ""),
+        ("Level", "num"),
+        ("Unit", ""),
+        ("Moves", ""),
+        ("Volatility", "num"),
+        ("Age", "num"),
+        ("Observed", ""),
+        ("Source", ""),
+    ]
+    # A market with no reading has nothing for eight of these nine columns, so
+    # it goes to its own one-reason table rather than repeating one paragraph
+    # across a row. Partitioning preserves order within each group.
+    readable = [row for row in view.rows if row.unavailable_reason is None]
+    unreadable = [row for row in view.rows if row.unavailable_reason is not None]
+    notes = _Footnotes()
+    rows: list[str] = []
+    for row in readable:
+        formatter = _basis_points if row.change_unit == "basis points" else _percent
+        moves = " · ".join(
+            f"{_e(move.label or move.horizon_id)} {_move_cell(move, formatter, notes)}"
+            for move in row.moves
+        )
+        level = (
+            _e(f"{row.level:,.4f}".rstrip("0").rstrip("."))
+            if row.level is not None
+            else notes.mark("no level was produced for this market")
+        )
+        rows.append(
+            "<tr>"
+            f'<td class="sym">{_e(row.benchmark_id)}<br>'
+            f'<span class="sub">{_e(row.display_name)}</span></td>'
+            f"<td>{_state_chip(row.state)}</td>"
+            f'<td class="num">{level}</td>'
+            f"<td>{_text(row.unit, 'no unit is stated')}</td>"
+            f"<td>{moves or notes.mark('this market holds no move')}</td>"
+            f'<td class="num">{_measured(row.volatility, row.volatility_reason, _plain) if row.volatility is not None else notes.mark(row.volatility_reason)}</td>'
+            f'<td class="num">{_e(_duration(row.age)) if row.age is not None else notes.mark("no age is stated")}</td>'
+            f"<td>{_stamp(row.observed_at)}</td>"
+            f"<td>{_text(row.source, 'no source is named')}</td>"
+            "</tr>"
+        )
+    parts = [_table(headers, rows), notes.render()]
+    if unreadable:
+        parts.append(_unreadable_markets_table(unreadable))
+    parts.append(
+        '<p class="note">Yields move in basis points, not percentage returns — '
+        "the two are different quantities and are never shown in one unit.</p>"
+    )
+    if view.relationships:
+        rel_rows = [
+            "<tr>"
+            f'<td class="sym">{_e(row.subject_id)}</td>'
+            f"<td>{_e(row.reference_id)}</td>"
+            f"<td>{_e(row.metric)}</td>"
+            f'<td class="num">{_measured(row.value, row.unavailable_reason, _plain)}</td>'
+            f'<td class="num">{_e(row.aligned_count)} / {_e(row.observation_count)}</td>'
+            f"<td>{_text(row.comparability, row.detail or 'no comparability key was stated')}</td>"
+            "</tr>"
+            for row in view.relationships
+        ]
+        parts.append(
+            _details(
+                f"cross-asset relationships against {view.relationship_reference or 'the stated reference'}",
+                _table(
+                    [
+                        ("Subject", "sym"),
+                        ("Reference", ""),
+                        ("Metric", ""),
+                        ("Value", "num"),
+                        ("Aligned / observed", "num"),
+                        ("Comparability", ""),
+                    ],
+                    rel_rows,
+                )
+                + '<p class="note">Aligned counts are shown because a '
+                "correlation over four aligned observations and one over ninety "
+                "are different claims.</p>",
+            )
+        )
+    return "".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Swing
+# ---------------------------------------------------------------------------
+
+
+def _setup_link(symbol: str) -> str:
+    return f'<a href="/swing/{quote(symbol, safe="")}">{_e(symbol)}</a>'
+
+
+def _evidence_cell(row: SetupRow) -> str:
+    if row.evidence is None:
+        return _absent(row.evidence_reason)
+    digest = row.evidence
+    ready = "ready" if digest.decision_ready else "not ready"
+    return (
+        f'<span title="{_e(digest.decision_ready_reason)}">'
+        f"{_e(digest.supporting)}✓ {_e(digest.conflicting)}✗ "
+        f"{_e(digest.missing)}? · {_e(ready)}</span>"
+    )
+
+
+def _setup_rows(rows: Sequence[SetupRow]) -> str:
+    body: list[str] = []
+    for row in rows:
+        body.append(
+            "<tr>"
+            f'<td class="num">{_e(row.position)}</td>'
+            f'<td class="sym">{_setup_link(row.symbol)}</td>'
+            f"<td>{_setup_chip(row.state)}</td>"
+            f"<td>{_text(row.direction, 'no direction is stated for this setup')}</td>"
+            f"<td>{_text(row.approval_status, 'no approval was produced')}</td>"
+            f"<td>{_text(row.sufficiency)}</td>"
+            f"<td>{_evidence_cell(row)}</td>"
+            f'<td class="num">{_measured(row.risk_reward, "no risk/reward was produced", lambda value: f"{value:.2f}")}</td>'
+            f"<td>{_text(row.identity, row.identity_reason)}</td>"
+            f"<td>{_text(row.paper_status, 'no paper trade for this symbol')}</td>"
+            f"<td>{_text(row.held, 'not held')}</td>"
+            "</tr>"
+        )
+    return _table(
+        [
+            ("#", "num"),
+            ("Symbol", "sym"),
+            ("State", ""),
+            ("Direction", ""),
+            ("Approval", ""),
+            ("Sufficiency", ""),
+            ("Evidence", ""),
+            ("R:R", "num"),
+            ("Identity", ""),
+            ("Paper", ""),
+            ("Held", ""),
+        ],
+        body,
+    )
+
+
+def _swing_body(view: SwingView) -> str:
+    parts: list[str] = []
+    parts.append("<h3>Top opportunities</h3>")
+    parts.append(
+        _setup_rows(view.opportunities)
+        or _empty(
+            "No setup is confirmed or a candidate on this refresh. That is a "
+            "conclusion, not a failure."
+        )
+    )
+    parts.append("<h3>Wait list</h3>")
+    parts.append(
+        _setup_rows(view.wait_list)
+        or _empty("Nothing is waiting on a confirmation.")
+    )
+    parts.append("<h3>No trade</h3>")
+    no_trade = _table(
+        [("Reason", ""), ("Classification", ""), ("Symbols", "")],
+        [
+            "<tr>"
+            f"<td>{_e(row.reason)}</td>"
+            f"<td>{_e(row.classification)}</td>"
+            f'<td class="sym">{_e(", ".join(row.symbols))}</td>'
+            "</tr>"
+            for row in view.no_trade
+        ],
+    )
+    parts.append(
+        no_trade
+        or _empty("No symbol was concluded a no-trade on this refresh.")
+    )
+    parts.append("<h3>Could not be read</h3>")
+    unreadable = _table(
+        [("Symbol", "sym"), ("Detail", "")],
+        [
+            f'<tr><td class="sym">{_e(row.symbol)}</td><td>{_e(row.detail)}</td></tr>'
+            for row in view.unreadable
+        ],
+    )
+    parts.append(
+        unreadable
+        or _empty("Every scanned symbol produced a readable analysis.")
+    )
+    if view.ranking_rule:
+        parts.append(
+            f'<p class="note">Ordering: {_e(view.ranking_rule)} This surface '
+            "does not reorder anything.</p>"
+        )
+    return "".join(parts)
+
+
+def _swing_detail(row: SetupRow) -> str:
+    """One symbol's full picture. Every field is the engines' own; none is new."""
+    parts: list[str] = []
+    parts.append(
+        _panel(
+            f"{row.symbol} — setup",
+            _kv(
+                [
+                    ("state", _setup_chip(row.state)),
+                    ("direction", _text(row.direction, "no direction is stated")),
+                    ("sufficiency", _text(row.sufficiency)),
+                    ("approval", _text(row.approval_status, "no approval was produced")),
+                    (
+                        "risk / reward",
+                        _measured(
+                            row.risk_reward,
+                            "no risk/reward was produced",
+                            lambda value: f"{value:.2f}",
+                        ),
+                    ),
+                    (
+                        "stop",
+                        _measured(row.stop, "no stop was produced", lambda v: f"{v:g}"),
+                    ),
+                    (
+                        "target",
+                        _measured(
+                            row.target, "no target was produced", lambda v: f"{v:g}"
+                        ),
+                    ),
+                    (
+                        "recommended size",
+                        _text(row.recommended_size, "no size was produced"),
+                    ),
+                    (
+                        "open risk after",
+                        _text(row.open_risk_after, "no figure was produced"),
+                    ),
+                ]
+            ),
+        )
+    )
+    if row.evidence is not None:
+        digest = row.evidence
+        parts.append(
+            _panel(
+                f"{row.symbol} — evidence",
+                _kv(
+                    [
+                        ("supporting", _e(digest.supporting)),
+                        ("conflicting", _e(digest.conflicting)),
+                        ("missing", _e(digest.missing)),
+                        ("unavailable", _e(digest.unavailable)),
+                        (
+                            "agreeing families",
+                            _text(", ".join(digest.agreeing_families), "none"),
+                        ),
+                        (
+                            "conflicting families",
+                            _text(", ".join(digest.conflicting_families), "none"),
+                        ),
+                        (
+                            "independence established",
+                            _e("yes" if digest.independence_established else "no"),
+                        ),
+                        (
+                            "decision ready",
+                            _e("yes" if digest.decision_ready else "no")
+                            + f'<br><span class="sub">{_e(digest.decision_ready_reason)}</span>',
+                        ),
+                    ]
+                )
+                + _details("caveats", _list(digest.caveats)),
+            )
+        )
+    else:
+        parts.append(
+            _panel(f"{row.symbol} — evidence", _absent(row.evidence_reason))
+        )
+    parts.append(
+        _panel(
+            f"{row.symbol} — thesis, confirmation, invalidation",
+            _details("thesis", _list(row.thesis), open_=True)
+            + _details("confirmation", _list(row.confirmation), open_=True)
+            + _details("invalidation", _list(row.invalidation), open_=True)
+            or _empty("No thesis, confirmation or invalidation was produced."),
+        )
+    )
+    parts.append(
+        _panel(
+            f"{row.symbol} — identity, paper and holdings",
+            _kv(
+                [
+                    ("stable identity", _text(row.identity, row.identity_reason)),
+                    (
+                        "paper trade",
+                        _text(row.paper_status, "no paper trade for this symbol"),
+                    ),
+                    ("held", _text(row.held, "not held")),
+                ]
+            ),
+        )
+    )
+    ordering = _table(
+        [("Component", ""), ("Value", "")],
+        [
+            f"<tr><td>{_e(name)}</td><td>{_e(value)}</td></tr>"
+            for name, value in row.rank_components
+        ],
+    )
+    blocking = _details("blocking reasons", _list(row.blocking_reasons))
+    warnings = _details("approval warnings", _list(row.approval_warnings))
+    parts.append(
+        _panel(
+            f"{row.symbol} — ordering and warnings",
+            (ordering or _empty("No ordering key was recorded for this row."))
+            + blocking
+            + warnings,
+        )
+    )
+    return "".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Portfolio, paper, performance
+# ---------------------------------------------------------------------------
+
+
+def _portfolio_body(view: PortfolioView) -> str:
+    tiles = "".join(
+        [
+            _tile("Open positions", _e(len(view.positions))),
+            _tile("Cash", _text(view.cash, view.cash_reason), small=True),
+            _tile("Exposure", _text(view.exposure, view.exposure_reason), small=True),
+            _tile(
+                "Market value",
+                _text(view.market_value, view.market_value_reason),
+                small=True,
+            ),
+            _tile(
+                "Unrealized",
+                _text(view.unrealized_pnl, view.unrealized_pnl_reason),
+                small=True,
+            ),
+            _tile(
+                "Committed risk",
+                _text(view.committed_risk, view.committed_risk_reason),
+                small=True,
+            ),
+            _tile(
+                "Available risk",
+                _text(view.available_risk, view.available_risk_reason),
+                small=True,
+            ),
+        ]
+    )
+    positions = _table(
+        [
+            ("Market", "sym"),
+            ("Book", ""),
+            ("Direction", ""),
+            ("Quantity", "num"),
+            ("Avg entry", "num"),
+            ("Mark", "num"),
+            ("Market value", "num"),
+            ("Unrealized", "num"),
+            ("Opened", ""),
+        ],
+        [
+            "<tr>"
+            f'<td class="sym">{_e(row.market)}</td>'
+            f"<td>{_e(row.book)}</td>"
+            f"<td>{_e(row.direction)}</td>"
+            f'<td class="num">{_e(row.quantity)}</td>'
+            f'<td class="num">{_e(row.average_entry)}</td>'
+            f'<td class="num">{_text(row.mark, "no mark was read for this market")}</td>'
+            f'<td class="num">{_text(row.market_value, "no mark, so no value")}</td>'
+            f'<td class="num">{_text(row.unrealized_pnl, "no mark, so no unrealized figure")}</td>'
+            f"<td>{_stamp(row.opened_at)}</td>"
+            "</tr>"
+            for row in view.positions
+        ],
+    )
+    books = _table(
+        [("Book", ""), ("Open positions", "num"), ("Market value", "num")],
+        [
+            "<tr>"
+            f"<td>{_e(row.label)}</td>"
+            f'<td class="num">{_e(row.open_positions)}</td>'
+            f'<td class="num">{_text(row.market_value, row.market_value_reason)}</td>'
+            "</tr>"
+            for row in view.books
+        ],
+    )
+    limits = _table(
+        [
+            ("Limit", ""),
+            ("Scope", ""),
+            ("Stated", "num"),
+            ("Current", "num"),
+            ("Status", ""),
+            ("Severity", ""),
+        ],
+        [
+            "<tr>"
+            f"<td>{_e(row.limit_id)}</td>"
+            f"<td>{_e(row.scope)}</td>"
+            f'<td class="num">{_e(row.stated_limit)}</td>'
+            f'<td class="num">{_text(row.current, row.current_reason)}</td>'
+            f"<td>{_text(row.status, row.status_reason)}</td>"
+            f"<td>{_e(row.severity)}</td>"
+            "</tr>"
+            for row in view.limits
+        ],
+    )
+    parts = [f'<div class="tiles">{tiles}</div>']
+    parts.append(
+        '<p class="note">These are recorded positions only. Simulated trades '
+        'are on the <a href="/paper">Paper</a> page and are never added into '
+        "any figure above.</p>"
+    )
+    parts.append(positions or _empty("No open position is recorded."))
+    if books:
+        parts.append(_details("books", books, open_=True))
+    if limits:
+        parts.append(_details("risk limits", limits, open_=True))
+    notes = [note for note in (view.budget_note, view.marks_note) if note]
+    if notes:
+        parts.append(_details("notes", _list(notes)))
+    return "".join(parts)
+
+
+def _paper_body(view: PaperView) -> str:
+    rows = _table(
+        [
+            ("Activation", ""),
+            ("Market", "sym"),
+            ("State", ""),
+            ("Open size", "num"),
+            ("Entry", "num"),
+            ("Stop", "num"),
+            ("Initial stop", "num"),
+            ("Initial risk", "num"),
+            ("Total R", "num"),
+            ("MFE R", "num"),
+            ("MAE R", "num"),
+            ("Bars", "num"),
+            ("Widenings", "num"),
+        ],
+        [
+            "<tr>"
+            f"<td>{_e(row.activation_id)}</td>"
+            f'<td class="sym">{_e(row.market)}</td>'
+            f"<td>{_setup_chip(row.state)}</td>"
+            f'<td class="num">{_e(row.open_size)}</td>'
+            f'<td class="num">{_text(row.entry, row.entry_reason)}</td>'
+            f'<td class="num">{_e(row.stop)}</td>'
+            f'<td class="num">{_e(row.initial_stop)}</td>'
+            f'<td class="num">{_text(row.initial_risk, row.initial_risk_reason)}</td>'
+            f'<td class="num">{_text(row.total_r, row.total_r_reason)}</td>'
+            f'<td class="num">{_text(row.max_favourable_r, row.max_favourable_r_reason)}</td>'
+            f'<td class="num">{_text(row.max_adverse_r, row.max_adverse_r_reason)}</td>'
+            f'<td class="num">{_e(row.bars_in_trade)}</td>'
+            f'<td class="num">{_e(row.stop_widenings)}</td>'
+            "</tr>"
+            for row in view.rows
+        ],
+    )
+    parts = [
+        '<p class="note">Simulated trades. None of it is real exposure, and '
+        "none of it appears in any portfolio figure.</p>"
+    ]
+    parts.append(rows or _empty("No paper trade is recorded."))
+    if view.note:
+        parts.append(f'<p class="note">{_e(view.note)}</p>')
+    return "".join(parts)
+
+
+def _equity_chart(view: PerformanceView) -> str:
+    """The cumulative curve, one step per closed trade.
+
+    **Pixels are interpolated; observations are not.** The polyline between two
+    points is a drawing convenience — no trade closed between them, and the note
+    under the chart says so. Scaling values into a viewBox is coordinate
+    arithmetic, not a financial calculation: no figure here is new, and every
+    vertex is a `cumulative` the statistics engine produced.
+    """
+    points = view.equity
+    if len(points) < 2:
+        return _empty(
+            "A curve needs at least two closed trades. Nothing is interpolated "
+            "to fill the gap."
+        )
+    values = [float(point.cumulative) for point in points]
+    low = min(values)
+    high = max(values)
+    span = high - low
+    if span == 0:
+        span = 1.0
+    width = EQUITY_CHART_WIDTH
+    height = EQUITY_CHART_HEIGHT
+    pad = 22
+    step = (width - 2 * pad) / (len(values) - 1)
+
+    def _y(value: float) -> float:
+        return height - pad - ((value - low) / span) * (height - 2 * pad)
+
+    coords = [
+        (pad + index * step, _y(value)) for index, value in enumerate(values)
+    ]
+    path = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    zero = ""
+    if low <= 0 <= high:
+        zero_y = _y(0.0)
+        zero = (
+            f'<line class="zero" x1="{pad}" y1="{zero_y:.1f}" '
+            f'x2="{width - pad}" y2="{zero_y:.1f}"/>'
+        )
+    dots = "".join(
+        f'<circle class="dot" cx="{x:.1f}" cy="{y:.1f}" r="2"><title>'
+        f"{_e(points[index].trade_ref)} · {_e(points[index].cumulative)} "
+        f"{_e(view.quote_asset)}</title></circle>"
+        for index, (x, y) in enumerate(coords)
+    )
+    return (
+        f'<svg class="chart" viewBox="0 0 {width} {height}" role="img" '
+        f'aria-label="Cumulative realized profit and loss in {_e(view.quote_asset)}">'
+        f'<line class="axis" x1="{pad}" y1="{height - pad}" x2="{width - pad}" y2="{height - pad}"/>'
+        f"{zero}"
+        f'<polyline class="line" points="{path}"/>'
+        f"{dots}"
+        f'<text x="{pad}" y="14">{_e(f"{high:,.2f}")}</text>'
+        f'<text x="{pad}" y="{height - 6}">{_e(f"{low:,.2f}")}</text>'
+        "</svg>"
+        f'<p class="note">{_e(view.equity_basis)} The line between two points '
+        "is drawn, not observed — no trade closed between them.</p>"
+    )
+
+
+def _performance_body(views: tuple[PerformanceView, ...]) -> str:
+    parts: list[str] = []
+    for view in views:
+        tiles = "".join(
+            [
+                _tile("Trades", _e(view.trades)),
+                _tile("Open", _e(view.open_trades)),
+                _tile("Resolved", _e(view.resolved)),
+                _tile("Sample floor", _e(view.sample_floor)),
+                _tile("Net", _text(view.net, view.net_reason), small=True),
+                _tile(
+                    "Expectancy",
+                    _text(view.expectancy, view.expectancy_reason),
+                    small=True,
+                ),
+                _tile(
+                    "Win rate", _text(view.win_rate, view.win_rate_reason), small=True
+                ),
+                _tile(
+                    "Profit factor",
+                    _text(view.profit_factor, view.profit_factor_reason),
+                    small=True,
+                ),
+                _tile(
+                    "Average R",
+                    _text(view.average_r, view.average_r_reason),
+                    small=True,
+                ),
+                _tile(
+                    "Max drawdown",
+                    _text(view.max_drawdown, view.max_drawdown_reason),
+                    small=True,
+                ),
+            ]
+        )
+        body = [f'<div class="tiles">{tiles}</div>']
+        body.append(
+            f'<p class="note">Figures are stated in {_e(view.quote_asset)} and '
+            "are never summed across quote assets. A rate below the sample "
+            "floor is refused rather than printed, and says so.</p>"
+        )
+        if view.floor_note:
+            body.append(f'<p class="note">{_e(view.floor_note)}</p>')
+        body.append(_equity_chart(view))
+        steps = _table(
+            [("Closed", ""), ("Trade", ""), ("Delta", "num"), ("Cumulative", "num")],
+            [
+                "<tr>"
+                f"<td>{_stamp(point.at)}</td>"
+                f"<td>{_e(point.trade_ref)}</td>"
+                f'<td class="num">{_e(point.delta)}</td>'
+                f'<td class="num">{_e(point.cumulative)}</td>'
+                "</tr>"
+                for point in view.equity
+            ],
+        )
+        if steps:
+            body.append(_details("every closed-trade step", steps))
+        if view.equity_excluded:
+            body.append(_details("excluded from the curve", _list(view.equity_excluded)))
+        parts.append(_panel(f"Performance — {view.quote_asset}", "".join(body)))
+    return "".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# System / data health
+# ---------------------------------------------------------------------------
+
+
+def _health_body(view: DataHealthView) -> str:
+    rows = _table(
+        [
+            ("Source", "sym"),
+            ("Label", ""),
+            ("State", ""),
+            ("Last observation", ""),
+            ("Age", "num"),
+            ("Provider", ""),
+            ("Detail", ""),
+        ],
+        [
+            "<tr>"
+            f'<td class="sym">{_e(row.source_id)}</td>'
+            f"<td>{_e(row.label)}</td>"
+            f"<td>{_state_chip(row.state)}</td>"
+            f"<td>{_stamp(row.last_observation)}</td>"
+            f'<td class="num">{_e(_duration(row.age)) if row.age is not None else _absent("no age is stated for this source")}</td>'
+            f"<td>{_text(row.provider, 'no provider is named for this source')}</td>"
+            f"<td>{_text(row.detail, 'no detail was stated')}</td>"
+            "</tr>"
+            for row in view.sources
+        ],
+    )
+    counts = "".join(
+        _tile(state.value.replace("_", " "), _e(len(view.with_state(state))))
+        for state in SourceState
+    )
+    return (
+        f'<div class="tiles">{counts}</div>'
+        '<p class="note">Counts, not a score. There is deliberately no single '
+        "health figure: sources publish on different schedules, and one number "
+        "over all of them would be a judgement this system has no basis to "
+        "make. <b>Behind schedule</b> means older than that source's own "
+        "publication cadence explains — not that the number is wrong. "
+        "<b>Unsupported</b> means this build has no provider for that market at "
+        "all, which is permanent rather than an outage.</p>"
+        f"{rows or _empty('No source was touched on this refresh.')}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Warnings
+# ---------------------------------------------------------------------------
+
+
+def _warnings_body(warnings: Sequence[WarningRow]) -> str:
+    if not warnings:
+        return _empty("No warning was raised on this refresh.")
+    rows = [
+        "<tr>"
+        f'<td class="sym">{_e(row.code)}</td>'
+        f'<td><span class="chip sev-{_e(row.severity.lower())}">{_e(row.severity)}</span></td>'
+        f"<td>{_e(row.kind)}</td>"
+        f"<td>{_e(row.statement)}"
+        + (
+            f'<br><span class="sub">{_e(row.evidence)}</span>'
+            if row.evidence
+            else ""
+        )
+        + "</td>"
+        f'<td class="sym">{_e(", ".join(row.subjects))}</td>'
+        "</tr>"
+        for row in warnings
+    ]
+    return _table(
+        [
+            ("Code", "sym"),
+            ("Severity", ""),
+            ("Kind", ""),
+            ("Statement", ""),
+            ("Subjects", "sym"),
+        ],
+        rows,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pages
+# ---------------------------------------------------------------------------
+
+
+def _overview(snapshot: OperatorDashboardSnapshot) -> str:
+    counts = snapshot.counts
+    parts: list[str] = []
+    parts.append(
+        _panel(
+            "Swing",
+            f'<div class="tiles">'
+            + _tile("Scanned", _e(counts.scanned))
+            + _tile("Confirmed", _e(counts.confirmed))
+            + _tile("Candidates", _e(counts.candidates))
+            + _tile("Waiting", _e(counts.waiting))
+            + _tile("Unreadable", _e(counts.unreadable))
+            + _tile("Open positions", _e(counts.open_positions))
+            + _tile("Paper trades", _e(counts.paper_positions))
+            + "</div>"
+            + (
+                _setup_rows(snapshot.swing.data.opportunities)
+                if snapshot.swing.data is not None
+                and snapshot.swing.data.opportunities
+                else _empty(
+                    "No confirmed or candidate setup on this refresh. A quiet "
+                    "market is a legitimate result."
+                )
+            ),
+            meta=_section_meta(snapshot.swing),
+        )
+        if not snapshot.swing.failed
+        else _panel("Swing", _failed(snapshot.swing))
+    )
+
+    parts.append(
+        _guarded(
+            snapshot.pulse,
+            "Global market pulse",
+            lambda view: _pulse_rows(view)
+            + '<p class="note">Full detail on the <a href="/markets">Markets</a> page.</p>',
+        )
+    )
+    parts.append(
+        _guarded(
+            snapshot.portfolio,
+            "Portfolio",
+            lambda view: '<div class="tiles">'
+            + _tile("Open positions", _e(len(view.positions)))
+            + _tile("Exposure", _text(view.exposure, view.exposure_reason), small=True)
+            + _tile(
+                "Committed risk",
+                _text(view.committed_risk, view.committed_risk_reason),
+                small=True,
+            )
+            + _tile(
+                "Available risk",
+                _text(view.available_risk, view.available_risk_reason),
+                small=True,
+            )
+            + "</div>",
+        )
+    )
+    parts.append(
+        _guarded(
+            snapshot.performance,
+            "Performance",
+            lambda views: "".join(
+                '<div class="tiles">'
+                + _tile("Asset", _e(view.quote_asset), small=True)
+                + _tile("Sample n", _e(view.trades))
+                + _tile("Net", _text(view.net, view.net_reason), small=True)
+                + _tile(
+                    "Expectancy",
+                    _text(view.expectancy, view.expectancy_reason),
+                    small=True,
+                )
+                + _tile(
+                    "Profit factor",
+                    _text(view.profit_factor, view.profit_factor_reason),
+                    small=True,
+                )
+                + _tile(
+                    "Max drawdown",
+                    _text(view.max_drawdown, view.max_drawdown_reason),
+                    small=True,
+                )
+                + "</div>"
+                for view in views
+            ),
+        )
+    )
+    parts.append(
+        _guarded(
+            snapshot.health,
+            "Data health",
+            lambda view: '<div class="tiles">'
+            + "".join(
+                _tile(state.value.replace("_", " "), _e(len(view.with_state(state))))
+                for state in SourceState
+            )
+            + "</div>"
+            + '<p class="note">Detail on the <a href="/system">System</a> page.</p>',
+        )
+    )
+    parts.append(_panel("Warnings", _warnings_body(snapshot.warnings)))
+    return "".join(parts)
+
+
+def _markets(snapshot: OperatorDashboardSnapshot) -> str:
+    return _guarded(snapshot.pulse, "Global market pulse", _pulse_body) + _guarded(
+        snapshot.macro, "Macro & cross-asset context", _macro_body
+    )
+
+
+def _swing(snapshot: OperatorDashboardSnapshot) -> str:
+    return _guarded(snapshot.swing, "Swing decision workspace", _swing_body)
+
+
+def _symbol_page(snapshot: OperatorDashboardSnapshot, symbol: str) -> str:
+    """One symbol's detail, or an honest statement that it is not on this page."""
+    if snapshot.swing.failed:
+        return _panel("Swing", _failed(snapshot.swing))
+    view = snapshot.swing.data
+    row = None if view is None else view.row_for(symbol)
+    if row is None:
+        return _panel(
+            f"{symbol}",
+            _empty(
+                f"{symbol} is not an actionable or waiting setup on this "
+                "refresh. It may have been concluded a no-trade, may not have "
+                "been readable, or may not be on the scanned watchlist — the "
+                "Swing page states which."
+            )
+            + '<p class="note"><a href="/swing">Back to Swing</a></p>',
+        )
+    return _swing_detail(row) + '<p class="note"><a href="/swing">Back to Swing</a></p>'
+
+
+def _portfolio(snapshot: OperatorDashboardSnapshot) -> str:
+    return _guarded(snapshot.portfolio, "Portfolio", _portfolio_body)
+
+
+def _paper(snapshot: OperatorDashboardSnapshot) -> str:
+    return _guarded(snapshot.paper, "Paper trades", _paper_body)
+
+
+def _performance(snapshot: OperatorDashboardSnapshot) -> str:
+    if snapshot.performance.failed:
+        return _panel(
+            "Performance",
+            _failed(snapshot.performance),
+            meta=_section_meta(snapshot.performance),
+        )
+    views = snapshot.performance.data
+    if not views:
+        return _panel(
+            "Performance",
+            _empty(_empty_message("performance")),
+            meta=_section_meta(snapshot.performance),
+        )
+    return _performance_body(views)
+
+
+def _system(snapshot: OperatorDashboardSnapshot) -> str:
+    parts = [_guarded(snapshot.health, "Data health", _health_body)]
+    sections = _table(
+        [("DashboardSection", ""), ("Status", ""), ("As of", ""), ("Source", "")],
+        [
+            "<tr>"
+            f'<td class="sym">{_e(section.name)}</td>'
+            f"<td>{_chip(section.status.value, section.status.value)}</td>"
+            f"<td>{_stamp(section.as_of)}</td>"
+            f"<td>{_text(section.source, section.unavailable_reason)}</td>"
+            "</tr>"
+            for section in snapshot.sections
+        ],
+    )
+    parts.append(_panel("Sections read this refresh", sections))
+    parts.append(
+        _panel(
+            "What this surface cannot do",
+            _kv(
+                [(name, _e(statement)) for name, statement in snapshot.limitations]
+            ),
+        )
+    )
+    return "".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# The document
+# ---------------------------------------------------------------------------
+
+
+def _header(snapshot: OperatorDashboardSnapshot, active: str) -> str:
+    """The header. **Last refresh and data instant are always both present.**
+
+    A page that showed only one would let an hour-old snapshot look live. The
+    refresh instant says when this HTML was built; each panel's own `as_of` says
+    what moment its figures describe, and the two are routinely different.
+    """
+    tabs = "".join(
+        f'<a href="{_e(path)}" class="{"on" if path == active else ""}">{_e(title)}</a>'
+        for path, title in PAGES
+    )
+    failures = len(snapshot.failed_sections)
+    failure_note = (
+        f' · <span class="chip state-unavailable">{failures} section(s) unavailable</span>'
+        if failures
+        else ""
+    )
+    # A link, not a button, and deliberately: a button implies a form, a form
+    # implies a POST, and this surface has no method that could change anything.
+    # Re-reading the engines is the only thing "refresh" does.
+    refresh = f'<a href="{_e(active)}?refresh=1">refresh now</a>'
+    return (
+        '<header class="top"><div class="brand">'
+        "<h1>FMITS Operator Dashboard</h1>"
+        '<span class="ro">read only · v0</span>'
+        '<div class="stamps">'
+        f"<span>last refresh <b>{_stamp(snapshot.refreshed_at)}</b></span>"
+        f"<span>data as of <b>{_stamp(snapshot.reference_time)}</b></span>"
+        f"<span>schema <b>{_e(snapshot.schema_version)}</b>{failure_note}</span>"
+        f"<span>{refresh}</span>"
+        "</div></div>"
+        f'<nav class="tabs">{tabs}</nav></header>'
+    )
+
+
+def _footer() -> str:
+    return (
+        '<footer class="foot">'
+        "<p>This surface reads FMITS. It places no order, records no trade, "
+        "activates no paper trade and changes no stored value. No write method "
+        "is reachable from it.</p>"
+        "<p>Nothing here is a recommendation. Colour marks a measured number's "
+        "sign, a status or an availability — never a suggested action. WAIT and "
+        "NO TRADE are conclusions, not failures. An unavailable figure is not a "
+        "zero, and every one of them states its reason.</p>"
+        "<p>The page is not live. It shows what one refresh read; reload to "
+        "refresh.</p>"
+        "</footer>"
+    )
+
+
+def render_page(
+    snapshot: OperatorDashboardSnapshot, path: str, *, symbol: str | None = None
+) -> str:
+    """One complete HTML document for one route.
+
+    Unknown routes never reach here — the server resolves them first and asks
+    for a page it knows, so this function has no fallback branch that could
+    render a half-page.
+    """
+    if symbol is not None:
+        title = f"Swing · {symbol}"
+        body = _symbol_page(snapshot, symbol)
+        active = "/swing"
+    else:
+        active = path
+        title = dict(PAGES).get(path, "Overview")
+        body = {
+            "/": _overview,
+            "/markets": _markets,
+            "/swing": _swing,
+            "/portfolio": _portfolio,
+            "/paper": _paper,
+            "/performance": _performance,
+            "/system": _system,
+        }[path](snapshot)
+    return (
+        "<!DOCTYPE html>"
+        '<html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<meta name="referrer" content="no-referrer">'
+        f"<title>FMITS · {_e(title)}</title>"
+        f"<style>{STYLESHEET}</style></head><body>"
+        f"{_header(snapshot, active)}"
+        f"<main>{body}</main>"
+        f"{_footer()}"
+        "</body></html>"
+    )

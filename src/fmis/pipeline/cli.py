@@ -52,6 +52,12 @@ from fmis.archive import (
     render_record_verification,
 )
 from fmis.market_structure import DEFAULT_LEFT_BARS, DEFAULT_RIGHT_BARS
+from fmis.operator_dashboard import (
+    DEFAULT_HOST as DASHBOARD_DEFAULT_HOST,
+    DEFAULT_PORT as DASHBOARD_DEFAULT_PORT,
+    SnapshotHolder,
+    serve as serve_dashboard,
+)
 from fmis.pipeline.market_analysis import PipelineError
 from fmis.daily import DailyRun, DailyRunError, render_daily_run, run_daily
 from fmis.market_regime import RegimePolicy
@@ -3243,6 +3249,133 @@ MTF_COMMAND = Command(
     run=_run_mtf,
 )
 
+def _configure_dashboard(parser: argparse.ArgumentParser) -> None:
+    """Five arguments, and `fmits dashboard` with none of them is the useful one."""
+    parser.add_argument(
+        "symbols",
+        nargs="*",
+        metavar="SYMBOL",
+        help=(
+            f"the watchlist to scan (default: the {len(SCAN_UNIVERSE)}-symbol "
+            "list `fmits scan` uses)"
+        ),
+    )
+    parser.add_argument(
+        "--host",
+        default=DASHBOARD_DEFAULT_HOST,
+        metavar="ADDRESS",
+        help=(
+            f"the interface to bind (default: {DASHBOARD_DEFAULT_HOST}). Any "
+            "other address additionally requires --allow-public, because this "
+            "page states your positions, open risk and account figures"
+        ),
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=DASHBOARD_DEFAULT_PORT,
+        metavar="N",
+        help=(
+            f"the port to listen on (default: {DASHBOARD_DEFAULT_PORT}). Pass 0 "
+            "to let the operating system choose a free one"
+        ),
+    )
+    parser.add_argument(
+        "--allow-public",
+        action="store_true",
+        help=(
+            "permit binding an address other than loopback. Publishing this "
+            "page to a network publishes what you hold and what you risk"
+        ),
+    )
+    parser.add_argument(
+        "--store-root",
+        default=None,
+        metavar="PATH",
+        help=(
+            "the durable store to read positions, plans, paper trades and "
+            "closed trades from (default: the owner's store). Read-only: this "
+            "command writes nothing"
+        ),
+    )
+    parser.add_argument(
+        "--no-relationships",
+        action="store_true",
+        help=(
+            "omit the macro cross-asset section. It costs one extra request "
+            "per refresh; this skips both the section and the request"
+        ),
+    )
+
+
+def _run_dashboard(args: argparse.Namespace) -> int:
+    """Serve the operator dashboard until interrupted.
+
+    **The only command in this CLI that does not print a page and exit.** It
+    binds a socket and blocks, so the usual "render, print, map to an exit code"
+    shape does not apply: the exit code reports whether the server ran, not
+    whether any market could be read. A provider outage is a section on the page
+    saying so, exactly as it is for every other surface.
+
+    **The first refresh happens on the first request, not here.** Starting the
+    server does not fetch, so the command comes up immediately and the owner
+    sees the page assemble rather than watching a silent terminal.
+    """
+    def announce(url: str, _server: object) -> None:
+        # Flushed explicitly: piped or redirected, this banner is block-buffered
+        # and the owner would stare at an empty terminal while the socket sat
+        # listening. The URL is the whole point of the command's output.
+        print("FMITS Operator Dashboard — read only", flush=True)
+        print(f"  open   {url}", flush=True)
+        print("  stop   Ctrl-C", flush=True)
+        print(
+            "  This surface reads. It places no order, records no trade and "
+            "changes no stored value.",
+            flush=True,
+        )
+
+    try:
+        serve_dashboard(
+            host=args.host,
+            port=args.port,
+            holder=SnapshotHolder(
+                symbols=tuple(args.symbols) or None,
+                store_root=args.store_root,
+                with_relationships=not args.no_relationships,
+            ),
+            allow_public=args.allow_public,
+            quiet=True,
+            announce=announce,
+        )
+    except (ValueError, OSError) as error:
+        print(f"fmits dashboard: {type(error).__name__}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print("fmits dashboard: stopped", file=sys.stderr)
+    return EXIT_OK
+
+
+DASHBOARD_COMMAND = Command(
+    name="dashboard",
+    help="serve the read-only operator dashboard on this machine",
+    description=(
+        "Serve a local, read-only web page over everything FMITS already knows: "
+        "the global market pulse, macro and cross-asset context, the swing "
+        "decision workspace in its own order, the recorded portfolio, the "
+        "simulator's paper trades, the deterministic statistics with the equity "
+        "curve, and the state of every data source the refresh touched. "
+        "Computes nothing: every figure was produced by an engine and is "
+        "carried to the page unchanged, with its instant, its source and — "
+        "where there is no figure — the reason there is none. Binds loopback "
+        "and refuses any other address without --allow-public. Answers GET and "
+        "HEAD only; it exposes no method that could place an order, record a "
+        "trade, activate a paper trade or change any stored value. Reads the "
+        "durable store and never writes to it. Runs until interrupted."
+    ),
+    configure=_configure_dashboard,
+    run=_run_dashboard,
+)
+
+
 #: The single registry. `build_parser` and `main` both read it, so a command
 #: cannot exist in the parser without a runner, or vice versa.
 COMMANDS: tuple[Command, ...] = (
@@ -3268,6 +3401,10 @@ COMMANDS: tuple[Command, ...] = (
     EXPECTANCY_COMMAND,
     EQUITY_COMMAND,
     TRADES_COMMAND,
+    # The last of the read surfaces, and deliberately not after `archive`:
+    # three guards pin `archive` as the final entry, and the dashboard is a
+    # window over every command above it rather than a step that follows them.
+    DASHBOARD_COMMAND,
     ARCHIVE_COMMAND,
 )
 

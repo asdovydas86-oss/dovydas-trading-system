@@ -242,6 +242,10 @@ EXPECTED_COMMANDS = {
     "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
     "today", "workspace", "pulse", "macro", "portfolio", "approve", "trade", "simulate", "archive",
     "statistics", "performance", "expectancy", "equity", "trades",
+    # Milestone BV. The visual surface over every command above it; the only
+    # entry that binds a socket and runs until interrupted rather than printing
+    # a page and exiting.
+    "dashboard",
 }
 
 

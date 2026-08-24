@@ -251,6 +251,79 @@ the automation ladder remains unstarted.
 
 ## 4. Product milestones
 
+### 2026-08-24 · `BV` — `fmits dashboard` — FMITS becomes something the owner can look at
+
+**Status:** Released — `0f31293` (production code + tests) on top of `1a73cf8`, with this
+product-docs commit recorded directly on top of it. **A new
+user-visible capability.**
+
+**What the owner can do that was impossible before: open a browser and see FMITS.**
+
+```
+uv run fmits dashboard
+```
+
+Then `http://127.0.0.1:8787/`. Stop with `Ctrl-C`.
+
+Until now every fact FMITS holds could only be read as terminal text, one command at a time, with no
+way to move between them and no way to see two of them at once. Seven pages now cover the same
+ground, linked:
+
+| Page | What it shows |
+|---|---|
+| **Overview** | Swing counts, top opportunities, the market pulse, portfolio and performance headlines, data-health counts, warnings |
+| **Markets** | The full pulse and macro context — levels with their units, moves over named windows, yields in basis points, volatility, co-movement, freshness, source, and every market FMITS cannot see with the reason |
+| **Swing** | Confirmed and candidate setups in the workspace's own order · the wait list · no-trade groups with verbatim reasons · symbols that could not be read. Click a symbol for its setup, evidence, thesis, confirmation, invalidation, stable identity, paper status and ordering key |
+| **Portfolio** | Recorded positions, books, exposure, risk limits and capital — with simulated trades never counted into any of it |
+| **Paper** | The simulator's trades: entry, stop, initial stop, initial risk, total R, MFE, MAE, bars, stop widenings |
+| **Performance** | Per quote asset: sample size, net, expectancy, win rate, profit factor, average R, max drawdown, and the deterministic equity curve as a chart |
+| **System** | Every data source, its state, its last observation, its age, its provider and its reason — with no composite health score |
+
+**It computes nothing.** Every figure on every page was produced by an engine that already existed
+and is carried to the screen unchanged. The dashboard holds no indicator, no market structure, no
+setup state, no evidence rule, no ranking, no return, no risk figure, no position size and no
+statistic — and the tests assert the absence of each. The only arithmetic in it converts an
+already-computed equity curve into pixel coordinates, and the page says the line between two points
+is drawn rather than observed.
+
+**It cannot change anything.** There is no BUY button, no SELL button, no form, no input and no
+script anywhere on any page. The server answers `GET` and `HEAD`; `POST`, `PUT`, `PATCH`, `DELETE`
+and `OPTIONS` all return `405`. It binds `127.0.0.1` and refuses any other address unless explicitly
+told otherwise. Browsing every page during the live demonstration left the owner's store untouched —
+it did not even create the directory.
+
+**Absence is never dressed up as zero.** A figure FMITS could not produce renders as *unavailable*
+with the reason beside it, never as a blank cell or a dash. An empty store says *"nothing failed —
+there is nothing recorded yet."* A source older than its own publication schedule explains is marked
+**behind schedule**, which is the engines' word; there is deliberately no *stale*, because staleness
+is a judgement about usability and that depends on what the reader is doing.
+
+**WAIT and NO TRADE do not look like failures.** Both are conclusions the engines reached on purpose,
+and they are styled as conclusions. Colour marks a measured number's sign, a status or an
+availability — never a suggested action. Green is not buy and red is not sell.
+
+**One refresh, seven pages.** The page states *last refresh* and *data as of* in its header at all
+times, and every panel carries its own instant and source. It does not stream and does not update
+itself, and it says so — an old page cannot pass for a live one. A refresh happens only on the first
+request or when the `refresh now` link is used.
+
+**If one source is down, the rest of the page still works.** A FRED outage costs the macro panel and
+nothing else, and the failure is stated with the provider's own error rather than shown as an empty
+section.
+
+**No new dependency.** FMITS still declares zero runtime dependencies; the dashboard is built on the
+Python standard library alone.
+
+**What this does not do**, deliberately: it is a window over FMITS, not a second FMITS. It places no
+order, records no trade, activates no paper trade and changes no stored value. It produces no ranking
+of its own — setups appear in exactly the order `fmits workspace` placed them, by the key printed on
+each row. It makes no interpretation, offers no recommendation, and involves **no AI** at any point.
+The visual design is a functional V0 and will change.
+
+Full record: [report 0032](reports/0032_2026-08-24_OPERATOR_DASHBOARD_V0_IMPLEMENTATION.md).
+
+---
+
 ### 2026-08-23 · `BU` — `fmits macro` — what the macro markets are doing, in the units they are actually measured in
 
 **Status:** Released — `2b30e38` (production code + tests) on top of `7fbe611`, with this

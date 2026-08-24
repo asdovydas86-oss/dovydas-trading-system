@@ -47,7 +47,7 @@ Examples:
 - Reports are **never deleted** unless the user explicitly authorizes deletion.
 - Do **not** create generic `REPORT.md` files in the repository root.
 
-**Next available report number: `0032`**
+**Next available report number: `0033`**
 
 ## Metadata header
 
@@ -88,6 +88,7 @@ Each report should open with a short metadata table:
 | 0029 | 2026-08-20 | Implementation | Swing Decision Workspace v1 (Milestone BS) — `fmits workspace` | Final | `main` / `b6a456c` | [0029_2026-08-20_SWING_DECISION_WORKSPACE_IMPLEMENTATION.md](0029_2026-08-20_SWING_DECISION_WORKSPACE_IMPLEMENTATION.md) |
 | 0031 | 2026-08-23 | Implementation | Macro & Cross-Asset Context Foundation (Milestone BU) — `fmits macro` | Final | `main` / `2b30e38` (base `7fbe611`) | [0031_2026-08-23_MACRO_AND_CROSS_ASSET_CONTEXT_IMPLEMENTATION.md](0031_2026-08-23_MACRO_AND_CROSS_ASSET_CONTEXT_IMPLEMENTATION.md) |
 | 0030 | 2026-08-22 | Implementation | Global Market Pulse Foundation (Milestone BT) — `fmits pulse` | Final | `main` / uncommitted (base `8ecd822`) | [0030_2026-08-22_GLOBAL_MARKET_PULSE_IMPLEMENTATION.md](0030_2026-08-22_GLOBAL_MARKET_PULSE_IMPLEMENTATION.md) |
+| 0032 | 2026-08-24 | Implementation | FMITS Operator Dashboard V0 (Milestone BV) — `fmits dashboard` | Final | `main` / `0f31293` (base `1a73cf8`) | [0032_2026-08-24_OPERATOR_DASHBOARD_V0_IMPLEMENTATION.md](0032_2026-08-24_OPERATOR_DASHBOARD_V0_IMPLEMENTATION.md) |
 | 0013 | 2026-08-11 | Review | Research Harness Correction V1 — Hostile Review | Final | `main` / uncommitted (base `f9ddc54`) | [0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md](0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
 | 0012 | 2026-08-11 | Implementation | Research Harness Correction V1 — Implementation Record | Final | `main` / uncommitted (base `f9ddc54`) | [0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md](0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) |
 | 0011 | 2026-08-08 | Implementation | Swing Setup Historical Backtest Harness V1 — Implementation Record | Final | `main` / uncommitted (base `35bce7a`) | [0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md](0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md) |

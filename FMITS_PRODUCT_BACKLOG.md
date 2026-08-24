@@ -281,6 +281,45 @@ Committed as `2b30e38` (production code + tests) with the documentation commit d
 > a guard test asserts `fmis.swing_workspace`, `fmis.today` and `fmis.setup_evidence` consume none
 > of it, so attaching macro as a separate evidence domain later is a deliberate edit.
 
+**`BV` — FMITS Operator Dashboard V0 — is DONE (2026-08-24), and was an owner-directed
+implementation task, not a NOW selection.** It sits on the same footing as `AT`, `AU`, `AV`,
+`BH`–`BN`, the `BG-D1` line, `BR`, `BS`, `BT` and `BU`: explicitly scoped by the owner, delivered
+against that scope, and **it does not satisfy the exactly-one-NOW rule**, which remains outstanding.
+It is the first milestone to deliver a *visual* surface: everything FMITS knew was previously
+readable only as terminal text. Evidence: `src/fmis/operator_dashboard/` (seven modules, 4,323
+lines), `fmits dashboard` serving seven routes on `http://127.0.0.1:8787/`, 847 new tests, full suite
+**10,671 passing** under `-W error`, **100 % statement and branch coverage** of all seven new
+modules, 34/34 semantic mutation probes killed, five hostile-review defects found and fixed, and
+[report 0032](reports/0032_2026-08-24_OPERATOR_DASHBOARD_V0_IMPLEMENTATION.md).
+Committed as `0f31293` (production code + tests) with the documentation commit directly on top.
+
+> **`BV` added no dependency, and that was a repository constraint rather than a preference.**
+> `pyproject.toml` declares `dependencies = []` and an existing guard names `flask`, `django`,
+> `fastapi`, `numpy` and `pandas` as source-level absences — which rules out FastAPI and Flask
+> directly and Streamlit through its dependency tree. The dashboard is served by the standard
+> library's `http.server` with hand-written HTML. A clean-environment install shows `fmis==0.0.1`
+> and nothing else.
+
+> **The milestone's central architectural result is a presentation seam that the engines do not know
+> about.** `fmis.operator_dashboard.models` is the whole contract; `render.py` and `theme.py` are
+> replaceable in their entirety without touching it, and guards assert the contract layer imports no
+> presentation module, holds no markup and holds no colour literal. The brief said the visual design
+> *will* change, so the cost of changing it was made the design's first constraint.
+
+> **It computes nothing, and four guards assert each way it could start to.** No indicator, no
+> ranking, no return, no risk figure, no statistic. `REFRESH_READS` names exactly four engine reads
+> per refresh and a test asserts the count, so a fifth is a decision somebody makes rather than one
+> that happens because a section needed a number. Ordering is inherited from `BS` index-for-index —
+> a mutation re-sorting rows by symbol is killed.
+
+> **The hostile review earned its place.** Five real defects were found *after* the suite was green,
+> every one a misleading page rather than a crash: crypto rows showing three false *unavailable*
+> cells for windows never measured (a regression of a fix `BU` had already made in the terminal
+> renderer); DXY and XAU vanishing entirely because unsupported markets live on the universe rather
+> than in the failure tuple; one 60-word reason printed six times across a row; healthy sources
+> rendering as *"unavailable: no detail was stated"*; and the paper/portfolio separation notes
+> disappearing when either section was empty. All fixed, all now guarded.
+
 > **`BS` is the first FMITS surface that orders setups, and the order is a key rather than a
 > score.** Every previous surface refused to order at all, on the stated ground that a top row reads
 > as the best idea. `BS` orders by four named engine states, prints every component on the row it
@@ -388,6 +427,22 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `BV` — FMITS Operator Dashboard V0 · **DONE** *(committed and pushed)*
+
+| Field | Value |
+|---|---|
+| **What shipped** | One new application-layer package, `fmis.operator_dashboard` (7 modules, 4,323 lines), and one new command, **`fmits dashboard`**: a local, read-only web surface over seven routes — Overview, Markets, Swing (+ per-symbol detail), Portfolio, Paper, Performance, System. The first *visual* surface FMITS has ever had |
+| **UI technology** | Standard-library `http.server` with server-rendered HTML. **Zero new dependencies.** Streamlit was rejected because `pandas`/`numpy` are on this repository's existing forbidden list; FastAPI and Flask because they are named in it directly; React/Next because a Node toolchain and a build step for seven static routes is not a V0 |
+| **The seam** | `models.py` is the entire presentation contract — `OperatorDashboardSnapshot` over seven `DashboardSection[T]` envelopes, each carrying `as_of`, `source`, `status` and an unavailability reason. `render.py` + `theme.py` are replaceable in full without touching it; guards assert the contract layer imports no presentation module, holds no markup and holds no colour literal |
+| **Computes nothing** | Every figure was produced by an engine and carried across unchanged. Guards assert the package holds no indicator vocabulary, performs no `sum`/`sorted`/`min`/`max`, contains no arithmetic on an engine value outside the equity chart's pixel scaling, and never sorts. Ordering is `BS`'s, inherited index-for-index |
+| **One refresh, seven pages** | `REFRESH_READS` names exactly four engine reads — `run_swing_workspace`, `run_market_pulse`, `run_macro_context`, `report_for_store` — and a test asserts the count. Measured live: 45.45 s for the refresh, then 0.00 s for each of six subsequent pages. Concurrent refreshes collapse under a lock |
+| **Read-only** | `GET`/`HEAD` only; `POST`/`PUT`/`PATCH`/`DELETE`/`OPTIONS` all `405`. Binds `127.0.0.1` and refuses any other address without `allow_public=True`. No form, button, input or script on any page. No store write verb, no execution verb and no `open()` anywhere in the package. Live proof: the owner's store did not exist before browsing and **still did not exist after** |
+| **Record kinds / repositories / write paths** | **0 added** |
+| **Verification** | 847 focused tests; 9,824 → **10,671** passing under `-W error`; **100 % statement and branch coverage** of all 7 new modules; **34/34 semantic mutation probes killed** with byte-exact in-memory restoration; 0 import cycles across 297 modules; 0 export collisions; clean-environment install verified (`fmis==0.0.1`, nothing else); 0 new dependencies; 0 ADRs; 0 guards weakened (six roster widenings for an additive command, each with its reason recorded) |
+| **Live demonstration** | Real data, 2026-08-24: six crypto markets from Binance; SPX, USDBROAD, US2Y, US10Y and VIX from FRED with yields in basis points; DXY and XAU shown as unsupported with their full reasons; 20 symbols scanned with 20 waiting; per-source data health with no composite score; 19/19 content checks; every mutating method refused; every traversal route `404` |
+| **Defects found by attacking the surface** | Five, all misleading pages rather than crashes: crypto rows showing three false *unavailable* cells for windows never measured; DXY and XAU vanishing entirely; one 60-word reason printed six times per row; healthy sources rendering as *"unavailable: no detail was stated"*; and the paper/portfolio separation notes disappearing when empty. All fixed and guarded |
+| **Screenshot** | Not captured — the browser-automation extension is not connected and the repository holds no screenshot tooling. No dependency was added for one; a text rendering of the live Overview is in report 0032 §15 |
 
 ### `BS` — Swing Decision Workspace v1 · **DONE** *(committed and pushed)*
 

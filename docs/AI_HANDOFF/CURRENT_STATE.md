@@ -7,12 +7,89 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BU — Macro & Cross-Asset Context Foundation (2026-08-23): `fmits macro`
-answers **what are equities, the dollar, yields and volatility doing, and what can this system not
-tell me?** Five of BT's five dark markets are now measured from a real public source; the two that
-remain dark name a missing *licence* rather than a missing adapter. Committed as `2b30e38`.
+**Last updated for:** BV — FMITS Operator Dashboard V0 (2026-08-24): `fmits dashboard` makes FMITS
+something the owner can **look at**. Seven read-only pages on `http://127.0.0.1:8787/` over the
+engines that already existed, computing nothing of their own. Committed as `0f31293`.
 Full record:
-[report 0031](../../reports/0031_2026-08-23_MACRO_AND_CROSS_ASSET_CONTEXT_IMPLEMENTATION.md).
+[report 0032](../../reports/0032_2026-08-24_OPERATOR_DASHBOARD_V0_IMPLEMENTATION.md).
+
+---
+
+## Milestone BV — FMITS Operator Dashboard V0
+
+- **New package `fmis.operator_dashboard`** (7 modules, 4,323 lines) plus one command,
+  **`fmits dashboard`**. It is the first *visual* surface in this repository: everything FMITS knew
+  was previously readable only as terminal text, one command at a time.
+
+- **Seven routes**, all `GET`-only: `/` Overview · `/markets` · `/swing` (+ `/swing/<SYMBOL>`
+  detail) · `/portfolio` · `/paper` · `/performance` · `/system`.
+
+- **It is a window, not a second FMITS.** The package holds no indicator, no market structure, no
+  setup state, no evidence rule, no ranking, no return, no risk figure, no position size and no
+  statistic. Guards assert each absence by scanning the package's own AST: no forbidden quantity
+  vocabulary, no `sum`/`sorted`/`min`/`max` in the contract layer, no arithmetic on an engine value
+  outside the equity chart's pixel scaling, and no `sort` anywhere. Ordering is `BS`'s, carried
+  index-for-index — a mutation re-sorting rows by symbol is killed.
+
+- **Four layers, and the middle one is the point.**
+  `sections.py` translates engine output to read models; `models.py` **is** the presentation
+  contract; `render.py` + `theme.py` produce HTML and appearance; `server.py` is a standard-library
+  socket. `render.py` and `theme.py` are deletable in full without touching anything below — guards
+  assert the contract layer imports no presentation module, holds no markup and holds no colour
+  literal, and that `render.py` holds no `style="`, `color:`, `background:`, `font-family` or
+  `font-size:` at all.
+
+- **Zero new dependencies, and that was a repository constraint.** `pyproject.toml` declares
+  `dependencies = []`, and `tests/test_statistics_completeness.py` already names `flask`, `django`,
+  `fastapi`, `numpy` and `pandas` as source-level absences — which rules out FastAPI and Flask
+  directly and Streamlit through its dependency tree. The server is `http.server`. A clean-env
+  install shows `fmis==0.0.1` and nothing else.
+
+- **One refresh, seven pages.** `REFRESH_READS` names exactly four engine reads —
+  `run_swing_workspace`, `run_market_pulse`, `run_macro_context`, `report_for_store` — and a test
+  asserts the count. Swing, portfolio and paper all come from the single workspace read, which is
+  stated rather than hidden: when it fails, all three fail together with the same reason. Measured
+  live: 45.45 s for the refresh, then 0.00 s × 6.
+
+- **Read-only, enforced rather than promised.** `POST`/`PUT`/`PATCH`/`DELETE`/`OPTIONS` are
+  *defined* and all return `405` — the stdlib's own `501` reads as *not implemented yet*. Binds
+  `127.0.0.1`; any other address is **refused**, not warned about. No static route and no request
+  path is ever joined to a filesystem root. No store write verb, no execution verb and no `open()`
+  appears anywhere in the package. Live proof: the owner's store did not exist before browsing and
+  still did not exist after — the dashboard did not even create the directory.
+
+- **Absence is never dressed as zero.** Three engine absence vocabularies — `NotAvailable`,
+  `Absent`, and `value`/`unavailable_reason` — collapse to one shape, `(value | None, reason |
+  None)`, with exactly one set. A missing figure renders as *unavailable* with its reason beside it,
+  never as a blank or a dash. There is deliberately **no `STALE`**: `SourceState.BEHIND_SCHEDULE` is
+  `FreshnessState`'s own word, and this layer invents no threshold.
+
+- **No composite health score**, deliberately. `/system` lists sources with per-state counts. One
+  number over sources with different publication schedules would be a judgement with no basis — and
+  the field most likely to be believed.
+
+- **Five defects found by attacking the surface, all misleading pages rather than crashes**: crypto
+  rows showing three false *unavailable* cells for windows never measured (a regression of a fix BU
+  had already made in the terminal renderer); DXY and XAU vanishing entirely, because unsupported
+  markets live on `universe.unsupported` rather than in the failure tuple; one 60-word reason
+  printed six times across a row; healthy sources rendering as *"unavailable: no detail was
+  stated"*; and the paper/portfolio separation notes disappearing when either section was empty.
+  All fixed, all guarded.
+
+- **Verification.** 847 focused tests; full suite 9,824 → **10,671** passing under `-W error`;
+  **100 % statement and branch coverage** of all 7 new modules; **34/34 semantic mutation probes
+  killed** with byte-exact in-memory restoration; 0 import cycles across 297 modules; 0 export
+  collisions; 0 ADRs; 0 guards weakened. Six existing tests were widened — five command-roster
+  updates for an additive command, and `test_trade_capture_architecture.py`'s CLI permitted-import
+  list, on the footing BS established for `fmis.swing_workspace`.
+
+- **Known limitations carried forward.** A full refresh takes 30–45 s against the default 20-symbol
+  watchlist. The page is not live and says so. There is no periodic refresh in V0. Only the equity
+  curve is charted — sparklines were declined because the pulse retains no intra-window series to
+  draw truthfully from. Access control is loopback binding alone. The visual design is provisional.
+
+- **The redesign seam.** A JSON API for a JavaScript frontend would be a new module at the same
+  seam, serializing `OperatorDashboardSnapshot`. Nothing beneath it would change.
 
 ---
 
@@ -2104,8 +2181,11 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
-**8,703 passing** (`python -m pytest`, ~189 s including the network-touching backtest and research
-suites), identically with `-W error`. Measured at the `BR` release-gate fixes (`f2cacf5`,
+**10,671 passing** (`python -m pytest`, ~197 s including the network-touching backtest and research
+suites), identically with `-W error`. Measured at `BV` (2026-08-24, `0f31293`, base `1a73cf8`):
+`BU` measured 9,824 and `BV` added 847.
+
+Previously **8,703 passing**, measured at the `BR` release-gate fixes (`f2cacf5`,
 2026-08-20): `BR` itself measured 8,693 against a pre-`BR` baseline of 8,530 (+163), and the fixes
 removed one test that pinned an invalid invariant and added eleven regressions (+10).
 

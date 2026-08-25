@@ -96,6 +96,18 @@ _BANNED = {"long", "short", "buy", "sell", "bullish", "bearish"}
 _PERMITTED_DIR = SRC / "swing_setup"
 _PERMITTED_FILE = SRC / "pipeline" / "cli.py"
 
+#: Widened for Milestone BW. `fmis.swing_lab` is the Swing Strategy Laboratory,
+#: and it spells a side for one reason: a simulated trade is long or short, and
+#: a research record that could not say which would be unreadable.
+#:
+#: What ADR-0028 §5 actually protects is untouched, and is asserted directly by
+#: `test_the_laboratory_carries_a_direction_and_never_derives_one` below: the
+#: laboratory never *decides* a side. Every `Direction` it holds was produced by
+#: `evaluate_setup` — the one function ADR-0028 permits to say LONG or SHORT —
+#: and is copied onto a trade record. There is no comparison, no threshold and
+#: no tally here that could produce a side of its own.
+_RESEARCH_PERMITTED_DIRS = frozenset({SRC / "swing_lab"})
+
 #: The trading-domain packages where direction is an owner assertion about their
 #: own money rather than an engine's reading of a market. Named one by one, so a
 #: seventh appearing anywhere fails this test and has to justify itself.
@@ -169,6 +181,8 @@ def _covered_files():
         if path.parent in _TRADE_DOMAIN_PERMITTED_DIRS:
             continue
         if path.parent in _OWNER_SURFACE_DIRS:
+            continue
+        if path.parent in _RESEARCH_PERMITTED_DIRS:
             continue
         yield path
 
@@ -327,3 +341,81 @@ def test_pipeline_cli_is_the_only_permitted_file_outside_swing_setup() -> None:
     """Pins the exemption to exactly the two locations ADR-0028 names."""
     assert _PERMITTED_FILE.exists()
     assert _PERMITTED_FILE.parent == SRC / "pipeline"
+
+
+def test_the_research_exemption_is_bounded_to_one_named_package() -> None:
+    """Pins the widening, so a second exempt research package is a deliberate edit."""
+    assert {path.name for path in _RESEARCH_PERMITTED_DIRS} == {"swing_lab"}
+    for path in _RESEARCH_PERMITTED_DIRS:
+        assert path.is_dir(), path
+
+
+def test_the_laboratory_carries_a_direction_and_never_derives_one() -> None:
+    """The exemption lets the lab *spell* a side; this proves it never *picks* one.
+
+    ADR-0028 §5's rule is that exactly one function decides a direction. The
+    laboratory is permitted the vocabulary because a trade record must say which
+    way it went — but every `Direction` it holds arrives from an assessment
+    `evaluate_setup` produced. So the lab may **read** `Direction.LONG` to route
+    a comparison or label a cohort, and may **compare** against it, but it must
+    never construct one from market facts.
+
+    Enforced structurally: no module in the package may contain a conditional
+    that assigns a `Direction` based on anything other than an already-decided
+    one. In practice the whole package assigns `Direction` in exactly two ways —
+    copying `assessment.direction`, and mapping a `Direction` onto the paper
+    engine's `TradeDirection` — and both are lookups, not judgements.
+    """
+    lab = SRC / "swing_lab"
+    for path in sorted(lab.glob("*.py")):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            # A comparison of a market quantity that yields a Direction is the
+            # shape a smuggled decision would take.
+            if isinstance(node, ast.IfExp):
+                rendered = ast.unparse(node)
+                if "Direction." in rendered:
+                    assert "direction" in rendered.lower(), (
+                        f"{path.name} chooses a Direction from something that is "
+                        f"not already a direction: {rendered}"
+                    )
+
+
+def test_the_laboratory_never_calls_the_directional_tally() -> None:
+    """`_tally` is where a side is decided. The lab reaches it only through
+    `evaluate_setup`, never directly.
+
+    Checked as **identifiers**, parsed — the same discipline this module's own
+    docstring argues for. `fmis.swing_lab.variants` discusses
+    `MINIMUM_AGREEING_FAMILIES` in prose precisely to record that the study does
+    *not* tune it, and a raw-text scan would flag that sentence as a violation.
+    """
+    lab = SRC / "swing_lab"
+    decision_internals = {"_tally", "_trend_lean", "_evidence_lean", "_directional_factors"}
+    for path in sorted(lab.glob("*.py")):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for token in _identifiers_and_string_values(tree):
+            assert token not in decision_internals, f"{path.name} reaches {token}"
+
+
+def test_the_laboratory_never_rebinds_the_agreement_threshold() -> None:
+    """The lab may *record* `MINIMUM_AGREEING_FAMILIES`; it may never set it.
+
+    Recording it in a manifest is what makes a run reproducible. Assigning it
+    would be threshold tuning wearing a research hat, and `swing_1d4h_core`'s
+    own hypothesis turns on the constant being left alone.
+    """
+    lab = SRC / "swing_lab"
+    for path in sorted(lab.glob("*.py")):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            targets = []
+            if isinstance(node, ast.Assign):
+                targets = node.targets
+            elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+                targets = [node.target]
+            for target in targets:
+                assert not (
+                    isinstance(target, ast.Name)
+                    and target.id == "MINIMUM_AGREEING_FAMILIES"
+                ), path.name

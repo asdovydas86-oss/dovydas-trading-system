@@ -46,6 +46,8 @@ from fmis.swing_setup.policy import (
     CONFIRMATION_LOOKBACK_BARS,
     MINIMUM_AGREEING_FAMILIES,
     RESEARCH_POLICY_ID_PREFIX,
+    PRODUCTION_CONTEXT_ROLE_TREATMENT,
+    ContextRoleTreatment,
     SETUP_POLICY_ID,
     evaluate_setup,
     research_policy_id,
@@ -222,6 +224,8 @@ __all__ = [
     "MINIMUM_AGREEING_FAMILIES",
     "CONFIRMATION_LOOKBACK_BARS",
     "RESEARCH_POLICY_ID_PREFIX",
+    "PRODUCTION_CONTEXT_ROLE_TREATMENT",
+    "ContextRoleTreatment",
     "research_policy_id",
     # errors
     "SwingSetupError",

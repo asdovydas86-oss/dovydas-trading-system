@@ -302,12 +302,19 @@ def test_the_registry_carries_its_commands_in_the_declared_order() -> None:
         "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
         "today", "workspace", "pulse", "macro", "portfolio", "approve", "trade", "simulate",
         "statistics", "performance", "expectancy", "equity", "trades",
+        # Milestone BW admits "research" immediately before "dashboard": a
+        # read-only research surface over history, placed after every command
+        # that describes the present because it measures policies rather than
+        # markets. It is deliberately not last — "archive" stays final, and
+        # "dashboard" stays the last of the live read surfaces, because the
+        # dashboard is a window over everything above it, this command included.
         # Milestone BV admits "dashboard" as the last of the read surfaces and
         # immediately before "archive", which stays last. The position is the
         # argument: the dashboard is a *window* over every command above it —
         # it computes nothing of its own and adds no step to the sequence — so
         # it belongs after the surfaces it presents rather than among them. It
         # changes no existing command and shares no flag with one.
+        "research",
         "dashboard",
         "archive",
     ]

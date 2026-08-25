@@ -381,6 +381,19 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # not to admit a second prefix. The two assertions below are unaffected
         # and still prove the store is never reached from here.
         "fmis.statistics",
+        # Widened for Milestone BW, on the identical footing again.
+        # `fmis.swing_lab` is the Swing Strategy Laboratory: an
+        # application-layer package at the same tier as the six above, reached
+        # only by `fmits research` and by `fmits dashboard --lab-artifact`. It
+        # is worth recording exactly what this widening does NOT admit. The
+        # laboratory's own guard asserts that no engine imports it, so the
+        # dependency runs one way only; it opens a file in exactly one module,
+        # and that file is a research artifact rather than the trading store;
+        # and the CLI decodes that artifact HERE precisely so
+        # `fmis.operator_dashboard` can keep its own stronger guarantee of
+        # opening nothing at all. The two assertions below are unaffected and
+        # still prove the store is never reached from here.
+        "fmis.swing_lab",
         # Widened for the BG-D1 surface slice, on the identical footing again.
         # `fmis.setup_observation` is an application-layer package at the same
         # tier as the five above: it is the only place a `SetupAssessment`

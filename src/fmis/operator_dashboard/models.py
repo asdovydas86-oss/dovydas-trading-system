@@ -72,6 +72,9 @@ __all__ = [
     "PerformanceView",
     "WarningRow",
     "OverviewCounts",
+    "LabVariantRow",
+    "LabGateRow",
+    "LabView",
     "OperatorDashboardSnapshot",
 ]
 
@@ -650,6 +653,87 @@ class OverviewCounts:
 
 
 @dataclass(frozen=True, slots=True)
+class LabVariantRow:
+    """One policy variant's measured result, as text this layer never computes.
+
+    Every figure arrives already reduced by `fmis.swing_lab.metrics` and is
+    carried across as canonical text beside its own sample count. `*_reason`
+    holds why a figure is absent — a thin cohort and an empty one look identical
+    in a blank cell, and this page must not let them.
+    """
+
+    variant_id: str
+    title: str
+    hypothesis: str
+    policy_id: str
+    is_baseline: bool
+    trades: int = 0
+    measurable: int = 0
+    ambiguous: int = 0
+    wins: int = 0
+    losses: int = 0
+    win_rate: str | None = None
+    win_rate_reason: str | None = None
+    expectancy: str | None = None
+    expectancy_reason: str | None = None
+    median_r: str | None = None
+    median_r_reason: str | None = None
+    profit_factor: str | None = None
+    profit_factor_reason: str | None = None
+    total_r: str = ""
+    max_drawdown: str = ""
+    sample_note: str = ""
+    #: The verdict `fmis.swing_lab.metrics.classify` derived from this result,
+    #: carried as its own value and its own sentence. This layer never decides
+    #: it — a page that computed a verdict would be a second research engine.
+    verdict: str = ""
+    verdict_statement: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class LabGateRow:
+    """What the context-role gate did, with the two block counts kept apart.
+
+    The raw block count and the count that actually removed a setup are
+    different facts, and a page showing only the first would suggest the gate
+    discarded thousands of trades it never had.
+    """
+
+    instants: int = 0
+    not_reached: int = 0
+    allowed: int = 0
+    blocked_without_effect: int = 0
+    blocked_candidate: int = 0
+    blocked_confirmed: int = 0
+    blocked_long: int = 0
+    blocked_short: int = 0
+    counterfactual_note: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class LabView:
+    """One completed experiment, read from an artifact the caller supplied.
+
+    **Not a live engine read.** A lab study replays years of history and takes
+    minutes; this page therefore shows a *record* of one, and says so. When no
+    artifact was supplied the page states that plainly rather than rendering an
+    empty table that reads as "no edge found".
+    """
+
+    experiment_id: str = ""
+    symbols: tuple[str, ...] = ()
+    measurement_start: str = ""
+    measurement_end: str = ""
+    interval_groups: tuple[str, ...] = ()
+    cost_policy: str = ""
+    result_digest: str = ""
+    digest_verified: bool = False
+    variants: tuple[LabVariantRow, ...] = ()
+    gate: LabGateRow | None = None
+    limitations: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class OperatorDashboardSnapshot:
     """Everything one refresh produced. The root of the presentation contract.
 
@@ -672,6 +756,7 @@ class OperatorDashboardSnapshot:
     paper: DashboardSection[PaperView]
     performance: DashboardSection[tuple[PerformanceView, ...]]
     health: DashboardSection[DataHealthView]
+    lab: DashboardSection[LabView] | None = None
     warnings: tuple[WarningRow, ...] = ()
     limitations: tuple[tuple[str, str], ...] = ()
     schema_version: int = DASHBOARD_SCHEMA_VERSION

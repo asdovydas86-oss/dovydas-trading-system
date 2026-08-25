@@ -59,7 +59,13 @@ _SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src" / "fmis"
 #: for. Anything else naming it is a production module reaching for a research
 #: knob, which is the failure this file exists to catch.
 _ALLOWED_OVERRIDE_MODULES = {"swing_setup/policy.py", "swing_setup/compose.py"}
-_ALLOWED_OVERRIDE_PREFIX = "swing_setup/research_"
+#: Widened for Milestone BW. `fmis.swing_lab` is the Swing Strategy Laboratory
+#: and is research code by construction — its own architecture guard asserts
+#: that no production module imports it, which is the same containment this
+#: prefix expresses for `swing_setup/research_*`. The override is still
+#: unreachable from any live surface.
+_ALLOWED_OVERRIDE_PREFIXES = ("swing_setup/research_", "swing_lab/")
+_ALLOWED_OVERRIDE_PREFIX = _ALLOWED_OVERRIDE_PREFIXES[0]
 
 
 def _origin(index: int, label: StructuralSwingLabel) -> LevelOrigin:
@@ -244,7 +250,7 @@ class TestNoProductionModuleSuppliesTheOverride:
             for name, text in self._sources()
             if "research_confirmation_max_age" in text
             and name.replace("\\", "/") not in _ALLOWED_OVERRIDE_MODULES
-            and not name.replace("\\", "/").startswith(_ALLOWED_OVERRIDE_PREFIX)
+            and not name.replace("\\", "/").startswith(_ALLOWED_OVERRIDE_PREFIXES)
         ]
         assert offenders == [], (
             "the research override escaped its declared modules; a production "

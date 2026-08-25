@@ -107,6 +107,7 @@ __all__ = [
     "SEGMENT_LADDER",
     "RESEARCH_LIMITATIONS",
     "build_segments",
+    "decode_full_series",
     "ResearchDataset",
     "ResearchStudy",
     "fetch_research_dataset",
@@ -276,7 +277,7 @@ class ResearchStudy:
         return (self.baseline, *self.variants)
 
 
-def _decode_full_series(
+def decode_full_series(
     symbol: str, interval: str, rows: Sequence[Sequence[Any]]
 ) -> CandleSeries:
     """Decode a raw historical kline cache into its full closed `CandleSeries`."""
@@ -458,7 +459,7 @@ def run_research_variant(
             raise ResearchError(
                 f"the dataset holds no {execution_interval} series for {symbol}"
             )
-        full_execution_series = _decode_full_series(symbol, execution_interval, rows)
+        full_execution_series = decode_full_series(symbol, execution_interval, rows)
         instants = sorted(
             instant
             for instant in {from_epoch_ms(row[CLOSE_TIME_INDEX] + 1) for row in rows}

@@ -245,7 +245,7 @@ EXPECTED_COMMANDS = {
     # Milestone BV. The visual surface over every command above it; the only
     # entry that binds a socket and runs until interrupted rather than printing
     # a page and exiting.
-    "dashboard",
+    "research", "dashboard",
 }
 
 

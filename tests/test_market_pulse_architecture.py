@@ -713,9 +713,10 @@ def test_every_command_that_existed_before_bt_is_still_registered() -> None:
     ]
     assert set(before) <= set(names)
     # BT added `pulse`; Milestone BU added `macro` beside it; Milestone BV added
-    # `dashboard` before `archive`. All three are additive and none replaced
-    # anything, which is what this test exists to prove.
-    assert set(names) - set(before) == {"pulse", "macro", "dashboard"}
+    # `dashboard` before `archive`; Milestone BW added `research` before
+    # `dashboard`. All four are additive and none replaced anything, which is
+    # what this test exists to prove.
+    assert set(names) - set(before) == {"pulse", "macro", "dashboard", "research"}
     assert len(names) == len(set(names))
 
 

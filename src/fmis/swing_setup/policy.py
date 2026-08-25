@@ -25,6 +25,7 @@ failure, an exception, or a case requiring an apology.
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 
 from fmis.decision_context import ContextState
 from fmis.decision_support import Alignment, OverallState
@@ -53,6 +54,8 @@ __all__ = [
     "MINIMUM_AGREEING_FAMILIES",
     "CONFIRMATION_LOOKBACK_BARS",
     "RESEARCH_POLICY_ID_PREFIX",
+    "ContextRoleTreatment",
+    "PRODUCTION_CONTEXT_ROLE_TREATMENT",
     "research_policy_id",
     "evaluate_setup",
 ]
@@ -87,14 +90,67 @@ CONFIRMATION_LOOKBACK_BARS = 10
 RESEARCH_POLICY_ID_PREFIX = f"{SETUP_POLICY_ID}+research"
 
 
-def research_policy_id(confirmation_max_age: int) -> str:
+class ContextRoleTreatment(Enum):
+    """What the CONTEXT-role timeframe is permitted to do. **Research only.**
+
+    The production mapping puts ``1w`` in the CONTEXT role, so in practice this
+    enumerates what the *weekly* timeframe may do to a swing thesis. It exists
+    because the owner asked a question the repository could not previously
+    answer — *is the weekly gate too restrictive for swing trading?* — and that
+    question is unanswerable while the gate is a hard-coded branch.
+
+    Three discrete, named semantics, deliberately **not** a threshold and not a
+    set of booleans a caller could combine into an unnamed fourth policy:
+
+    * `GATE_AND_VOTE` — production. A non-`TRENDING` context regime returns
+      `WAIT` before any direction is formed, **and** the context-role structural
+      trend is one of the voting families. The weekly timeframe therefore
+      appears twice in one decision, which is itself a finding rather than an
+      accusation: the two readings come from different packages
+      (`fmis.market_regime` and `fmis.structural_trend`) over the same candles.
+    * `VOTE_ONLY` — the regime gate is removed; the context-role structural
+      trend still votes. This is the owner's stated hypothesis: *1W describes
+      higher-timeframe context and should not by itself kill an opportunity.*
+    * `IGNORED` — the context role neither gates nor votes, leaving the SETUP
+      and EXECUTION roles to decide alone. `MINIMUM_AGREEING_FAMILIES` is
+      **not** relaxed to compensate, so under this treatment both surviving
+      families must agree — a stricter unanimity rule, not a looser one. That
+      consequence is stated rather than tuned away.
+    """
+
+    GATE_AND_VOTE = "gate_and_vote"
+    VOTE_ONLY = "vote_only"
+    IGNORED = "ignored"
+
+
+#: What the live product does, named so a reader never has to infer which member
+#: is production from its position in the enum.
+PRODUCTION_CONTEXT_ROLE_TREATMENT = ContextRoleTreatment.GATE_AND_VOTE
+
+
+def research_policy_id(
+    confirmation_max_age: int,
+    context_role: ContextRoleTreatment = PRODUCTION_CONTEXT_ROLE_TREATMENT,
+) -> str:
     """The `policy_id` a research override stamps on every assessment it produces.
 
     Deterministic and injective over the override's own domain: two runs under
     the same override produce the same string, and two different overrides can
     never collide on one, because the value is written out rather than hashed.
+
+    ``context_role`` appends a clause **only** when it is not the production
+    treatment, so every id this function produced before that parameter existed
+    is byte-identical today.
     """
-    return f"{RESEARCH_POLICY_ID_PREFIX}(max_confirmation_age={confirmation_max_age})"
+    suffix = (
+        ""
+        if context_role is PRODUCTION_CONTEXT_ROLE_TREATMENT
+        else f",context_role={context_role.value}"
+    )
+    return (
+        f"{RESEARCH_POLICY_ID_PREFIX}(max_confirmation_age={confirmation_max_age}"
+        f"{suffix})"
+    )
 
 
 def _trend_lean(trend: StructuralTrendType) -> Lean:
@@ -237,14 +293,33 @@ def _factor_observed(family: str, inputs: SetupInputs) -> str:
     return f"{state.value} (dominant={alignment.value if alignment is not None else 'none'})"
 
 
-def _directional_factors(inputs: SetupInputs) -> tuple[DirectionalFactor, ...]:
-    return (
-        DirectionalFactor(
-            family="context_structural_trend",
-            lean=_trend_lean(inputs.context_structural_trend),
-            observed=_factor_observed("context_structural_trend", inputs),
-            source=f"fmis.structural_trend ({inputs.context_interval})",
-        ),
+def _directional_factors(
+    inputs: SetupInputs,
+    context_role: ContextRoleTreatment = PRODUCTION_CONTEXT_ROLE_TREATMENT,
+) -> tuple[DirectionalFactor, ...]:
+    """The families this policy will tally, in order.
+
+    Under `ContextRoleTreatment.IGNORED` the context-role family is **absent**
+    rather than present-but-silenced. A silenced factor would still be reported
+    on the assessment and still generate an `_extra_limitations` line explaining
+    why it did not vote, which would describe the run as though a family had
+    been unavailable when in fact the variant declined to ask it. What the
+    context role said is not lost: the research layer reads it from
+    `SetupInputs`, which every variant shares.
+    """
+    context = (
+        ()
+        if context_role is ContextRoleTreatment.IGNORED
+        else (
+            DirectionalFactor(
+                family="context_structural_trend",
+                lean=_trend_lean(inputs.context_structural_trend),
+                observed=_factor_observed("context_structural_trend", inputs),
+                source=f"fmis.structural_trend ({inputs.context_interval})",
+            ),
+        )
+    )
+    return context + (
         DirectionalFactor(
             family="setup_structural_trend",
             lean=_trend_lean(inputs.setup_structural_trend),
@@ -311,6 +386,7 @@ def evaluate_setup(
     inputs: SetupInputs,
     *,
     research_confirmation_max_age: int | None = None,
+    research_context_role: ContextRoleTreatment | None = None,
 ) -> SetupAssessment:
     """Interpret already-computed facts into one deterministic setup assessment.
 
@@ -333,6 +409,20 @@ def evaluate_setup(
     different bar, price, stop and target. Only replaying the decision can
     produce that lifecycle, and replaying it requires the bound to be an
     argument at the point the decision is made.
+
+    ``research_context_role`` is the second **research-only** override, added by
+    Milestone BW to answer whether the CONTEXT-role timeframe — ``1w`` under the
+    production mapping — is too restrictive for swing trading. Omitted, it
+    changes nothing and the result is byte-identical to what this function
+    returned before it existed. Supplied, it selects one of
+    `ContextRoleTreatment`'s three named semantics, stamps the same research
+    ``policy_id`` machinery on the result, and adds its own limitation line.
+    Like the bound above it is a **discrete named policy, never a knob**: there
+    is no way to spell "gate on a weaker regime threshold", because a threshold
+    is exactly the thing a researcher could shop for.
+
+    Both overrides are independent and compose: supplying either one makes the
+    assessment a research assessment.
 
     It is deliberately **not** a `RegimePolicy`-style policy object and
     deliberately not offered as a knob on `setup_for_symbol`,
@@ -363,27 +453,52 @@ def evaluate_setup(
                 "research_confirmation_max_age cannot be negative, got "
                 f"{research_confirmation_max_age}"
             )
+    if research_context_role is not None and not isinstance(
+        research_context_role, ContextRoleTreatment
+    ):
+        raise TypeError(
+            "research_context_role must be a ContextRoleTreatment or None, got "
+            f"{type(research_context_role).__name__}"
+        )
 
-    is_research = research_confirmation_max_age is not None
+    is_research = (
+        research_confirmation_max_age is not None or research_context_role is not None
+    )
     confirmation_max_age = (
-        CONFIRMATION_LOOKBACK_BARS if not is_research else research_confirmation_max_age
+        CONFIRMATION_LOOKBACK_BARS
+        if research_confirmation_max_age is None
+        else research_confirmation_max_age
+    )
+    context_role = (
+        PRODUCTION_CONTEXT_ROLE_TREATMENT
+        if research_context_role is None
+        else research_context_role
     )
     policy_id = (
-        SETUP_POLICY_ID if not is_research else research_policy_id(confirmation_max_age)
-    )
-    research_limitations = (
-        ()
+        SETUP_POLICY_ID
         if not is_research
-        else (
+        else research_policy_id(confirmation_max_age, context_role)
+    )
+    research_limitations: tuple[str, ...] = ()
+    if research_confirmation_max_age is not None:
+        research_limitations += (
             "RESEARCH OVERRIDE ACTIVE: the confirmation-staleness bound was "
             f"{confirmation_max_age} bar(s) for this assessment, not the "
             f"production {CONFIRMATION_LOOKBACK_BARS}. This is a measurement "
             "of a counterfactual policy and is not what the live product would "
             "have said.",
         )
-    )
+    if research_context_role is not None:
+        research_limitations += (
+            "RESEARCH OVERRIDE ACTIVE: the context role "
+            f"({inputs.context_interval}) was treated as "
+            f"{context_role.value}, not the production "
+            f"{PRODUCTION_CONTEXT_ROLE_TREATMENT.value}. This is a measurement "
+            "of a counterfactual policy and is not what the live product would "
+            "have said.",
+        )
 
-    factors = _directional_factors(inputs)
+    factors = _directional_factors(inputs, context_role)
 
     if inputs.decision_context_state is ContextState.INSUFFICIENT:
         reasons = inputs.decision_context_statements or (
@@ -399,7 +514,10 @@ def evaluate_setup(
             policy_id=policy_id, extra_limitations=research_limitations,
         )
 
-    if inputs.context_regime_structure is not StructureState.TRENDING:
+    if (
+        context_role is ContextRoleTreatment.GATE_AND_VOTE
+        and inputs.context_regime_structure is not StructureState.TRENDING
+    ):
         thesis = (
             f"Context-role ({inputs.context_interval}) regime structure is "
             f"{inputs.context_regime_structure.value}, not trending. A "

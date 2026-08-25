@@ -61,6 +61,19 @@ from fmis.operator_dashboard import (
 from fmis.pipeline.market_analysis import PipelineError
 from fmis.daily import DailyRun, DailyRunError, render_daily_run, run_daily
 from fmis.market_regime import RegimePolicy
+from fmis.swing_lab import (
+    CONSERVATIVE_COSTS,
+    FRICTIONLESS_COSTS,
+    PRE_SPECIFIED_VARIANTS,
+    SwingLabError,
+    measure_robustness,
+    run_lab_study,
+    variant_by_id,
+    write_study,
+)
+from fmis.swing_lab import read_artifact, verify_digest
+from fmis.swing_lab.render import render_robustness, render_study
+from fmis.operator_dashboard.sections import lab_view
 from fmis.swing_setup import (
     BacktestError,
     DEFAULT_BACKTEST_DAYS,
@@ -3299,6 +3312,18 @@ def _configure_dashboard(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--lab-artifact",
+        default=None,
+        metavar="PATH",
+        dest="lab_artifact",
+        help=(
+            "show a saved Swing Lab experiment on the /lab page. The file is "
+            "read HERE and handed to the dashboard already decoded, so the "
+            "dashboard package still opens nothing. Omitted, /lab says no "
+            "experiment is loaded"
+        ),
+    )
+    parser.add_argument(
         "--no-relationships",
         action="store_true",
         help=(
@@ -3321,6 +3346,18 @@ def _run_dashboard(args: argparse.Namespace) -> int:
     server does not fetch, so the command comes up immediately and the owner
     sees the page assemble rather than watching a silent terminal.
     """
+    lab = None
+    if args.lab_artifact is not None:
+        # Decoded HERE, deliberately. The dashboard package opens nothing, and
+        # a guard asserts it: handing it an already-parsed view is what keeps
+        # that true while still putting research on a page.
+        try:
+            artifact = read_artifact(args.lab_artifact)
+            lab = lab_view(artifact, digest_verified=verify_digest(artifact))
+        except SwingLabError as error:
+            print(f"fmits dashboard: {error}", file=sys.stderr)
+            return EXIT_FAILURE
+
     def announce(url: str, _server: object) -> None:
         # Flushed explicitly: piped or redirected, this banner is block-buffered
         # and the owner would stare at an empty terminal while the socket sat
@@ -3342,6 +3379,7 @@ def _run_dashboard(args: argparse.Namespace) -> int:
                 symbols=tuple(args.symbols) or None,
                 store_root=args.store_root,
                 with_relationships=not args.no_relationships,
+                lab=lab,
             ),
             allow_public=args.allow_public,
             quiet=True,
@@ -3352,6 +3390,159 @@ def _run_dashboard(args: argparse.Namespace) -> int:
         return EXIT_FAILURE
     print("fmits dashboard: stopped", file=sys.stderr)
     return EXIT_OK
+
+
+def _configure_research(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "area",
+        choices=("swing",),
+        help=(
+            "which research question to run. Only 'swing' exists today: the "
+            "Swing Strategy Laboratory's timeframe-policy comparison"
+        ),
+    )
+    parser.add_argument(
+        "symbols", nargs="+", metavar="SYMBOL",
+        help="the universe to replay, in report order",
+    )
+    parser.add_argument(
+        "--start", required=True, metavar="ISO8601",
+        help=(
+            "start of the MEASUREMENT window. Warm-up history is derived and "
+            "fetched before it; a window the provider cannot warm is refused "
+            "with the shortfall rather than quietly shortened"
+        ),
+    )
+    parser.add_argument(
+        "--end", default=None, metavar="ISO8601",
+        help="end of the measurement window (default: now)",
+    )
+    parser.add_argument(
+        "--variant", action="append", default=None, metavar="ID", dest="variant",
+        help=(
+            "repeatable: run only these pre-specified variants. Omitted, every "
+            "variant in the study is run. Variants are DEFINED IN CODE and "
+            "cannot be described on the command line — a policy invented at a "
+            "shell prompt is a policy nobody pre-specified. Available: "
+            + ", ".join(item.variant_id for item in PRE_SPECIFIED_VARIANTS)
+        ),
+    )
+    parser.add_argument(
+        "--window", type=int, default=DEFAULT_EVALUATION_WINDOW_BARS, metavar="BARS",
+        help=(
+            "execution-role bars to evaluate a trade over (default: "
+            f"{DEFAULT_EVALUATION_WINDOW_BARS}); a measurement policy, not a "
+            "tuned value"
+        ),
+    )
+    parser.add_argument(
+        "--costs", choices=("frictionless", "conservative"), default="frictionless",
+        help=(
+            "cost scenario (default: frictionless). 'conservative' charges 10 "
+            "basis points on the entry and the exit notional and is "
+            "deliberately pessimistic"
+        ),
+    )
+    parser.add_argument(
+        "--robustness", action="store_true",
+        help="also print the chronological, walk-forward, symbol and direction splits",
+    )
+    parser.add_argument(
+        "--save", default=None, metavar="PATH",
+        help=(
+            "write the completed experiment as a JSON research artifact, "
+            "carrying its manifest and every trade so the run can be reviewed "
+            "and rebuilt. Refuses to overwrite an existing file. This is a "
+            "research record, not part of the trading store"
+        ),
+    )
+    parser.add_argument(
+        "-n", "--limit", type=int, default=None, metavar="CANDLES",
+        help="candles requested per role (default: the harness default)",
+    )
+
+
+def _run_research(args: argparse.Namespace) -> int:
+    """Run one Swing Lab experiment and print its report.
+
+    **Read-only research.** This command replays history, measures policy
+    variants and prints a comparison. It writes nothing, changes no production
+    strategy and promotes nothing: a variant that measures well here is a
+    candidate for forward testing, which is a later, explicit owner decision.
+    """
+    end = _reference_time(args.end, omit=False)
+    start = datetime.fromisoformat(args.start)
+    if start.tzinfo is None:
+        print(
+            "fmits research: --start must be timezone-aware, e.g. "
+            "2024-01-01T00:00:00+00:00",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    try:
+        chosen = (
+            PRE_SPECIFIED_VARIANTS
+            if args.variant is None
+            else tuple(variant_by_id(item) for item in args.variant)
+        )
+        study = run_lab_study(
+            args.symbols,
+            measurement_start=start,
+            measurement_end=end,
+            run_at=datetime.now(timezone.utc),
+            experiment_id=f"cli-{start.date()}-{end.date()}",
+            variants=chosen,
+            costs=(
+                CONSERVATIVE_COSTS if args.costs == "conservative" else FRICTIONLESS_COSTS
+            ),
+            evaluation_window_bars=args.window,
+            limit=DEFAULT_BACKTEST_LIMIT if args.limit is None else args.limit,
+        )
+    except SwingLabError as error:
+        print(f"fmits research {args.area}: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_study(study))
+    if args.save is not None:
+        try:
+            written = write_study(study, args.save)
+        except SwingLabError as error:
+            print(f"fmits research {args.area}: {error}", file=sys.stderr)
+            return EXIT_FAILURE
+        print(f"\nResearch artifact written to {written}")
+    if args.robustness:
+        for result in study.results:
+            print()
+            print(
+                render_robustness(
+                    measure_robustness(
+                        result.trades,
+                        variant_id=result.variant.variant_id,
+                        measurement_start=start,
+                        measurement_end=end,
+                    )
+                )
+            )
+    return EXIT_OK
+
+
+RESEARCH_COMMAND = Command(
+    name="research",
+    help="replay policy variants over real history and compare them (read-only)",
+    description=(
+        "The Swing Strategy Laboratory. Replays the current production swing "
+        "policy over a historical measurement window and, over the SAME facts "
+        "at the same instants, replays pre-specified alternative policies "
+        "beside it — chiefly variants of what the CONTEXT-role timeframe (1w "
+        "under the production mapping) is allowed to do. Reports setups, "
+        "trades, expectancy in R, profit factor, drawdown and what the weekly "
+        "gate actually blocked. Every variant is defined in code and fixed "
+        "before any result is seen; none can be described on this command "
+        "line. This command changes no production strategy, writes nothing, "
+        "and promotes nothing."
+    ),
+    configure=_configure_research,
+    run=_run_research,
+)
 
 
 DASHBOARD_COMMAND = Command(
@@ -3404,6 +3595,7 @@ COMMANDS: tuple[Command, ...] = (
     # The last of the read surfaces, and deliberately not after `archive`:
     # three guards pin `archive` as the final entry, and the dashboard is a
     # window over every command above it rather than a step that follows them.
+    RESEARCH_COMMAND,
     DASHBOARD_COMMAND,
     ARCHIVE_COMMAND,
 )

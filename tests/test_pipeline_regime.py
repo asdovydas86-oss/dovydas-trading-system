@@ -344,7 +344,7 @@ def test_the_registry_carries_its_commands_in_the_declared_order() -> None:
         # sequence — so it belongs after the surfaces it presents rather than
         # among them. It changes no existing command and shares no flag with
         # one.
-        "dashboard",
+        "research", "dashboard",
         "archive",
     ]
     assert len(set(names)) == len(names)

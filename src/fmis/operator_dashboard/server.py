@@ -125,6 +125,7 @@ class SnapshotHolder:
         store_root: Path | str | None = None,
         benchmarks: Sequence[str] | None = None,
         with_relationships: bool = True,
+        lab: Any | None = None,
     ) -> None:
         self._refresher = refresher
         self._clock = clock or (lambda: datetime.now(timezone.utc))
@@ -132,6 +133,10 @@ class SnapshotHolder:
         self._store_root = store_root
         self._benchmarks = benchmarks
         self._with_relationships = with_relationships
+        #: A saved experiment, already decoded by the caller. This package never
+        #: reads it from disk — see the module docstring on why no filesystem
+        #: access exists here at all.
+        self._lab = lab
         self._lock = threading.Lock()
         self._snapshot: OperatorDashboardSnapshot | None = None
         #: Counts every completed refresh. A test asserts that navigating four
@@ -145,6 +150,7 @@ class SnapshotHolder:
             store_root=self._store_root,
             benchmarks=self._benchmarks,
             with_relationships=self._with_relationships,
+            lab=self._lab,
         )
         self._snapshot = snapshot
         self.refresh_count += 1

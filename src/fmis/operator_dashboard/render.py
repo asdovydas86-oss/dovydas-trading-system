@@ -67,6 +67,7 @@ PAGES: tuple[tuple[str, str], ...] = (
     ("/portfolio", "Portfolio"),
     ("/paper", "Paper"),
     ("/performance", "Performance"),
+    ("/lab", "Swing Lab"),
     ("/system", "System"),
 )
 
@@ -1422,6 +1423,129 @@ def _footer() -> str:
     )
 
 
+
+def _lab(snapshot: OperatorDashboardSnapshot) -> str:
+    """The Swing Lab page. **Read-only, and a record rather than a live read.**
+
+    There is no control on this page that could change a strategy, and there is
+    nothing to click that runs anything. A lab study replays years of history
+    over several minutes, so what is shown is a saved experiment the operator
+    passed in — which the page states, rather than letting a stale table read as
+    a live one.
+    """
+    section = snapshot.lab
+    if section is None or section.data is None:
+        return _panel(
+            "Swing Lab",
+            "<p class='muted'>No experiment is loaded. Run one with "
+            "<code>fmits research swing SYMBOL --start ... --save study.lab.json</code> "
+            "and start the dashboard with <code>--lab-artifact study.lab.json</code>. "
+            "This page shows a saved research record; it never runs a replay "
+            "itself and never changes a strategy.</p>",
+        )
+    view = section.data
+    head = (
+        "<dl class='meta'>"
+        f"<dt>Experiment</dt><dd>{_e(view.experiment_id)}</dd>"
+        f"<dt>Symbols</dt><dd>{_e(', '.join(view.symbols))}</dd>"
+        f"<dt>Window</dt><dd>{_e(view.measurement_start)} → {_e(view.measurement_end)}</dd>"
+        f"<dt>Timeframes</dt><dd>{_e('; '.join(view.interval_groups))}</dd>"
+        f"<dt>Costs</dt><dd>{_e(view.cost_policy)}</dd>"
+        f"<dt>Digest</dt><dd><code>{_e(view.result_digest)}</code> "
+        f"({'verified' if view.digest_verified else 'NOT VERIFIED'})</dd>"
+        "</dl>"
+    )
+
+    def cell(value: str | None, reason: str | None) -> str:
+        if value is None:
+            return f"<td class='absent'>unavailable<small>{_e(reason or '')}</small></td>"
+        return f"<td>{_e(value)}</td>"
+
+    rows = []
+    for variant in view.variants:
+        rows.append(
+            "<tr>"
+            f"<th scope='row'>{_e(variant.variant_id)}"
+            f"{' <span class=\'tag\'>baseline</span>' if variant.is_baseline else ''}"
+            f"<small>{_e(variant.title)}</small></th>"
+            f"<td class='verdict'>{_e(variant.verdict.replace('_', ' '))}</td>"
+            f"<td>{variant.trades}</td>"
+            f"<td>{variant.measurable}</td>"
+            f"<td>{variant.ambiguous}</td>"
+            f"<td>{variant.wins}/{variant.losses}</td>"
+            + cell(variant.win_rate, variant.win_rate_reason)
+            + cell(variant.expectancy, variant.expectancy_reason)
+            + cell(variant.median_r, variant.median_r_reason)
+            + cell(variant.profit_factor, variant.profit_factor_reason)
+            + f"<td>{_e(variant.total_r)}</td>"
+            f"<td>{_e(variant.max_drawdown)}</td>"
+            "</tr>"
+        )
+    table = (
+        "<table><thead><tr><th>Variant</th><th>Verdict</th><th>Trades</th><th>Measurable</th>"
+        "<th>Ambiguous</th><th>W/L</th><th>Win rate</th><th>Expectancy R</th>"
+        "<th>Median R</th><th>Profit factor</th><th>Total R</th>"
+        "<th>Max DD (R)</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+
+    gate = view.gate
+    gate_html = ""
+    if gate is not None:
+        gate_html = _panel(
+            "What the 1W gate did",
+            "<dl class='meta'>"
+            f"<dt>Instants judged</dt><dd>{gate.instants}</dd>"
+            f"<dt>Gate never reached</dt><dd>{gate.not_reached}</dd>"
+            f"<dt>Allowed</dt><dd>{gate.allowed}</dd>"
+            f"<dt>Blocked, nothing to block</dt><dd>{gate.blocked_without_effect}</dd>"
+            f"<dt>Blocked a CANDIDATE</dt><dd>{gate.blocked_candidate}</dd>"
+            f"<dt>Blocked a CONFIRMED setup</dt><dd>{gate.blocked_confirmed}</dd>"
+            f"<dt>Materially blocked</dt><dd>{gate.blocked_candidate + gate.blocked_confirmed}"
+            "<small>the only count that means the gate removed something</small></dd>"
+            f"<dt>Blocked long / short</dt><dd>{gate.blocked_long} / {gate.blocked_short}</dd>"
+            "</dl>"
+            f"<p class='muted'>{_e(gate.counterfactual_note)}</p>",
+        )
+
+    verdicts = "".join(
+        f"<li><strong>{_e(item.variant_id)}</strong> — "
+        f"<em>{_e(item.verdict.replace('_', ' '))}</em>: "
+        f"{_e(item.verdict_statement)}</li>"
+        for item in view.variants
+    )
+
+    hypotheses = "".join(
+        f"<li><strong>{_e(item.variant_id)}</strong> — {_e(item.hypothesis)}"
+        f"<br><small><code>{_e(item.policy_id)}</code></small></li>"
+        for item in view.variants
+    )
+    limitations = "".join(f"<li>{_e(item)}</li>" for item in view.limitations)
+    return (
+        _panel("Swing Lab — saved experiment", head + table)
+        + _panel(
+            "Verdicts",
+            f"<ul>{verdicts}</ul>"
+            "<p class='muted'>Each verdict is <strong>derived from the measured "
+            "expectancy alone</strong> and can be recomputed from this "
+            "experiment's own artifact. No verdict this system produces "
+            "approves live trading; the strongest one available means "
+            "<em>worth testing forward</em>.</p>",
+        )
+        + gate_html
+        + _panel("Pre-specified hypotheses", f"<ul>{hypotheses}</ul>")
+        + _panel("Limitations", f"<ul>{limitations}</ul>")
+        + _panel(
+            "This page promotes nothing",
+            "<p class='muted'>A variant that measures well here is a candidate "
+            "for forward testing and nothing more. The production strategy is "
+            "unchanged by this experiment and cannot be changed from this "
+            "page.</p>",
+        )
+    )
+
+
 def render_page(
     snapshot: OperatorDashboardSnapshot, path: str, *, symbol: str | None = None
 ) -> str:
@@ -1445,6 +1569,7 @@ def render_page(
             "/portfolio": _portfolio,
             "/paper": _paper,
             "/performance": _performance,
+            "/lab": _lab,
             "/system": _system,
         }[path](snapshot)
     return (

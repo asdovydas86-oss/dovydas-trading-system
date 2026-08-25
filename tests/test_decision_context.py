@@ -496,6 +496,14 @@ def test_no_engine_below_imports_this_package() -> None:
     the `ContextState` through which a second opinion could enter, and a test in
     that package varies every other field on the assessment to prove the answer
     never moves. The direction rule is unchanged.
+
+    Widened again for Milestone BW to admit `fmis.swing_lab`: a research root
+    above `fmis.swing_setup`. It imports `ContextPolicy` only to pass the
+    caller's policy through to a replay, and reads `ContextState.INSUFFICIENT`
+    for exactly one purpose: to tell that the production context gate was
+    never reached at an instant, rather than blaming it for a refusal made
+    upstream. It adds no threshold and re-decides nothing, which is the same
+    footing ADR-0026 permits `fmis.today` and `fmis.setup_evidence`.
     """
     root = PACKAGE_DIR.parent
     permitted = {
@@ -504,6 +512,7 @@ def test_no_engine_below_imports_this_package() -> None:
         root / "swing_setup",
         root / "today",  # BJ: the fourth composition root, above the other three
         root / "setup_evidence",  # BR: carries sufficiency, never recomputes it
+        root / "swing_lab",  # BW: a research root; reads ContextState, decides nothing
         PACKAGE_DIR,
     }
     for py in root.rglob("*.py"):

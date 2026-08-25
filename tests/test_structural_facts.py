@@ -728,9 +728,15 @@ def test_no_engine_imports_the_fact_sheet_root() -> None:
     root, above all three of the others. It names `DetectionSettings` only to
     pass the caller's swing-detection window through to the scan; it derives no
     fact sheet of its own. The direction is still unchanged.
+
+    Widened again for Milestone BW: `fmis.swing_lab` is a fifth
+    application-layer root, above `fmis.swing_setup`, and it consumes the same
+    root for the same reason `fmis.today` does — it passes `DetectionSettings`
+    through to a replay and derives no fact sheet of its own. The direction is
+    still unchanged: no engine reaches upward.
     """
     root = Path(sf_module.__file__).parent.parent
-    above = {"pipeline", "workspace", "daily", "swing_setup", "today"}
+    above = {"pipeline", "workspace", "daily", "swing_setup", "today", "swing_lab"}
     for path in root.rglob("*.py"):
         if above & set(path.parts) or "__pycache__" in path.parts:
             continue

@@ -851,7 +851,7 @@ def test_registry_names_are_unique() -> None:
     assert set(names) == {
         "facts", "mtf", "regime", "swing", "setup", "evidence", "scan", "backtest", "daily",
         "today", "workspace", "pulse", "macro", "portfolio", "approve", "trade", "simulate",
-        "statistics", "performance", "expectancy", "equity", "trades", "dashboard",
+        "statistics", "performance", "expectancy", "equity", "trades", "research", "dashboard",
         "archive",
     }
 
@@ -981,9 +981,16 @@ def test_no_engine_imports_the_multi_timeframe_root() -> None:
     well as the market half. It names `TimeframeRole` only to pass the caller's
     role assignment through to the scan; it fetches nothing itself. The
     direction is still unchanged, and every engine remains covered.
+
+    Widened again for Milestone BW: `fmis.swing_lab` is a fifth
+    application-layer root, above `fmis.swing_setup`, replaying the same
+    multi-timeframe sheet through the identical composition root at every
+    historical instant. The direction is still unchanged: no engine reaches
+    upward, and the laboratory's own guard asserts that nothing below it
+    imports the laboratory either.
     """
     root = Path(mtf_module.__file__).parent.parent
-    above = {"pipeline", "workspace", "daily", "swing_setup", "today"}
+    above = {"pipeline", "workspace", "daily", "swing_setup", "today", "swing_lab"}
     for path in root.rglob("*.py"):
         if above & set(path.parts) or "__pycache__" in path.parts:
             continue

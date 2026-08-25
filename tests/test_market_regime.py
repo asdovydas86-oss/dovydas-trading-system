@@ -667,6 +667,15 @@ def test_no_engine_below_imports_this_package() -> None:
     runs. It classifies nothing, reads no regime state and prints no regime
     vocabulary — the workspace page states, in words, that no single directional
     regime label is produced, citing ADR-0025 for why.
+
+    Widened again for Milestone BW to admit `fmis.swing_lab`: a research root
+    above `fmis.swing_setup`. It names `RegimePolicy` only to pass the caller's
+    policy through to a replay, and reads exactly one regime state —
+    `StructureState.TRENDING` — to attribute what the production context gate
+    did at each historical instant. It classifies nothing and re-decides
+    nothing: the state it reads is the one `fmis.market_regime` already
+    produced, which is what makes the attribution a measurement rather than a
+    second opinion. The direction rule is unchanged.
     """
     root = PACKAGE_DIR.parent
     permitted = {
@@ -676,6 +685,7 @@ def test_no_engine_below_imports_this_package() -> None:
         root / "daily",  # AN: a second application-layer root, above the workspace
         root / "swing_setup",  # AR: a third, at the same tier as the workspace
         root / "today",  # BJ: a fourth, above all of them; passes the policy through
+        root / "swing_lab",  # BW: a research root above swing_setup; reads, never classifies
         PACKAGE_DIR,
     }
     for py in root.rglob("*.py"):

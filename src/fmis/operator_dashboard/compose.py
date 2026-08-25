@@ -57,6 +57,7 @@ from fmis.market_pulse import (
     universe_subset,
 )
 from fmis.operator_dashboard.models import (
+    LabView,
     DASHBOARD_SCHEMA_VERSION,
     DataHealthView,
     MacroView,
@@ -187,6 +188,7 @@ def build_snapshot(
     macro_error: BaseException | None = None,
     statistics: Any | None = None,
     statistics_error: BaseException | None = None,
+    lab: LabView | None = None,
 ) -> OperatorDashboardSnapshot:
     """Assemble one snapshot from engine outputs that have already been read.
 
@@ -322,6 +324,22 @@ def build_snapshot(
         empty=not health.sources,
     )
 
+    # --- swing lab -----------------------------------------------------------
+    # NOT a read. The artifact was decoded by the caller and handed in already
+    # parsed, which is what keeps this package free of any filesystem access at
+    # all — a guard asserts no module here opens anything.
+    lab_section: DashboardSection[LabView] | None = (
+        None
+        if lab is None
+        else _section(
+            "lab",
+            lab,
+            as_of=None,
+            source=f"saved research artifact · {lab.experiment_id}",
+            empty=not lab.variants,
+        )
+    )
+
     return OperatorDashboardSnapshot(
         refreshed_at=refreshed_at,
         reference_time=reference_time,
@@ -333,6 +351,7 @@ def build_snapshot(
         paper=paper_section,
         performance=performance_section,
         health=health_section,
+        lab=lab_section,
         warnings=warnings,
         limitations=DASHBOARD_LIMITATIONS,
         schema_version=DASHBOARD_SCHEMA_VERSION,
@@ -351,6 +370,7 @@ def refresh(
     pulse_runner: Callable[..., Any] = run_market_pulse,
     macro_runner: Callable[..., Any] = run_macro_context,
     statistics_runner: Callable[..., Any] = report_for_store,
+    lab: LabView | None = None,
 ) -> OperatorDashboardSnapshot:
     """Perform one refresh: four reads, each isolated, then one snapshot.
 
@@ -433,4 +453,5 @@ def refresh(
         macro_error=macro_error,
         statistics=statistics,
         statistics_error=statistics_error,
+        lab=lab,
     )

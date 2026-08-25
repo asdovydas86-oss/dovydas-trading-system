@@ -64,7 +64,7 @@ from fmis.pipeline.regime import REGIME_LIMITATIONS, regime_features, regime_for
 from fmis.pipeline.structural_facts import DetectionSettings, Limitation, StructuralFactSheet
 from fmis.providers.binance import BinanceError, Transport
 from fmis.swing_setup.models import ExecutionBreakEvent, SetupAssessment, SetupInputs
-from fmis.swing_setup.policy import evaluate_setup
+from fmis.swing_setup.policy import ContextRoleTreatment, evaluate_setup
 
 __all__ = [
     "SETUP_LIMITATIONS",
@@ -298,6 +298,7 @@ def setup_inputs_and_assessment_for_sheet(
     policy: RegimePolicy | None = None,
     context_policy: ContextPolicy | None = None,
     research_confirmation_max_age: int | None = None,
+    research_context_role: ContextRoleTreatment | None = None,
 ) -> tuple[SetupInputs, SetupAssessment]:
     """Compose the policy's own input alongside its assessment. Pure.
 
@@ -332,7 +333,9 @@ def setup_inputs_and_assessment_for_sheet(
     )
     inputs = build_setup_inputs(sheet, regimes, evidence, context)
     return inputs, evaluate_setup(
-        inputs, research_confirmation_max_age=research_confirmation_max_age
+        inputs,
+        research_confirmation_max_age=research_confirmation_max_age,
+        research_context_role=research_context_role,
     )
 
 

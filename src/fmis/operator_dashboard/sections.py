@@ -41,6 +41,9 @@ from fmis.operator_dashboard.models import (
     DataHealthView,
     EquityStep,
     EvidenceView,
+    LabGateRow,
+    LabVariantRow,
+    LabView,
     LimitRow,
     MacroRow,
     MacroView,
@@ -72,6 +75,7 @@ __all__ = [
     "performance_views",
     "health_view",
     "warning_rows",
+    "lab_view",
 ]
 
 
@@ -824,4 +828,109 @@ def warning_rows(workspace: Any) -> tuple[WarningRow, ...]:
             detail=tuple(warning.detail),
         )
         for warning in workspace.warnings
+    )
+
+
+# ---------------------------------------------------------------------------
+# Swing Lab
+# ---------------------------------------------------------------------------
+
+
+#: How many decimal places a lab figure is carried at. An expectancy is a
+#: quotient of two exact decimals and arrives with ~28 significant digits; a
+#: page showing all of them states a precision the sample cannot support and is
+#: simply unreadable. Four places is a **stated presentation precision**, not a
+#: rounding of a measurement — the artifact keeps every digit, and this layer
+#: neither computes nor re-derives the value it is displaying.
+_LAB_PLACES = Decimal("0.0001")
+
+
+def _measure(measure: Any) -> tuple[str | None, str | None]:
+    """A `Measure` split into canonical text and the reason it is absent.
+
+    The sample count is not dropped here: it is folded into the reason when a
+    figure is missing, so a page can never show a blank cell without saying how
+    many trades produced it. `quantize` states a display precision; it performs
+    no arithmetic on the engine's value and cannot change which side of zero it
+    falls on.
+    """
+    if measure is None:
+        return None, "not measured"
+    if measure.value is None:
+        return None, measure.reason
+    return format(measure.value.quantize(_LAB_PLACES), "f"), None
+
+
+def lab_view(artifact: Any, *, digest_verified: bool) -> LabView:
+    """Adapt one lab artifact into the page's read model. A copy, never a measure.
+
+    Every figure here was reduced by `fmis.swing_lab.metrics` before this
+    function saw it. Nothing is totalled, ranked or re-derived: variant order is
+    the artifact's own, which is the study's own, which is the order the
+    variants were pre-specified in.
+    """
+    manifest = artifact.manifest
+    gate = artifact.gate
+    rows = []
+    for variant_id in artifact.variant_ids:
+        spec = artifact.variant(variant_id)
+        metrics = artifact.metrics(variant_id)
+        verdict = artifact.verdict(variant_id)
+        win_rate, win_rate_reason = _measure(metrics.win_rate)
+        expectancy, expectancy_reason = _measure(metrics.expectancy_r)
+        median, median_reason = _measure(metrics.median_r)
+        profit_factor, profit_factor_reason = _measure(metrics.profit_factor)
+        rows.append(
+            LabVariantRow(
+                variant_id=variant_id,
+                title=spec["title"],
+                hypothesis=spec["hypothesis"],
+                policy_id=spec["policy_id"],
+                is_baseline=spec["is_production_baseline"],
+                trades=metrics.trades,
+                measurable=metrics.measurable_trades,
+                ambiguous=metrics.ambiguous_trades,
+                wins=metrics.wins,
+                losses=metrics.losses,
+                win_rate=win_rate,
+                win_rate_reason=win_rate_reason,
+                expectancy=expectancy,
+                expectancy_reason=expectancy_reason,
+                median_r=median,
+                median_r_reason=median_reason,
+                profit_factor=profit_factor,
+                profit_factor_reason=profit_factor_reason,
+                total_r=format(metrics.total_r.quantize(_LAB_PLACES), "f"),
+                max_drawdown=format(
+                    metrics.max_drawdown.max_drawdown_r.quantize(_LAB_PLACES), "f"
+                ),
+                sample_note=(
+                    f"{metrics.measurable_trades} measurable of {metrics.trades}"
+                ),
+                verdict=verdict.value,
+                verdict_statement=verdict.statement,
+            )
+        )
+    return LabView(
+        experiment_id=manifest["experiment_id"],
+        symbols=tuple(manifest["symbols"]),
+        measurement_start=manifest["measurement_start"],
+        measurement_end=manifest["measurement_end"],
+        interval_groups=tuple("/".join(group) for group in manifest["interval_groups"]),
+        cost_policy=manifest["cost_policy"]["policy_id"],
+        result_digest=manifest["result_digest"],
+        digest_verified=digest_verified,
+        variants=tuple(rows),
+        gate=LabGateRow(
+            instants=gate["instants"],
+            not_reached=gate["not_reached"],
+            allowed=gate["allowed"],
+            blocked_without_effect=gate["blocked_without_effect"],
+            blocked_candidate=gate["blocked_candidate"],
+            blocked_confirmed=gate["blocked_confirmed"],
+            blocked_long=gate["blocked_long"],
+            blocked_short=gate["blocked_short"],
+            counterfactual_note=gate["counterfactual_note"],
+        ),
+        limitations=tuple(manifest["limitations"]),
     )

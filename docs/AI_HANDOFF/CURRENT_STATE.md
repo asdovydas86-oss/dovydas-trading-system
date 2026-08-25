@@ -7,13 +7,80 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BW — Swing Strategy Laboratory & Historical Replay (2026-08-25): the first
-milestone whose deliverable is an **answer** rather than a feature. `fmits research swing` replays
-the production swing policy and four pre-specified alternatives over the same historical facts and
-measures them. Independently verified at the release gate — production behaviour proved unchanged over
-115,200 input combinations, and the primary study's digest reproduced exactly on a fresh re-run.
-Full record:
-[report 0033](../../reports/0033_2026-08-25_SWING_STRATEGY_LABORATORY_IMPLEMENTATION.md).
+**Last updated for:** BX — Swing Trade Geometry Research & Policy Candidates (2026-08-25): the
+second milestone whose deliverable is an **answer**. `fmits research geometry` replays history once
+and measures thirteen pre-declared stop/target rules against a development sample and a set of
+symbols this repository had never looked at. Full record:
+[report 0034](../../reports/0034_2026-08-25_SWING_TRADE_GEOMETRY_RESEARCH.md).
+
+---
+
+## Milestone BX — Swing Trade Geometry Research & Policy Candidates
+
+- **The headline: there is still no candidate. All thirteen pre-declared geometries are
+  REJECTED**, under both cost scenarios. Every one lost money on the development sample.
+
+- **The most useful finding is a refutation.** A minimum planned reward-to-risk — the obvious fix
+  after BW — makes the strategy **worse**: every threshold tested is worse than no threshold at all
+  (−0.276R with no floor against −0.470R / −0.482R / −0.605R / −0.577R at 1.0 / 1.25 / 1.5 / 2.0),
+  and the win rate collapses from 45.5 % to 6.5 %. The reason is arithmetic: **a high planned R:R is
+  produced by a tight stop, not a distant target.** Rank correlation between planned R:R and
+  stop/ATR is **−0.65**, measured independently on both samples. Setups planning ≥ 3.0R carry a
+  median stop of **0.22 ATR**; setups planning < 1.0R carry **1.31 ATR**. An R:R filter selects the
+  trades whose stops sit inside a fifth of an average bar's range.
+
+- **The diagnosis, from 240 reconstructed trades** (development figures): 52.9 % of setups plan
+  reward < risk · 85.7 % of target exits pay under +1R · 48.2 % of stops sit inside one ATR(14) ·
+  68.8 % of trades give back a full R of open profit · **73.2 % of stopped-out trades had their
+  original target reached afterwards, inside the same evaluation window** · 63.5 % of trades resolve
+  in a single 4H bar. The thesis was usually right; the stop was usually wrong.
+
+- **Costs are decisive, not a refinement.** At a pessimistic 10 bp per side the production
+  geometry carries a mean drag of **0.723R per trade**, taking development expectancy from −0.276R
+  to **−0.999R**. Cost in R is `fee_rate × (entry + exit) / risk`, so it is charged against the risk
+  denominator: at the median 152 bp stop it costs 0.132R, at the tightest 1.43 bp stop **14.0R**.
+  Any rule that widens the stop is dramatically less cost-sensitive.
+
+- **Read the dev/holdout gap with care.** The **baseline itself** is negative on development
+  (−0.276R) and positive on the holdout (+0.055R). A gap that large in the baseline is a property of
+  the symbol split — six majors against nine high-beta altcoins — not of any geometry. The large
+  positive holdout figures for the target-selection family are **not** out-of-sample validation of
+  those rules (limitation BX-4).
+
+- **What the evidence points at, and what BX deliberately did not do.** Relocating the stop to the
+  nearest real 4H level ≥ 0.5 ATR away *and* requiring a real 1D target paying the risk is positive
+  on both samples and survives costs — but it was constructed **after** results were seen and is a
+  **single grid point** whose neighbours fail. It is recorded as the next milestone's pre-declared
+  hypothesis, never as a candidate.
+
+- **New modules in `fmis.swing_lab`** (9): `geometry`, `geometry_variants`, `geometry_replay`,
+  `geometry_outcome`, `geometry_diagnosis`, `geometry_verdict`, `geometry_study`,
+  `geometry_render`, `geometry_artifact`. Plus `fmits research geometry` and a read-only
+  `/geometry` dashboard page.
+
+- **One production seam.** `swing_setup.policy._nearest` was promoted to public `ordered_levels`
+  so research can select the second or third level without copying production's ordering.
+  `_STOP_SIDE`/`_TARGET_SIDE` likewise became `STOP_SIDE`/`TARGET_SIDE` (private aliases retained).
+  Proved faithful by a 16,000-case differential **and** by BW's primary digest reproducing exactly.
+
+- **A shipped defect was found and fixed:** `fmits research swing` crashed on every invocation
+  (`DEFAULT_BACKTEST_LIMIT` was referenced but never imported in `cli.py`). No test covered
+  `_run_research`. BW's figures are unaffected — they were produced through the Python API — but the
+  command its report advertised did not run.
+
+- **Verification:** 45/45 mutation probes killed · full suite **11,285 passing** under `-W error` ·
+  coverage 91–99 % on the new modules · 13 new architecture guards · no guard weakened.
+
+- **Independently re-verified at the release gate.** Production `evaluate_setup` proved unchanged
+  against the committed HEAD copy over **2,352,000 input combinations**; BW's digest `b2ffcdce…`
+  and **both** BX digests (`722539817f…`, `cd9b3d9d6a…`) reproduced exactly from fresh network
+  fetches; the six headline diagnosis figures recomputed *without* the diagnosis layer and matched
+  exactly; six trades reconciled against freshly fetched candles; 24 hostile probes, 0 failures.
+  The gate found five defects — the largest being that **the claimed CLI regression did not
+  exist** — and fixed all five. It changed no trading rule and no result.
+
+- **No geometry is approved for anything.** The strongest verdict this repository produces means
+  *worth testing forward*, and nothing reached it.
 
 ---
 

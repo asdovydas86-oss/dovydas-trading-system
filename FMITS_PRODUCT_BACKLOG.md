@@ -281,6 +281,43 @@ Committed as `2b30e38` (production code + tests) with the documentation commit d
 > a guard test asserts `fmis.swing_workspace`, `fmis.today` and `fmis.setup_evidence` consume none
 > of it, so attaching macro as a separate evidence domain later is a deliberate edit.
 
+**`BX` — Swing Trade Geometry Research & Policy Candidates — is DONE (2026-08-25), and was an
+owner-directed research task, not a NOW selection.** It sits on the same footing as `AT`, `AU`,
+`AV`, `BH`–`BN`, the `BG-D1` line, `BR`, `BS`, `BT`, `BU`, `BV` and `BW`: explicitly scoped by the
+owner, delivered against that scope, and **it does not satisfy the exactly-one-NOW rule**, which
+remains outstanding. It is the second milestone whose deliverable is an **answer**, and the answer
+is again negative — but this time it comes with a mechanism. Evidence: nine new modules in
+`src/fmis/swing_lab/`, `fmits research geometry`, the read-only `/geometry` dashboard page, 179 new
+tests, full suite **11,271 passing** under `-W error`, 91–99 % statement and branch coverage of the
+new modules, **42/42 mutation probes killed**, and
+[report 0034](reports/0034_2026-08-25_SWING_TRADE_GEOMETRY_RESEARCH.md).
+
+> **What the owner can do after `BX` that was impossible before:** ask *which stop and which target*
+> — not just *which timeframe* — and get a measured answer against a symbol set the repository has
+> never looked at, with every criterion for promotion reported by name. `fmits research geometry`
+> and `/geometry` are that surface.
+
+> **`BX` promoted nothing.** All thirteen pre-declared geometries are REJECTED under both cost
+> scenarios. The production stop and target rules are byte-for-byte unchanged.
+>
+> **The finding worth carrying forward is a refutation.** A minimum planned reward-to-risk — the
+> obvious response to `BW`'s diagnosis — makes the strategy **worse** (development −0.276R →
+> −0.605R, win rate 45.5 % → 6.5 %), because in this system **a high planned R:R is produced by a
+> tight stop, not a distant target** (rank correlation −0.65 on both samples independently).
+>
+> **The defect is the stop.** 73.2 % of stopped-out trades had their original target reached
+> afterwards inside the same window; 48.2 % of stops sit inside one ATR(14); 63.5 % of trades are
+> decided by the very next 4H candle. And costs are decisive rather than marginal: at 10 bp per side
+> the production geometry carries a mean drag of **0.723R per trade** (development expectancy
+> −0.276R → −0.999R), because cost in R is charged against the risk denominator — 0.132R at the
+> median 152 bp stop, but **14.0R** at the tightest 1.43 bp stop.
+>
+> The rule the evidence points at — relocate the stop to the nearest *real* 4H level at least
+> 0.5 ATR away, then require a *real* 1D target that pays the risk — is positive on both samples and
+> survives costs, but it was constructed **after** the results were seen and is a single grid point
+> whose neighbours fail. It is recorded as the **next milestone's pre-declared hypothesis, not as a
+> candidate**. Acting on it remains an owner decision.
+
 **`BW` — Swing Strategy Laboratory & Historical Replay — is DONE (2026-08-25), and was an
 owner-directed research task, not a NOW selection.** It sits on the same footing as `AT`, `AU`,
 `AV`, `BH`–`BN`, the `BG-D1` line, `BR`, `BS`, `BT`, `BU` and `BV`: explicitly scoped by the owner,
@@ -450,6 +487,25 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `BX` — Swing Trade Geometry Research & Policy Candidates · **DONE** *(not committed, not pushed)*
+
+| Field | Value |
+|---|---|
+| **What shipped** | Nine new modules in `fmis.swing_lab` (`geometry`, `geometry_variants`, `geometry_replay`, `geometry_outcome`, `geometry_diagnosis`, `geometry_verdict`, `geometry_study`, `geometry_render`, `geometry_artifact`), the command **`fmits research geometry`**, and a read-only **`/geometry`** dashboard page |
+| **What it answered** | *Why does the swing strategy produce poor payoff geometry, and can a small set of explicit geometry policies fix it?* **Thirteen pre-declared geometries, all REJECTED**, under both cost scenarios. **No candidate deserves forward testing** |
+| **The finding** | **"Minimum 2R" is backwards.** An R:R floor makes development worse (−0.276R → −0.605R; win rate 45.5 % → 6.5 %), because a high planned R:R is produced by a **tight stop**, not a distant target — rank correlation −0.65 with stop/ATR on both samples independently. Setups planning ≥ 3R carry a median stop of **0.22 ATR** |
+| **The diagnosis** | 240 trades reconstructed. 52.9 % plan reward < risk · 85.7 % of target exits pay under +1R · 48.2 % of stops sit inside one ATR(14) · 68.8 % give back a full R of open profit · **73.2 % of stop-outs had their target reached afterwards** · 63.5 % resolve in a single 4H bar |
+| **Costs** | Decisive, not marginal. At 10 bp/side the mean drag is **0.723R per trade** (development expectancy −0.276R → −0.999R). Cost in R is `fee_rate × (entry + exit) / risk`, so it scales inversely with the stop: **0.132R** at the median 152 bp stop, **14.0R** at the tightest 1.43 bp stop |
+| **The holdout** | Nine symbols this repository had **never measured**, over the identical window, cut from one capture so both samples see byte-identical facts. Read limitation **BX-4** before quoting its figures: the *baseline itself* is +0.055R there against −0.276R on development, so the gap is a symbol-class effect, not a geometry effect |
+| **Reuse, not duplication** | No second backtester, no second simulator, no volatility engine. `evaluate_setup`, `ordered_levels`, `simulate_trade`, `PaperCostPolicy`, `OpportunityTracker`, BC's replay transport and the existing ATR(14) feature are all **called**. The BW replay loop was **extracted and shared** rather than copied |
+| **Production seam** | `_nearest` promoted to public `ordered_levels`; `_STOP_SIDE`/`_TARGET_SIDE` to `STOP_SIDE`/`TARGET_SIDE` (private aliases retained). Proved faithful by a 16,000-case differential **and** by BW's primary digest `b2ffcdce…` reproducing exactly |
+| **No-lookahead** | Structural first — `GeometryCandidate` holds no bar and no outcome, so a policy *cannot* read forward; plans are byte-identical with the bar array discarded entirely. Then by mutation, with a warm-up control that must change, plus **absolute** index assertions a shifted-index mutation cannot cancel out of |
+| **Defect found in shipped code** | **`fmits research swing` crashed on every invocation** — `DEFAULT_BACKTEST_LIMIT` referenced but never imported in `cli.py`; no test covered `_run_research`. Fixed, with a regression. BW's figures are unaffected (produced via the Python API) |
+| **Verification** | 219 focused tests; full suite **11,285** under `-W error`; 91–99 % statement and branch coverage of the new modules (not 100 %, misses named); **45/45** mutation probes killed; 13 new architecture guards; **0 guards weakened** (one widened with its reason recorded; two dashboard guards fired and were *obeyed*) |
+| **Release gate** | Independently re-verified. Production `evaluate_setup` unchanged over **2,352,000** input combinations against the committed HEAD copy; BW's digest and **both** BX digests reproduced exactly from fresh fetches; the six headline diagnosis figures recomputed without the diagnosis layer; six trades reconciled against raw provider candles; 24 hostile probes, 0 failures. **Five defects found and fixed** — the largest being that the claimed CLI regression **did not exist**; a static name-resolution guard now covers every CLI runner and is proven to catch the original defect. No trading rule and no result changed |
+| **Not done** | Exit management (partial at +1R, break-even, trailing) is classified **NOT MEASURABLE** with current fill semantics rather than estimated — a third level on one bar multiplies the ambiguous cases. `swing_1d4h1h_roles` remains unmeasured from BW |
+| **Evidence** | `src/fmis/swing_lab/geometry*.py`, `fmits research geometry --help`, `/geometry`, [report 0034](reports/0034_2026-08-25_SWING_TRADE_GEOMETRY_RESEARCH.md) |
 
 ### `BW` — Swing Strategy Laboratory & Historical Replay · **DONE** *(not committed, not pushed)*
 

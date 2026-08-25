@@ -7,11 +7,84 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BV — FMITS Operator Dashboard V0 (2026-08-24): `fmits dashboard` makes FMITS
-something the owner can **look at**. Seven read-only pages on `http://127.0.0.1:8787/` over the
-engines that already existed, computing nothing of their own. Committed as `0f31293`.
+**Last updated for:** BW — Swing Strategy Laboratory & Historical Replay (2026-08-25): the first
+milestone whose deliverable is an **answer** rather than a feature. `fmits research swing` replays
+the production swing policy and four pre-specified alternatives over the same historical facts and
+measures them. Independently verified at the release gate — production behaviour proved unchanged over
+115,200 input combinations, and the primary study's digest reproduced exactly on a fresh re-run.
 Full record:
-[report 0032](../../reports/0032_2026-08-24_OPERATOR_DASHBOARD_V0_IMPLEMENTATION.md).
+[report 0033](../../reports/0033_2026-08-25_SWING_STRATEGY_LABORATORY_IMPLEMENTATION.md).
+
+---
+
+## Milestone BW — Swing Strategy Laboratory & Historical Replay
+
+- **The headline is a finding, not a capability: the swing strategy does not currently have an
+  edge, and the 1W gate is not the reason.** Over 2022-10-15 → 2026-08-01 on BTC/ETH/BNB/LTC the
+  production policy produced 59 trades at **−0.535R expectancy**, a 34.6 % win rate and a **0.16
+  profit factor**. A held-out study over seven symbols and a different window agrees: −0.239R.
+  Every variant tested is loss-making in both.
+
+- **The binding defect is trade geometry.** The average winner pays **+0.301R** while the average
+  loser costs **−0.978R**; break-even at a 34.6 % win rate needs +1.848R. **48 % of setups have a
+  planned reward smaller than their planned risk**, and **94 % of trades that reach their target
+  return less than +1R** — because the stop is the nearest 4H level and the target the nearest 1D
+  level, with nothing requiring reward > risk. Stops as tight as **1.3 basis points** (0.013 % of price) occur. This is
+  a **production finding, deliberately not fixed in this milestone**: changing the policy on the
+  strength of a backtest, inside the milestone that built the backtest, is the sequence the brief
+  forbids.
+
+- **The owner's hypothesis was tested and is not supported.** Demoting 1W from gate to context
+  beat the baseline on the primary study and *lost* to it on the holdout, with twice the drawdown.
+  What reproduced in both is that removing the weekly role **entirely** (`swing_1d4h_core`) is the
+  least-bad of the four — and still loss-making. The gate itself blocks 54.7 % of the instants it
+  judges but only **14.6 %** materially, and the 74 trades it removed were themselves losers
+  (−0.270R). It was removing bad trades from a bad strategy.
+
+- **New package `fmis.swing_lab`** (11 modules) plus `fmits research` and a read-only `/lab`
+  dashboard page. **No second backtester was built**: Milestone BC's replay transport, derived
+  warm-up, window boundaries and setup identity are all called, as are `fmis.paper.fills`'s gap
+  rule and `fmis.trade_lifecycle.PaperCostPolicy`. A guard asserts the package defines no fill
+  rule of its own.
+
+- **Facts once, policies many.** `SetupInputs` is policy-independent, so the lab computes the facts
+  once per (symbol, instant) and evaluates every variant sharing an interval mapping over them.
+  That is ~4× cheaper and, more importantly, makes the comparison *exact* — separate replays could
+  differ for reasons that are not the policy.
+
+- **One production seam, on BC's exact precedent.** `evaluate_setup` gained a research-only
+  `research_context_role` taking a `ContextRoleTreatment` — three discrete named semantics, never a
+  threshold. Omitted it changes nothing; supplied it stamps a research `policy_id`. Every BC-era
+  research id is byte-identical.
+
+- **No-lookahead is proved by mutating the future**: scaling every post-window candle ×1000 changes
+  no observation, and a warm-up mutation *does* change them — the control that stops the proof
+  being vacuous. The control variant reproduced production on all 33,264 observations and 59
+  trades, which is what licenses every counterfactual.
+
+- **Verification.** 273 focused tests; full suite 10,671 → **10,969** under `-W error`; **95 %**
+  statement and branch coverage of the new package (not 100 % — see report §20);
+  **35/35 mutation probes killed** with SHA-256-verified byte-exact restoration; 0 import cycles; 0 export collisions (four found and fixed); 0 ADRs;
+  **0 guards weakened** — seven widened, each with its reason recorded in the test.
+
+- **Nine defects found**, two of them in production (the geometry and the 1.3 bp stops, both
+  reported not fixed), one a latent under-warmed fixture in this milestone's own tests, two
+  mutation survivors now killed, and four export collisions.
+
+- **Known limitations.** The weekly warm-up costs ~4.8 years and excludes SOL/DOT/AVAX from any
+  multi-year window (BW-2). R is a per-trade statistic and **not** an account return (BW-4).
+  Nothing here is a forward test (BW-7). The fifth specified variant,
+  `swing_1d4h1h_roles` (1D/4H/1H), is implemented and runnable but **was not measured** — it needs
+  ~4× the instants — and is the first thing a follow-up should run.
+
+- **Nothing was promoted, and the verdict is now derived rather than asserted.** `LabVerdict` /
+  `classify` compute REJECTED / INCONCLUSIVE / CANDIDATE_FOR_FORWARD_TEST from the measured
+  expectancy alone, so any reader can recompute a verdict from the artifact. Every measured
+  variant is **REJECTED** on both the primary study and the holdout; `swing_1d4h1h_roles`
+  remains **INCONCLUSIVE** because it was specified and implemented but never measured.
+  **No variant is approved for forward or live testing** — the strongest verdict this system
+  can produce means *worth testing forward*, and none reached it. The recommendation is to fix
+  the geometry first and re-run.
 
 ---
 

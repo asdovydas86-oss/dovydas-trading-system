@@ -281,6 +281,29 @@ Committed as `2b30e38` (production code + tests) with the documentation commit d
 > a guard test asserts `fmis.swing_workspace`, `fmis.today` and `fmis.setup_evidence` consume none
 > of it, so attaching macro as a separate evidence domain later is a deliberate edit.
 
+**`BW` — Swing Strategy Laboratory & Historical Replay — is DONE (2026-08-25), and was an
+owner-directed research task, not a NOW selection.** It sits on the same footing as `AT`, `AU`,
+`AV`, `BH`–`BN`, the `BG-D1` line, `BR`, `BS`, `BT`, `BU` and `BV`: explicitly scoped by the owner,
+delivered against that scope, and **it does not satisfy the exactly-one-NOW rule**, which remains
+outstanding. It is the first milestone whose deliverable is an **answer** rather than a feature,
+and the answer is negative: measured over 3.79 years on four symbols and confirmed on a seven-symbol
+holdout, **the swing strategy has no edge in any of the four configurations tested**, and the 1W
+gate is not the reason. Evidence: `src/fmis/swing_lab/` (11 modules), `fmits research swing`, the
+read-only `/lab` dashboard page, 273 new tests, full suite **10,969 passing** under `-W error`,
+95 % statement and branch coverage of the new package, 35/35 mutation probes killed, nine defects
+found, and [report 0033](reports/0033_2026-08-25_SWING_STRATEGY_LABORATORY_IMPLEMENTATION.md).
+Released at the BW release gate: production behaviour proved unchanged over 115,200 input
+combinations, and the primary study's digest reproduced exactly on an independent re-run.
+
+> **`BW` promoted nothing, and that is the milestone's own rule.** Every variant is classified
+> REJECTED; the one specified variant that was not measured (`swing_1d4h1h_roles`, 1D/4H/1H) is
+> INCONCLUSIVE. The production strategy is byte-for-byte unchanged — `CONFIRMATION_LOOKBACK_BARS`
+> is still 10, `MINIMUM_AGREEING_FAMILIES` still 2, `DEFAULT_TIMEFRAMES` still 1W/1D/4H. The two
+> production defects it found (winners paying less than losers cost, and stops as tight as 13 basis
+> points) are **reported and deliberately not fixed**: changing a trading policy on the strength of
+> a backtest, inside the milestone that built the backtest, is exactly the sequence this work was
+> commissioned to avoid. **Acting on them is an owner decision and is the natural next milestone.**
+
 **`BV` — FMITS Operator Dashboard V0 — is DONE (2026-08-24), and was an owner-directed
 implementation task, not a NOW selection.** It sits on the same footing as `AT`, `AU`, `AV`,
 `BH`–`BN`, the `BG-D1` line, `BR`, `BS`, `BT` and `BU`: explicitly scoped by the owner, delivered
@@ -427,6 +450,20 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `BW` — Swing Strategy Laboratory & Historical Replay · **DONE** *(not committed, not pushed)*
+
+| Field | Value |
+|---|---|
+| **What shipped** | One new application-layer package, `fmis.swing_lab` (11 modules), one command **`fmits research swing`**, and a read-only **`/lab`** dashboard page. A reproducible historical laboratory that replays the production swing policy and four pre-specified alternatives over the *same* facts at the same instants |
+| **What it answered** | *Is the 1W gate too restrictive for swing trading?* **No.** The gate blocks 54.7 % of judged instants but only 14.6 % materially, and the 74 trades it removed were themselves losers (−0.270R). The strategy is loss-making with the gate (−0.535R) and without it (−0.335R), on a holdout too (−0.239R / −0.260R) |
+| **The real finding** | **Trade geometry.** Average winner +0.301R, average loser −0.978R; break-even at a 34.6 % win rate needs +1.848R. 48 % of setups plan a reward smaller than their risk; 94 % of target-exits return under +1R. The stop is the nearest 4H level and the target the nearest 1D level, and nothing requires reward > risk |
+| **Reuse, not duplication** | No second backtester. BC's replay transport, derived warm-up, window boundaries and `OpportunityTracker` are called; so are `fmis.paper.fills.fill_at_level` (the gap rule) and `fmis.trade_lifecycle.PaperCostPolicy`. A guard asserts the package defines no fill rule of its own |
+| **Production seam** | One research-only keyword on `evaluate_setup`, `research_context_role`, taking a `ContextRoleTreatment` — three discrete named semantics, never a threshold. Omitted it changes nothing; every BC-era research `policy_id` is byte-identical |
+| **No-lookahead** | Proved by mutating the future: post-window candles scaled ×1000 change no observation, while a warm-up mutation *does* — the control that stops the proof being vacuous. The explicit hard-gate control reproduced production on all 33,264 observations and 59 trades |
+| **Verification** | 273 focused tests; full suite **10,969** under `-W error`; 95 % statement and branch coverage (not 100 %); **35/35** mutation probes killed with SHA-256-verified byte-exact restoration; 0 import cycles; 0 export collisions (four found and fixed); 0 ADRs; **0 guards weakened** (seven widened, each with its reason recorded) |
+| **Not done** | `swing_1d4h1h_roles` (1D context / 4H setup / 1H execution) is specified and implemented but **not measured** — it needs ~4× the instants. It is the first thing a follow-up should run |
+| **Evidence** | `src/fmis/swing_lab/`, `fmits research --help`, `/lab`, [report 0033](reports/0033_2026-08-25_SWING_STRATEGY_LABORATORY_IMPLEMENTATION.md) |
 
 ### `BV` — FMITS Operator Dashboard V0 · **DONE** *(committed and pushed)*
 

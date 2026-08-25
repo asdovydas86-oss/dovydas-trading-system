@@ -251,6 +251,56 @@ the automation ladder remains unstarted.
 
 ## 4. Product milestones
 
+### 2026-08-25 · `BW` — `fmits research swing` — the owner can ask whether a strategy actually works
+
+**Status:** Released — production commit on top of `d8e1b9e`, with this product-docs commit recorded
+directly on top of it. **A new user-visible capability.**
+
+**What the owner can do that was impossible before: measure whether the swing strategy has an edge,
+instead of believing it does.**
+
+```
+uv run fmits research swing BTCUSDT ETHUSDT BNBUSDT LTCUSDT \
+    --start 2022-10-15T00:00:00+00:00 --robustness --save study.lab.json
+uv run fmits dashboard --lab-artifact study.lab.json     # then /lab
+```
+
+Until now FMITS could state a setup, explain it and simulate it forward — but it could not say
+whether following those setups had ever made money. It can now: the production policy is replayed
+over years of real closed candles, one historical instant at a time, and alternative policies are
+replayed **over the same facts at the same instants** so a difference between them is the policy and
+nothing else.
+
+| It reports | |
+|---|---|
+| Per variant | trades, measurable trades, ambiguous trades, win rate, expectancy in R, median R, profit factor, total R, max drawdown, MFE, MAE, bars held — **every rate beside the sample it came from** |
+| The 1W gate | how often it blocked, how often that block actually removed a setup, and how the trades it removed performed under the identical rules |
+| Robustness | chronological, walk-forward, per-symbol and long/short splits, with cohort agreement stated |
+| A verdict | REJECTED / INCONCLUSIVE / CANDIDATE-FOR-FORWARD-TEST, **derived from the measured expectancy alone** so the owner can recompute it from the artifact |
+
+**Every experiment is reproducible.** A run writes a JSON artifact carrying its manifest and every
+trade, and a SHA-256 result digest. Re-running the same experiment reproduces the digest exactly —
+verified at release by re-fetching and re-replaying from scratch.
+
+**The first thing it measured was bad news, and that is the point.**
+
+> The current production swing strategy showed **no positive edge** in any configuration tested:
+> −0.535R expectancy over 59 trades on BTC/ETH/BNB/LTC (2022-10-15 → 2026-08-01), and −0.239R on a
+> seven-symbol holdout. The owner's hypothesis — that the 1W gate is too restrictive — was **not
+> supported**: removing the gate did not reliably help, and the strongest measured defect is trade
+> **geometry**, where the average winner pays +0.301R while the average loser costs −0.978R.
+
+**Nothing was promoted and no strategy changed.** The production policy is byte-for-byte unchanged —
+proved at release by comparing it against the previous commit across 115,200 input combinations with
+zero differences. No verdict this system produces approves live trading; the strongest one available
+means *worth testing forward*, and no variant reached it. `swing_1d4h1h_roles` was specified and
+implemented but not measured, and remains **INCONCLUSIVE**.
+
+**The `/lab` page is read-only**, like the rest of the dashboard: no form, no button, no input, no
+script, and no control that could change a strategy.
+
+---
+
 ### 2026-08-24 · `BV` — `fmits dashboard` — FMITS becomes something the owner can look at
 
 **Status:** Released — `0f31293` (production code + tests) on top of `1a73cf8`, with this

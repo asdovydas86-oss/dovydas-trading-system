@@ -28,6 +28,15 @@ _MODULES = (
     "__init__.py",
     "artifact.py",
     "gate.py",
+    "geometry.py",
+    "geometry_artifact.py",
+    "geometry_diagnosis.py",
+    "geometry_outcome.py",
+    "geometry_render.py",
+    "geometry_replay.py",
+    "geometry_study.py",
+    "geometry_variants.py",
+    "geometry_verdict.py",
     "metrics.py",
     "models.py",
     "render.py",
@@ -37,6 +46,11 @@ _MODULES = (
     "trades.py",
     "variants.py",
 )
+
+#: The Milestone BX modules that decide a stop or a target. Guarded more tightly
+#: than the rest of the package: these are the ones a lookahead or a fabricated
+#: level would have to pass through.
+_GEOMETRY_POLICY_MODULES = ("geometry.py", "geometry_variants.py")
 
 
 def _source(name: str) -> str:
@@ -144,13 +158,14 @@ class TestNoProductionSideEffects:
     def test_only_the_artifact_module_touches_the_filesystem(self, name: str) -> None:
         """One module may write, and it writes a research record, never a store."""
         text = _source(name)
-        if name == "artifact.py":
+        if name in ("artifact.py", "geometry_artifact.py"):
             return
         for token in ("open(", "write_text", "mkdir", "unlink", "Path("):
             assert token not in text, f"{name} touches the filesystem via {token}"
 
-    def test_the_artifact_module_writes_no_store_record(self) -> None:
-        text = _source("artifact.py")
+    @pytest.mark.parametrize("name", ("artifact.py", "geometry_artifact.py"))
+    def test_the_artifact_modules_write_no_store_record(self, name: str) -> None:
+        text = _source(name)
         for token in ("fmis.records", "fmis.persistence", "fmis.archive", "fmis.ledger"):
             assert token not in text
 
@@ -253,3 +268,137 @@ class TestNoPromotionVocabulary:
             "adopt this variant",
         ):
             assert phrase not in text, f"{name} promotes a strategy"
+
+
+class TestGeometryIsResearchOnly:
+    """Milestone BX's own absences. Each is a way a geometry rule could go wrong."""
+
+    @pytest.mark.parametrize("name", _GEOMETRY_POLICY_MODULES)
+    def test_no_policy_module_constructs_a_price_level(self, name: str) -> None:
+        """**A level is never invented.** Every stop and target must be one the
+        structural engines already produced, so a policy module may not build a
+        `PriceLevel` — 'place the target at 2R' has no spelling here."""
+        for node in ast.walk(_tree(name)):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                assert node.func.id != "PriceLevel", f"{name} constructs a level"
+
+    @pytest.mark.parametrize("name", _GEOMETRY_POLICY_MODULES)
+    def test_no_policy_module_reads_a_bar_or_an_outcome(self, name: str) -> None:
+        """A geometry policy decides before the outcome exists. If it could name
+        an MFE, an MAE or a realized R, a future value could reach an admission
+        rule — which is exactly what §11 of the brief forbids."""
+        text = _source(name)
+        for token in (
+            "mfe", "mae", "net_r", "gross_r", "PriceBar", "exit_price",
+            "simulate_trade", "fill_at_level", "reached(",
+        ):
+            assert token not in text, f"{name} reads {token}"
+
+    @pytest.mark.parametrize("name", _GEOMETRY_POLICY_MODULES)
+    def test_no_policy_module_imports_the_outcome_layer(self, name: str) -> None:
+        """The isolation is one-directional and asserted in both directions."""
+        imported = _imported_modules(name)
+        for forbidden in (
+            "fmis.swing_lab.geometry_outcome",
+            "fmis.swing_lab.geometry_diagnosis",
+            "fmis.swing_lab.trades",
+            "fmis.paper.fills",
+            "fmis.paper.models",
+        ):
+            assert forbidden not in imported, f"{name} imports {forbidden}"
+
+    def test_the_outcome_layer_imports_no_policy(self) -> None:
+        """The other direction: an outcome statistic can never become a rule."""
+        imported = _imported_modules("geometry_outcome.py")
+        assert "fmis.swing_lab.geometry_variants" not in imported
+
+    def test_the_level_ordering_rule_is_productions_own(self) -> None:
+        """`ordered_levels` is called, never restated. A research copy of the
+        ordering is exactly the copy that could drift from production's."""
+        assert "ordered_levels" in _imported_modules_names("geometry.py")
+        for name in _MODULES:
+            tree = _tree(name)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    assert node.name != "ordered_levels", f"{name} defines its own"
+
+    def test_no_geometry_module_assigns_a_production_constant(self) -> None:
+        """Threshold shopping, made structurally impossible for the constants a
+        researcher would most want to move.
+
+        `SAMPLE_FLOOR` is exempt in `metrics.py` alone, because that module
+        **owns** it. Every other module — including all nine BX ones — may read
+        it and may not rebind it, which is the property that matters: a variant
+        cannot lower the floor to make its own thin cohort reportable.
+        """
+        owners = {"SAMPLE_FLOOR": "metrics.py"}
+        for name in _MODULES:
+            for node in ast.walk(_tree(name)):
+                if not isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                    continue
+                targets = (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
+                for target in targets:
+                    if not isinstance(target, ast.Name):
+                        continue
+                    if owners.get(target.id) == name:
+                        continue
+                    assert target.id not in (
+                        "MINIMUM_AGREEING_FAMILIES",
+                        "CONFIRMATION_LOOKBACK_BARS",
+                        "DEFAULT_TIMEFRAMES",
+                        "SAMPLE_FLOOR",
+                    ), f"{name} assigns {target.id}"
+
+    def test_the_trade_simulator_is_milestone_bws(self) -> None:
+        """No second simulator: the geometry replay calls `simulate_trade`."""
+        assert "fmis.swing_lab.trades" in _imported_modules("geometry_replay.py")
+        for name in _MODULES:
+            if name == "trades.py":
+                continue
+            for node in ast.walk(_tree(name)):
+                if isinstance(node, ast.FunctionDef):
+                    assert node.name != "simulate_trade", f"{name} defines its own"
+
+    def test_the_volatility_measure_is_an_existing_feature(self) -> None:
+        """No volatility engine was added: the ATR is the production feature,
+        named from the production constant rather than retyped."""
+        imported = _imported_modules("geometry_replay.py")
+        assert "fmis.features.indicators.atr" in imported
+        assert "fmis.pipeline.regime" in imported
+        for name in _MODULES:
+            text = _source(name)
+            assert "true_range" not in text, f"{name} computes a true range"
+
+    def test_no_geometry_module_defines_a_second_metrics_engine(self) -> None:
+        for name in _MODULES:
+            if name == "metrics.py":
+                continue
+            for node in ast.walk(_tree(name)):
+                if isinstance(node, ast.FunctionDef):
+                    assert node.name not in (
+                        "compute_lab_metrics", "classify", "lab_breakdown_by"
+                    ), f"{name} redefines {node.name}"
+
+    def test_the_verdict_layer_can_never_approve_trading(self) -> None:
+        text = _source("geometry_verdict.py")
+        assert "approved_for_live" not in text.lower()
+        assert "APPROVED" not in text or "is_approved_for_trading" in text
+
+    def test_no_geometry_module_names_a_position_size_or_leverage(self) -> None:
+        """§7: BX must not improve a result by risking more. Position sizing is
+        a separate layer and this package cannot reach it."""
+        for name in _MODULES:
+            text = _source(name).lower()
+            for token in ("leverage", "position_size", "notional_size", "margin"):
+                assert token not in text, f"{name} names {token}"
+
+
+def _imported_modules_names(name: str) -> set[str]:
+    """Every bare name imported by ``name`` (as opposed to every module)."""
+    found: set[str] = set()
+    for node in ast.walk(_tree(name)):
+        if isinstance(node, ast.ImportFrom):
+            found.update(alias.asname or alias.name for alias in node.names)
+    return found

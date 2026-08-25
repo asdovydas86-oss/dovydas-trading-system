@@ -42,6 +42,8 @@ from fmis.swing_setup.models import Direction
 
 __all__ = [
     "ARTIFACT_FILENAME_SUFFIX",
+    "trade_payload",
+    "trade_from_payload",
     "encode_study",
     "write_study",
     "read_artifact",
@@ -60,7 +62,7 @@ def _instant(value: datetime | None) -> str | None:
     return None if value is None else value.isoformat()
 
 
-def _trade_payload(trade: LabTrade) -> dict[str, Any]:
+def trade_payload(trade: LabTrade) -> dict[str, Any]:
     return {
         "variant_id": trade.variant_id,
         "symbol": trade.symbol,
@@ -89,7 +91,7 @@ def _trade_payload(trade: LabTrade) -> dict[str, Any]:
     }
 
 
-def _trade_from_payload(raw: Mapping[str, Any]) -> LabTrade:
+def trade_from_payload(raw: Mapping[str, Any]) -> LabTrade:
     def decimal(key: str) -> Decimal | None:
         value = raw.get(key)
         return None if value is None else Decimal(value)
@@ -151,7 +153,7 @@ def encode_study(study: LabStudy) -> dict[str, Any]:
                     role.value: interval
                     for role, interval in result.variant.timeframes.items()
                 },
-                "trades": [_trade_payload(trade) for trade in result.trades],
+                "trades": [trade_payload(trade) for trade in result.trades],
             }
             for result in study.results
         ],
@@ -218,7 +220,7 @@ class LabArtifact:
         self.gate: Mapping[str, Any] = payload["gate"]
         self.trades_by_variant: dict[str, tuple[LabTrade, ...]] = {
             variant["variant_id"]: tuple(
-                _trade_from_payload(trade) for trade in variant["trades"]
+                trade_from_payload(trade) for trade in variant["trades"]
             )
             for variant in payload["variants"]
         }

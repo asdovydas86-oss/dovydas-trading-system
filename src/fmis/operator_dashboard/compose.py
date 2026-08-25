@@ -189,6 +189,7 @@ def build_snapshot(
     statistics: Any | None = None,
     statistics_error: BaseException | None = None,
     lab: LabView | None = None,
+    geometry: Any | None = None,
 ) -> OperatorDashboardSnapshot:
     """Assemble one snapshot from engine outputs that have already been read.
 
@@ -340,6 +341,21 @@ def build_snapshot(
         )
     )
 
+    # --- trade geometry ------------------------------------------------------
+    # Same discipline as the lab section above: decoded by the caller, handed in
+    # already parsed, so this package still opens nothing.
+    geometry_section = (
+        None
+        if geometry is None
+        else _section(
+            "geometry",
+            geometry,
+            as_of=None,
+            source=f"saved geometry artifact · {geometry.experiment_id}",
+            empty=not geometry.policies,
+        )
+    )
+
     return OperatorDashboardSnapshot(
         refreshed_at=refreshed_at,
         reference_time=reference_time,
@@ -352,6 +368,7 @@ def build_snapshot(
         performance=performance_section,
         health=health_section,
         lab=lab_section,
+        geometry=geometry_section,
         warnings=warnings,
         limitations=DASHBOARD_LIMITATIONS,
         schema_version=DASHBOARD_SCHEMA_VERSION,
@@ -371,6 +388,7 @@ def refresh(
     macro_runner: Callable[..., Any] = run_macro_context,
     statistics_runner: Callable[..., Any] = report_for_store,
     lab: LabView | None = None,
+    geometry: Any | None = None,
 ) -> OperatorDashboardSnapshot:
     """Perform one refresh: four reads, each isolated, then one snapshot.
 

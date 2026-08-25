@@ -41,6 +41,13 @@ from fmis.operator_dashboard.models import (
     DataHealthView,
     EquityStep,
     EvidenceView,
+    GeometryCriterionRow,
+    GeometryFindingRow,
+    GeometryPolicyRow,
+    GeometrySampleRow,
+    GeometrySensitivityRow,
+    GeometryShareRow,
+    GeometryView,
     LabGateRow,
     LabVariantRow,
     LabView,
@@ -76,6 +83,7 @@ __all__ = [
     "health_view",
     "warning_rows",
     "lab_view",
+    "geometry_view",
 ]
 
 
@@ -931,6 +939,160 @@ def lab_view(artifact: Any, *, digest_verified: bool) -> LabView:
             blocked_long=gate["blocked_long"],
             blocked_short=gate["blocked_short"],
             counterfactual_note=gate["counterfactual_note"],
+        ),
+        limitations=tuple(manifest["limitations"]),
+    )
+
+
+def _geometry_sample(entry: Any, metrics: Any) -> GeometrySampleRow:
+    """One sample's row. Every figure was reduced by `fmis.swing_lab.metrics`."""
+    win_rate, win_rate_reason = _measure(metrics.win_rate)
+    expectancy, expectancy_reason = _measure(metrics.expectancy_r)
+    median, median_reason = _measure(metrics.median_r)
+    profit_factor, profit_factor_reason = _measure(metrics.profit_factor)
+    planned_rr = next(
+        (
+            item["median"]
+            for item in entry["diagnosis"]["distributions"]
+            if item["label"] == "planned_rr"
+        ),
+        None,
+    )
+    return GeometrySampleRow(
+        sample=entry["sample"],
+        trades=metrics.trades,
+        measurable=metrics.measurable_trades,
+        refused=entry["refused"],
+        win_rate=win_rate,
+        win_rate_reason=win_rate_reason,
+        expectancy=expectancy,
+        expectancy_reason=expectancy_reason,
+        median_r=median,
+        median_r_reason=median_reason,
+        profit_factor=profit_factor,
+        profit_factor_reason=profit_factor_reason,
+        total_r=format(metrics.total_r.quantize(_LAB_PLACES), "f"),
+        max_drawdown=format(
+            metrics.max_drawdown.max_drawdown_r.quantize(_LAB_PLACES), "f"
+        ),
+        median_planned_rr=None if planned_rr is None else f"{planned_rr:.3f}",
+        largest_symbol_share=entry["largest_symbol_share"],
+    )
+
+
+def geometry_view(artifact: Any, *, digest_verified: bool) -> GeometryView:
+    """Adapt one geometry artifact into the page's read model. A copy, never a measure.
+
+    Every figure arrived reduced; nothing here is totalled, ranked or
+    re-derived. Policy order is the artifact's own, which is the order the
+    geometries were **pre-declared** in — deliberately not an order by result,
+    because a table sorted by expectancy is a table that has chosen a winner.
+    """
+    manifest = artifact.manifest
+    rows: list[GeometryPolicyRow] = []
+    for policy_id in artifact.policy_ids:
+        entry = artifact.policy(policy_id)
+        rows.append(
+            GeometryPolicyRow(
+                policy_id=policy_id,
+                title=entry["title"],
+                family=entry["family"],
+                hypothesis=entry["hypothesis"],
+                stop_rule=entry["stop_rule"],
+                target_rule=entry["target_rule"],
+                is_production_geometry=entry["is_production_geometry"],
+                verdict=entry["verdict"],
+                verdict_statement=entry["verdict_statement"],
+                development=_geometry_sample(
+                    entry["development"], artifact.metrics(policy_id, "development")
+                ),
+                holdout=_geometry_sample(
+                    entry["holdout"], artifact.metrics(policy_id, "holdout")
+                ),
+                criteria=tuple(
+                    GeometryCriterionRow(
+                        name=item["name"],
+                        requirement=item["requirement"],
+                        passed=item["passed"],
+                        observed=item["observed"],
+                    )
+                    for item in entry["criteria"]
+                ),
+                blocking_criteria=tuple(
+                    item["name"]
+                    for item in entry["criteria"]
+                    if item["passed"] is not True
+                ),
+            )
+        )
+
+    sensitivity: list[GeometrySensitivityRow] = []
+    plateau_notes: list[str] = []
+    for curve in artifact.payload["sensitivity"]:
+        plateau_notes.append(
+            f"{curve['kind']}: "
+            + {
+                True: "plateau — every measurable point agrees in sign",
+                False: "NOT a plateau — the sign changes across the grid",
+                None: "not evaluable — fewer than three points cleared the floor",
+            }[curve["is_plateau"]]
+        )
+        for point in curve["points"]:
+            sensitivity.append(
+                GeometrySensitivityRow(
+                    kind=curve["kind"],
+                    threshold=f"{point['threshold']:.2f}",
+                    development_trades=point["development_trades"],
+                    development_expectancy=point["development_expectancy_r"],
+                    holdout_trades=point["holdout_trades"],
+                    holdout_expectancy=point["holdout_expectancy_r"],
+                )
+            )
+
+    baseline = artifact.payload["policies"][0]["development"]["diagnosis"]
+    return GeometryView(
+        experiment_id=manifest["experiment_id"],
+        development_symbols=tuple(manifest["development_symbols"]),
+        holdout_symbols=tuple(manifest["holdout_symbols"]),
+        measurement_start=manifest["measurement_start"],
+        measurement_end=manifest["measurement_end"],
+        admission=manifest["admission_policy_id"],
+        candidate_count=manifest["candidate_count"],
+        cost_policy=manifest["cost_policy"]["policy_id"],
+        result_digest=manifest["result_digest"],
+        digest_verified=digest_verified,
+        policies=tuple(rows),
+        candidate_policy_ids=artifact.candidate_policy_ids,
+        sensitivity=tuple(sensitivity),
+        plateau_notes=tuple(plateau_notes),
+        baseline_findings=tuple(
+            GeometryFindingRow(
+                question=item["question"],
+                supported=item["supported"],
+                evidence=item["evidence"],
+                reading=item["reading"],
+            )
+            for item in baseline["findings"]
+        ),
+        # Carried as the three stored values, never combined into a rate here:
+        # a percentage is arithmetic, `fmis.swing_lab.geometry_diagnosis.Share`
+        # already decided whether one may be stated at all, and this layer must
+        # not be able to state one it refused.
+        baseline_shares=tuple(
+            GeometryShareRow(
+                label=label,
+                numerator=baseline[key]["numerator"],
+                denominator=baseline[key]["denominator"],
+                fraction=baseline[key]["fraction"],
+                text=baseline[key]["text"],
+            )
+            for label, key in (
+                ("setups planning reward < risk", "reward_below_risk"),
+                ("target exits under +1R", "target_exits_below_one_r"),
+                ("stops inside one ATR(14)", "stops_inside_one_atr"),
+                ("trades giving back a full R", "mfe_exceeds_realized_by_one_r"),
+                ("stop-outs whose target came later", "stopped_then_reached_target"),
+            )
         ),
         limitations=tuple(manifest["limitations"]),
     )

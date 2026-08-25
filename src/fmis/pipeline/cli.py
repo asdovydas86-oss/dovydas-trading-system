@@ -72,11 +72,19 @@ from fmis.swing_lab import (
     write_study,
 )
 from fmis.swing_lab import read_artifact, verify_digest
+from fmis.swing_lab.geometry_artifact import (
+    read_geometry_artifact,
+    verify_geometry_digest,
+    write_geometry_study,
+)
+from fmis.swing_lab.geometry_render import render_geometry_study
+from fmis.swing_lab.geometry_study import run_geometry_experiment
 from fmis.swing_lab.render import render_robustness, render_study
-from fmis.operator_dashboard.sections import lab_view
+from fmis.operator_dashboard.sections import geometry_view, lab_view
 from fmis.swing_setup import (
     BacktestError,
     DEFAULT_BACKTEST_DAYS,
+    DEFAULT_BACKTEST_LIMIT,
     DEFAULT_BACKTEST_SYMBOLS,
     DEFAULT_EVALUATION_WINDOW_BARS,
     DEFAULT_VARIANT_MAX_AGES,
@@ -3324,6 +3332,17 @@ def _configure_dashboard(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--geometry-artifact",
+        default=None,
+        metavar="PATH",
+        dest="geometry_artifact",
+        help=(
+            "show a saved Trade Geometry experiment on the /geometry page. Read "
+            "HERE and handed to the dashboard already decoded, on the same terms "
+            "as --lab-artifact. Omitted, /geometry says no experiment is loaded"
+        ),
+    )
+    parser.add_argument(
         "--no-relationships",
         action="store_true",
         help=(
@@ -3358,6 +3377,17 @@ def _run_dashboard(args: argparse.Namespace) -> int:
             print(f"fmits dashboard: {error}", file=sys.stderr)
             return EXIT_FAILURE
 
+    geometry = None
+    if args.geometry_artifact is not None:
+        try:
+            record = read_geometry_artifact(args.geometry_artifact)
+            geometry = geometry_view(
+                record, digest_verified=verify_geometry_digest(record)
+            )
+        except SwingLabError as error:
+            print(f"fmits dashboard: {error}", file=sys.stderr)
+            return EXIT_FAILURE
+
     def announce(url: str, _server: object) -> None:
         # Flushed explicitly: piped or redirected, this banner is block-buffered
         # and the owner would stare at an empty terminal while the socket sat
@@ -3380,6 +3410,7 @@ def _run_dashboard(args: argparse.Namespace) -> int:
                 store_root=args.store_root,
                 with_relationships=not args.no_relationships,
                 lab=lab,
+                geometry=geometry,
             ),
             allow_public=args.allow_public,
             quiet=True,
@@ -3395,15 +3426,41 @@ def _run_dashboard(args: argparse.Namespace) -> int:
 def _configure_research(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "area",
-        choices=("swing",),
+        choices=("swing", "geometry"),
         help=(
-            "which research question to run. Only 'swing' exists today: the "
-            "Swing Strategy Laboratory's timeframe-policy comparison"
+            "which research question to run. 'swing' is the Swing Strategy "
+            "Laboratory's timeframe-policy comparison (Milestone BW); "
+            "'geometry' is the Swing Trade Geometry Laboratory's stop/target "
+            "comparison (Milestone BX), which needs --development and --holdout "
+            "instead of a positional universe"
         ),
     )
     parser.add_argument(
-        "symbols", nargs="+", metavar="SYMBOL",
-        help="the universe to replay, in report order",
+        "symbols", nargs="*", metavar="SYMBOL",
+        help=(
+            "the universe to replay, in report order. Required for 'swing'; "
+            "'geometry' refuses it and asks for --development/--holdout, "
+            "because a geometry study that could not say which symbols were "
+            "held back would have no holdout at all"
+        ),
+    )
+    parser.add_argument(
+        "--development", nargs="+", default=None, metavar="SYMBOL",
+        help=(
+            "geometry only: the symbols variants may be judged on. These are "
+            "NOT out-of-sample — Milestone BW already measured them"
+        ),
+    )
+    parser.add_argument(
+        "--holdout", nargs="+", default=None, metavar="SYMBOL",
+        help=(
+            "geometry only: symbols held back, measured over the SAME window. "
+            "Must be disjoint from --development"
+        ),
+    )
+    parser.add_argument(
+        "--no-sensitivity", action="store_true",
+        help="geometry only: skip the parameter-sensitivity grids (faster)",
     )
     parser.add_argument(
         "--start", required=True, metavar="ISO8601",
@@ -3479,6 +3536,22 @@ def _run_research(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return EXIT_FAILURE
+    if args.area == "geometry":
+        return _run_geometry_research(args, start=start, end=end)
+    if not args.symbols:
+        print(
+            "fmits research swing: at least one SYMBOL is required",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    for name in ("development", "holdout"):
+        if getattr(args, name) is not None:
+            print(
+                f"fmits research swing: --{name} belongs to 'geometry'; the "
+                "swing study replays one universe and holds nothing back",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
     try:
         chosen = (
             PRE_SPECIFIED_VARIANTS
@@ -3525,20 +3598,85 @@ def _run_research(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _run_geometry_research(
+    args: argparse.Namespace, *, start: datetime, end: datetime
+) -> int:
+    """Run one Swing Trade Geometry experiment and print its report.
+
+    **Read-only research.** Replays history once, measures pre-declared geometry
+    policies against a development sample and a held-back one, and prints what
+    each concluded. It writes no trading record, changes no production strategy
+    and promotes nothing: the strongest verdict it can produce means *worth
+    testing forward*, which is a later, explicit owner decision.
+
+    Geometries are **defined in code** and cannot be described on this command
+    line — a stop rule invented at a shell prompt is a rule nobody pre-declared.
+    """
+    if args.symbols:
+        print(
+            "fmits research geometry: name symbols with --development and "
+            "--holdout, not positionally. A geometry study that could not say "
+            "which symbols were held back would have no holdout at all",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    if not args.development or not args.holdout:
+        print(
+            "fmits research geometry: both --development and --holdout are "
+            "required. Measuring a policy without holding symbols back is "
+            "exactly the mistake this study exists to avoid",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    try:
+        study = run_geometry_experiment(
+            development_symbols=args.development,
+            holdout_symbols=args.holdout,
+            measurement_start=start,
+            measurement_end=end,
+            run_at=datetime.now(timezone.utc),
+            experiment_id=f"geometry-{start.date()}-{end.date()}",
+            costs=(
+                CONSERVATIVE_COSTS if args.costs == "conservative" else FRICTIONLESS_COSTS
+            ),
+            evaluation_window_bars=args.window,
+            limit=DEFAULT_BACKTEST_LIMIT if args.limit is None else args.limit,
+            with_sensitivity=not args.no_sensitivity,
+        )
+    except SwingLabError as error:
+        print(f"fmits research geometry: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_geometry_study(study))
+    if args.save is not None:
+        try:
+            written = write_geometry_study(study, args.save)
+        except SwingLabError as error:
+            print(f"fmits research geometry: {error}", file=sys.stderr)
+            return EXIT_FAILURE
+        print(f"\nResearch artifact written to {written}")
+    return EXIT_OK
+
+
 RESEARCH_COMMAND = Command(
     name="research",
     help="replay policy variants over real history and compare them (read-only)",
     description=(
-        "The Swing Strategy Laboratory. Replays the current production swing "
-        "policy over a historical measurement window and, over the SAME facts "
-        "at the same instants, replays pre-specified alternative policies "
-        "beside it — chiefly variants of what the CONTEXT-role timeframe (1w "
-        "under the production mapping) is allowed to do. Reports setups, "
-        "trades, expectancy in R, profit factor, drawdown and what the weekly "
-        "gate actually blocked. Every variant is defined in code and fixed "
-        "before any result is seen; none can be described on this command "
-        "line. This command changes no production strategy, writes nothing, "
-        "and promotes nothing."
+        "Two read-only laboratories. 'geometry' (Milestone BX) replays history "
+        "once and compares pre-declared stop/target rules against a development "
+        "sample and a held-back one, reporting expectancy, planned reward-to-"
+        "risk, volatility-normalised stop distance, parameter sensitivity and a "
+        "named verdict per rule. "
+        "'swing' (Milestone BW) replays the current production swing policy "
+        "over a historical measurement window and, over the SAME facts at the "
+        "same instants, replays pre-specified alternative policies beside it — "
+        "chiefly variants of what the CONTEXT-role timeframe (1w under the "
+        "production mapping) is allowed to do — reporting setups, trades, "
+        "expectancy in R, profit factor, drawdown and what the weekly gate "
+        "actually blocked. "
+        "Every variant and every geometry is defined in code and fixed before "
+        "any result is seen; none can be described on this command line. This "
+        "command changes no production strategy, writes no trading record, and "
+        "promotes nothing."
     ),
     configure=_configure_research,
     run=_run_research,

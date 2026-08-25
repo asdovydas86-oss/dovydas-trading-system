@@ -1895,6 +1895,7 @@ def test_nothing_below_imports_level_crossing() -> None:
         root / "decision_context",
         root / "swing_setup",
         root / "setup_observation",
+        root / "swing_lab",
     }
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:

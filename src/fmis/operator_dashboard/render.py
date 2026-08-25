@@ -68,6 +68,7 @@ PAGES: tuple[tuple[str, str], ...] = (
     ("/paper", "Paper"),
     ("/performance", "Performance"),
     ("/lab", "Swing Lab"),
+    ("/geometry", "Trade Geometry"),
     ("/system", "System"),
 )
 
@@ -1546,6 +1547,197 @@ def _lab(snapshot: OperatorDashboardSnapshot) -> str:
     )
 
 
+def _geometry(snapshot: OperatorDashboardSnapshot) -> str:
+    """The Trade Geometry page. **Designed for a decision, not for completeness.**
+
+    The order is deliberate and is the order a reader needs it in:
+
+    1. **the verdict first**, because a reader who stops after one screen must
+       not come away with a different impression from one who reads to the end;
+    2. the two samples side by side, never one without the other;
+    3. why each rule was refused, by criterion name;
+    4. the diagnosis of the production geometry, evidence before reading;
+    5. the sensitivity curves, as curves;
+    6. the limitations, in full.
+
+    There is no ranked table and no "best rule" — sorting by expectancy would be
+    choosing one, and the criteria exist so that choice is not a judgement call.
+    """
+    section = snapshot.geometry
+    if section is None or not section.is_available or section.data is None:
+        return _panel(
+            "Trade Geometry",
+            "<p class='muted'>No geometry experiment is loaded. Run one with "
+            "<code>fmits research geometry --development BTCUSDT ... --holdout "
+            "NEOUSDT ... --start ... --save geometry.json</code> and start the "
+            "dashboard with <code>--geometry-artifact geometry.json</code>. "
+            "This page shows a saved research record; it never runs a replay "
+            "itself and never changes a strategy.</p>",
+        )
+    view = section.data
+
+    head = (
+        "<dl class='meta'>"
+        f"<dt>Experiment</dt><dd>{_e(view.experiment_id)}</dd>"
+        f"<dt>Development</dt><dd>{_e(', '.join(view.development_symbols))}"
+        "<small>already measured by Milestone BW — NOT out-of-sample</small></dd>"
+        f"<dt>Holdout</dt><dd>{_e(', '.join(view.holdout_symbols))}"
+        "<small>never previously measured, same window</small></dd>"
+        f"<dt>Window</dt><dd>{_e(view.measurement_start)} → {_e(view.measurement_end)}</dd>"
+        f"<dt>Admission</dt><dd>{_e(view.admission)}"
+        "<small>held fixed for every geometry</small></dd>"
+        f"<dt>Candidates</dt><dd>{view.candidate_count}</dd>"
+        f"<dt>Costs</dt><dd>{_e(view.cost_policy)}</dd>"
+        f"<dt>Digest</dt><dd><code>{_e(view.result_digest)}</code> "
+        f"({'verified' if view.digest_verified else 'NOT VERIFIED'})</dd>"
+        "</dl>"
+    )
+
+    winners = view.candidate_policy_ids
+    if winners:
+        verdict_html = (
+            f"<p><strong>{len(winners)} of {len(view.policies)}</strong> "
+            "geometries met every criterion:</p><ul>"
+            + "".join(f"<li><code>{_e(item)}</code></li>" for item in winners)
+            + "</ul><p class='muted'>A candidate for forward testing is "
+            "<strong>worth testing forward</strong> and nothing more. It is not "
+            "approval to trade.</p>"
+        )
+    else:
+        verdict_html = (
+            "<p><strong>NO CANDIDATE.</strong> No geometry met every criterion, "
+            "so none is proposed for forward or shadow testing.</p>"
+            "<p class='muted'>This is a result, not a missing measurement — the "
+            "criteria each policy failed are listed below by name.</p>"
+        )
+
+    def cell(value: str | None, reason: str | None) -> str:
+        if value is None:
+            return f"<td class='absent'>unavailable<small>{_e(reason or '')}</small></td>"
+        return f"<td>{_e(value)}</td>"
+
+    rows = []
+    for policy in view.policies:
+        for sample in (policy.development, policy.holdout):
+            first = sample is policy.development
+            rows.append(
+                "<tr>"
+                + (
+                    f"<th scope='row' rowspan='2'><code>{_e(policy.policy_id)}</code>"
+                    f"{' <span class=\'tag\'>control</span>' if policy.is_production_geometry else ''}"
+                    f"<small>{_e(policy.title)}</small>"
+                    f"<small>{_e(policy.family)}</small></th>"
+                    f"<td class='verdict' rowspan='2'>{_e(policy.verdict.replace('_', ' '))}</td>"
+                    if first
+                    else ""
+                )
+                + f"<td>{_e(sample.sample)}</td>"
+                f"<td>{sample.trades}</td>"
+                f"<td>{sample.refused}</td>"
+                f"<td>{sample.measurable}</td>"
+                + cell(sample.win_rate, sample.win_rate_reason)
+                + cell(sample.expectancy, sample.expectancy_reason)
+                + cell(sample.median_r, sample.median_r_reason)
+                + cell(sample.profit_factor, sample.profit_factor_reason)
+                + f"<td>{_e(sample.total_r)}</td>"
+                f"<td>{_e(sample.max_drawdown)}</td>"
+                f"<td>{_e(sample.median_planned_rr or '—')}</td>"
+                "</tr>"
+            )
+    table = (
+        "<table><thead><tr><th>Geometry</th><th>Verdict</th><th>Sample</th>"
+        "<th>Trades</th><th>Refused</th><th>Measurable</th><th>Win rate</th>"
+        "<th>Expectancy R</th><th>Median R</th><th>Profit factor</th>"
+        "<th>Total R</th><th>Max DD (R)</th><th>Median planned R:R</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+    )
+
+    criteria_html = ""
+    for policy in view.policies:
+        marks = "".join(
+            "<li>"
+            + _chip(
+                {True: "pass", False: "fail", None: "not evaluable"}[item.passed],
+                {True: "ok", False: "bad", None: "warn"}[item.passed],
+            )
+            + f" <strong>{_e(item.name)}</strong> — {_e(item.observed)}"
+            f"<br><small>{_e(item.requirement)}</small></li>"
+            for item in policy.criteria
+        )
+        criteria_html += (
+            f"<details><summary><code>{_e(policy.policy_id)}</code> — "
+            f"{_e(policy.verdict_statement)}</summary>"
+            f"<p class='muted'>{_e(policy.hypothesis)}</p>"
+            f"<ul class='criteria'>{marks}</ul></details>"
+        )
+
+    findings_html = "".join(
+        "<li>"
+        + _chip(
+            {True: "yes", False: "no", None: "not answerable"}[item.supported],
+            {True: "warn", False: "ok", None: "muted"}[item.supported],
+        )
+        + f" <strong>{_e(item.question)}</strong>"
+        f"<br><small>evidence: {_e(item.evidence)}</small>"
+        f"<br><small>{_e(item.reading)}</small></li>"
+        for item in view.baseline_findings
+    )
+    shares_html = "".join(
+        f"<dt>{_e(item.label)}</dt><dd>{_e(item.text)}"
+        + ("<small>too few to state a rate</small>" if item.fraction is None else "")
+        + "</dd>"
+        for item in view.baseline_shares
+    )
+
+    sensitivity_rows = "".join(
+        f"<tr><td>{_e(row.kind)}</td><td>{_e(row.threshold)}</td>"
+        f"<td>{row.development_trades}</td>"
+        f"<td>{_e(row.development_expectancy or '—')}</td>"
+        f"<td>{row.holdout_trades}</td>"
+        f"<td>{_e(row.holdout_expectancy or '—')}</td></tr>"
+        for row in view.sensitivity
+    )
+    sensitivity_html = ""
+    if sensitivity_rows:
+        notes = "".join(f"<li>{_e(item)}</li>" for item in view.plateau_notes)
+        sensitivity_html = _panel(
+            "Parameter sensitivity",
+            "<p class='muted'>A plateau is evidence; a spike at one hand-picked "
+            "number is an artifact. These grid points were swept after the "
+            "results were seen and are <strong>not</strong> pre-declared "
+            "candidates.</p>"
+            f"<ul>{notes}</ul>"
+            "<table><thead><tr><th>Grid</th><th>Threshold</th>"
+            "<th>Dev trades</th><th>Dev expectancy R</th>"
+            "<th>Holdout trades</th><th>Holdout expectancy R</th>"
+            "</tr></thead><tbody>" + sensitivity_rows + "</tbody></table>",
+        )
+
+    limitations = "".join(f"<li>{_e(item)}</li>" for item in view.limitations)
+    return (
+        _panel("Does any geometry deserve forward testing?", verdict_html)
+        + _panel("Trade Geometry — saved experiment", head + table)
+        + _panel("Criteria, geometry by geometry", criteria_html)
+        + _panel(
+            "Diagnosis of the production geometry",
+            f"<dl class='meta'>{shares_html}</dl>"
+            "<p class='muted'>Evidence above; interpretation below. A reader may "
+            "disagree with a reading without doubting the count it was read "
+            "from.</p>"
+            f"<ul class='criteria'>{findings_html}</ul>",
+        )
+        + sensitivity_html
+        + _panel("Limitations", f"<ul>{limitations}</ul>")
+        + _panel(
+            "This page promotes nothing",
+            "<p class='muted'>A geometry that measures well here is a candidate "
+            "for forward testing and nothing more. The production stop and "
+            "target rules are unchanged by this experiment and cannot be "
+            "changed from this page.</p>",
+        )
+    )
+
+
 def render_page(
     snapshot: OperatorDashboardSnapshot, path: str, *, symbol: str | None = None
 ) -> str:
@@ -1570,6 +1762,7 @@ def render_page(
             "/paper": _paper,
             "/performance": _performance,
             "/lab": _lab,
+            "/geometry": _geometry,
             "/system": _system,
         }[path](snapshot)
     return (

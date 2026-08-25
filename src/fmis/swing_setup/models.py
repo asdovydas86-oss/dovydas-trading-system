@@ -49,6 +49,8 @@ __all__ = [
     "SetupInputs",
     "ExecutionBreakEvent",
     "CONFIRMATION_SIDE",
+    "STOP_SIDE",
+    "TARGET_SIDE",
 ]
 
 #: Bumped when the serialized shape changes in a way a consumer must notice.
@@ -269,12 +271,21 @@ NOT_CALIBRATED = Probability(ProbabilityStatus.NOT_CALIBRATED)
 #: direction. One authoritative mapping rather than a branch repeated at every
 #: call site — a policy bug that inverted one branch would be caught by the
 #: model's own validation rather than only by a test that happened to cover it.
-_STOP_SIDE: Mapping[Direction, LevelSide] = MappingProxyType(
+#:
+#: Public because the geometry research layer selects stops and targets from the
+#: same level lists and must agree with production about which side each is on.
+#: A research copy of this mapping is exactly the copy that could invert and be
+#: measured as a policy difference.
+STOP_SIDE: Mapping[Direction, LevelSide] = MappingProxyType(
     {Direction.LONG: LevelSide.LOWER, Direction.SHORT: LevelSide.UPPER}
 )
-_TARGET_SIDE: Mapping[Direction, LevelSide] = MappingProxyType(
+TARGET_SIDE: Mapping[Direction, LevelSide] = MappingProxyType(
     {Direction.LONG: LevelSide.UPPER, Direction.SHORT: LevelSide.LOWER}
 )
+#: The private spellings every existing call site uses, kept as aliases to the
+#: *same objects* so no import in the repository changes meaning.
+_STOP_SIDE = STOP_SIDE
+_TARGET_SIDE = TARGET_SIDE
 #: The side a confirming (or awaited) structure break must fall on.
 CONFIRMATION_SIDE: Mapping[Direction, LevelSide] = MappingProxyType(
     {Direction.LONG: LevelSide.UPPER, Direction.SHORT: LevelSide.LOWER}

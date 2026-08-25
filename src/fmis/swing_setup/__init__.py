@@ -50,6 +50,7 @@ from fmis.swing_setup.policy import (
     ContextRoleTreatment,
     SETUP_POLICY_ID,
     evaluate_setup,
+    ordered_levels,
     research_policy_id,
 )
 from fmis.swing_setup.render import render_setup
@@ -227,6 +228,7 @@ __all__ = [
     "PRODUCTION_CONTEXT_ROLE_TREATMENT",
     "ContextRoleTreatment",
     "research_policy_id",
+    "ordered_levels",
     # errors
     "SwingSetupError",
 ]

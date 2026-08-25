@@ -75,6 +75,13 @@ __all__ = [
     "LabVariantRow",
     "LabGateRow",
     "LabView",
+    "GeometryCriterionRow",
+    "GeometrySampleRow",
+    "GeometryPolicyRow",
+    "GeometrySensitivityRow",
+    "GeometryShareRow",
+    "GeometryFindingRow",
+    "GeometryView",
     "OperatorDashboardSnapshot",
 ]
 
@@ -734,6 +741,155 @@ class LabView:
 
 
 @dataclass(frozen=True, slots=True)
+class GeometryCriterionRow:
+    """One requirement a geometry had to meet, and the measurement that decided it.
+
+    ``passed`` is tri-state for the reason `fmis.swing_lab.geometry_verdict`
+    makes it so: a criterion that could not be evaluated is not a failure, and a
+    page that rendered both as a red mark would report a policy nobody measured
+    as one that lost money.
+    """
+
+    name: str
+    requirement: str
+    passed: bool | None
+    observed: str
+
+
+@dataclass(frozen=True, slots=True)
+class GeometrySampleRow:
+    """One geometry's result on one sample. Text, already reduced upstream.
+
+    ``refused`` sits beside ``trades`` deliberately. A rule that traded six times
+    because it refused ninety candidates and a rule that traded six times because
+    six setups formed are different findings, and a trade count alone cannot tell
+    them apart.
+    """
+
+    sample: str
+    trades: int = 0
+    measurable: int = 0
+    refused: int = 0
+    win_rate: str | None = None
+    win_rate_reason: str | None = None
+    expectancy: str | None = None
+    expectancy_reason: str | None = None
+    median_r: str | None = None
+    median_r_reason: str | None = None
+    profit_factor: str | None = None
+    profit_factor_reason: str | None = None
+    total_r: str = ""
+    max_drawdown: str = ""
+    median_planned_rr: str | None = None
+    largest_symbol_share: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryFindingRow:
+    """One diagnostic question, its evidence and its reading, kept apart.
+
+    Evidence and interpretation are separate fields because the milestone brief
+    asks them to be: a reader may disagree with the reading without having to
+    doubt the count it was read from.
+    """
+
+    question: str
+    supported: bool | None
+    evidence: str
+    reading: str
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryShareRow:
+    """A count out of a total, and the rate — if the engine allowed one.
+
+    The three values are carried separately and are **never** combined here.
+    `fmis.swing_lab.geometry_diagnosis.Share` already decided whether a rate may
+    be stated for this denominator; computing one on this page would let the
+    dashboard state a rate the engine refused.
+    """
+
+    label: str
+    numerator: int
+    denominator: int
+    fraction: str | None
+    #: The engine's own canonical rendering, e.g. ``45/85 (52.9%)``. Carried so
+    #: no surface has to round a `Decimal` itself.
+    text: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryPolicyRow:
+    """One pre-declared geometry: what it is, what it measured, what blocked it."""
+
+    policy_id: str
+    title: str
+    family: str
+    hypothesis: str
+    stop_rule: str
+    target_rule: str
+    is_production_geometry: bool
+    verdict: str
+    verdict_statement: str
+    development: GeometrySampleRow
+    holdout: GeometrySampleRow
+    criteria: tuple[GeometryCriterionRow, ...] = ()
+    #: The names of every criterion this policy did not meet, in declaration
+    #: order. A **field** rather than a property: selecting rows is the kind of
+    #: work this layer exists not to do, and `fmis.swing_lab.geometry_verdict`
+    #: already decided which criteria blocked.
+    blocking_criteria: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class GeometrySensitivityRow:
+    """One threshold on one sensitivity grid, both samples side by side."""
+
+    kind: str
+    threshold: str
+    development_trades: int
+    development_expectancy: str | None
+    holdout_trades: int
+    holdout_expectancy: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryView:
+    """One completed geometry experiment, read from an artifact the caller supplied.
+
+    **Not a live engine read**, for the reason `LabView` states: a geometry study
+    replays years of history and takes tens of minutes. With no artifact loaded
+    the page says so plainly rather than rendering an empty table, which on this
+    page would read as *"no geometry works"* rather than *"nothing was measured"*.
+    """
+
+    experiment_id: str = ""
+    development_symbols: tuple[str, ...] = ()
+    holdout_symbols: tuple[str, ...] = ()
+    measurement_start: str = ""
+    measurement_end: str = ""
+    admission: str = ""
+    candidate_count: int = 0
+    cost_policy: str = ""
+    result_digest: str = ""
+    digest_verified: bool = False
+    policies: tuple[GeometryPolicyRow, ...] = ()
+    sensitivity: tuple[GeometrySensitivityRow, ...] = ()
+    plateau_notes: tuple[str, ...] = ()
+    baseline_findings: tuple[GeometryFindingRow, ...] = ()
+    baseline_shares: tuple[GeometryShareRow, ...] = ()
+    limitations: tuple[str, ...] = ()
+    #: Every policy the STUDY judged worth forward testing. Usually empty, and
+    #: that is a result rather than a missing measurement. A field, not a
+    #: filter — see `GeometryPolicyRow.blocking_criteria`.
+    candidate_policy_ids: tuple[str, ...] = ()
+    #: Always ``False``, carried as data so the contract itself states it. No
+    #: page in this repository approves trading, and there is no code path here
+    #: that could set it to anything else.
+    is_approved_for_trading: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class OperatorDashboardSnapshot:
     """Everything one refresh produced. The root of the presentation contract.
 
@@ -757,6 +913,7 @@ class OperatorDashboardSnapshot:
     performance: DashboardSection[tuple[PerformanceView, ...]]
     health: DashboardSection[DataHealthView]
     lab: DashboardSection[LabView] | None = None
+    geometry: DashboardSection[GeometryView] | None = None
     warnings: tuple[WarningRow, ...] = ()
     limitations: tuple[tuple[str, str], ...] = ()
     schema_version: int = DASHBOARD_SCHEMA_VERSION

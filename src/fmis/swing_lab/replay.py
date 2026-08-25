@@ -30,10 +30,9 @@ on a separately decoded series and can never flow back into an assessment.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
 from typing import Any
 
 from fmis.decision_context import ContextPolicy, ContextState
@@ -41,6 +40,7 @@ from fmis.market_regime import RegimePolicy, StructureState
 from fmis.pipeline.market_analysis import InsufficientDataError
 from fmis.pipeline.multi_timeframe import TimeframeRole, multi_timeframe_facts_for_symbol
 from fmis.pipeline.regime import regime_features
+from fmis.paper.models import PriceBar
 from fmis.pipeline.structural_facts import DetectionSettings
 from fmis.providers.binance import Transport
 from fmis.swing_lab.models import (
@@ -77,6 +77,10 @@ from fmis.trade_lifecycle import PaperCostPolicy
 __all__ = [
     "LabObservation",
     "VariantReplay",
+    "ReplayInstant",
+    "UnanalysableInstant",
+    "decode_symbol_bars",
+    "replay_instants",
     "replay_variant_group",
     "group_variants",
 ]
@@ -181,6 +185,145 @@ def _segment_of(segments: Sequence[TemporalSegment], instant: datetime) -> str |
     return None
 
 
+@dataclass(frozen=True, slots=True)
+class UnanalysableInstant:
+    """An instant whose window the production fact path refused. **A value, not a raise.**
+
+    Roughly one instant in a warm-up prefix cannot be analysed, and that is an
+    ordinary countable outcome of a replay rather than an error in it. Raising
+    would end the walk; swallowing it would lose a count every manifest reports.
+    ``measured`` is carried because *where* the refusal fell is what decides
+    which counter it belongs to, and only the generator knows it.
+    """
+
+    symbol: str
+    as_of: datetime
+    measured: bool
+    error: InsufficientDataError
+
+
+@dataclass(frozen=True, slots=True)
+class ReplayInstant:
+    """One symbol at one decision instant, with the facts that instant produced.
+
+    **The one place history is read, so the one place lookahead could hide.**
+    Every consumer in this package — the variant replay of Milestone BW and the
+    geometry capture of Milestone BX — is handed these objects rather than
+    reaching for candles itself. A second loop that re-derived the same facts
+    would be a second chance to accidentally read one bar too far, and there is
+    deliberately only one.
+
+    ``signal_index`` is the position, in the symbol's decoded bar array, of the
+    bar whose **close** produced this instant. A trade entered from here fills at
+    ``signal_index + 1``'s open, never at the close that was being looked at.
+    """
+
+    symbol: str
+    as_of: datetime
+    measured: bool
+    segment: str | None
+    sheet: Any
+    inputs: SetupInputs
+    baseline_assessment: SetupAssessment
+    last_timestamp: datetime | None
+    signal_index: int | None
+
+
+def decode_symbol_bars(
+    dataset: ResearchDataset, symbol: str, execution_interval: str
+) -> tuple[tuple[PriceBar, ...], dict[datetime, int]]:
+    """One symbol's execution-timeframe bars, and an open-time → position index.
+
+    Raises:
+        SwingLabError: the dataset holds no such series.
+    """
+    rows = dataset.cache.get((symbol, execution_interval))
+    if rows is None:
+        raise SwingLabError(
+            f"the dataset holds no {execution_interval} series for {symbol}"
+        )
+    bars = to_price_bars(decode_full_series(symbol, execution_interval, rows))
+    return bars, {bar.open_time: position for position, bar in enumerate(bars)}
+
+
+def replay_instants(
+    symbol: str,
+    *,
+    timeframes: Mapping[TimeframeRole, str],
+    window: ResearchWindow,
+    segments: Sequence[TemporalSegment],
+    dataset: ResearchDataset,
+    index_of: Mapping[datetime, int],
+    limit: int = DEFAULT_BACKTEST_LIMIT,
+    identity_priming_bars: int = DEFAULT_IDENTITY_PRIMING_BARS,
+    policy: RegimePolicy | None = None,
+    context_policy: ContextPolicy | None = None,
+    detection: DetectionSettings | None = None,
+) -> Iterator[ReplayInstant | UnanalysableInstant]:
+    """Walk one symbol's decision instants, yielding the facts each produced.
+
+    An instant the production fact path refuses is yielded as an
+    `UnanalysableInstant` rather than raised — see that type for why.
+
+    The transport handed to the production fact path is Milestone BC's replay
+    transport, rebuilt per instant with ``now`` pinned to that instant, which is
+    what makes a future candle unreachable rather than merely unread.
+    """
+    execution_interval = timeframes[TimeframeRole.EXECUTION]
+    settings = DetectionSettings() if detection is None else detection
+    ordered_segments = tuple(segments)
+    rows = dataset.cache.get((symbol, execution_interval))
+    if rows is None:  # pragma: no cover - decode_symbol_bars already refused
+        raise SwingLabError(
+            f"the dataset holds no {execution_interval} series for {symbol}"
+        )
+    priming_start = window.measurement_start - identity_priming_bars * interval_duration(
+        execution_interval
+    )
+    instants = sorted(
+        instant
+        for instant in {from_epoch_ms(row[CLOSE_TIME_INDEX] + 1) for row in rows}
+        if priming_start <= instant < window.measurement_end
+    )
+    for instant in instants:
+        measured = window.is_measured(instant)
+        replay_transport = build_replay_transport(
+            dataset.cache, now=instant, index=dataset.index
+        )
+        try:
+            sheet = multi_timeframe_facts_for_symbol(
+                symbol,
+                timeframes=dict(timeframes),
+                limit=limit,
+                features=regime_features(),
+                detection=settings,
+                transport=replay_transport,
+                clock=lambda moment=instant: moment,
+            )
+            # The one production composition call in this package. Every policy
+            # is `evaluate_setup` over THESE inputs — there is no second fact path.
+            inputs, baseline_assessment = setup_inputs_and_assessment_for_sheet(
+                sheet, policy=policy, context_policy=context_policy
+            )
+        except InsufficientDataError as error:
+            yield UnanalysableInstant(
+                symbol=symbol, as_of=instant, measured=measured, error=error
+            )
+            continue
+        last_timestamp = sheet.by_role[TimeframeRole.EXECUTION].sheet.window.last_timestamp
+        yield ReplayInstant(
+            symbol=symbol,
+            as_of=instant,
+            measured=measured,
+            segment=_segment_of(ordered_segments, instant) if measured else None,
+            sheet=sheet,
+            inputs=inputs,
+            baseline_assessment=baseline_assessment,
+            last_timestamp=last_timestamp,
+            signal_index=None if last_timestamp is None else index_of.get(last_timestamp),
+        )
+
+
 def dataset_for_group(
     symbols: Sequence[str],
     intervals: Sequence[str],
@@ -252,10 +395,6 @@ def replay_variant_group(
     settings = DetectionSettings() if detection is None else detection
     ordered_segments = tuple(segments)
 
-    priming_start = window.measurement_start - identity_priming_bars * interval_duration(
-        execution_interval
-    )
-
     observations: dict[str, list[LabObservation]] = {v.variant_id: [] for v in variants}
     trades: dict[str, list[LabTrade]] = {v.variant_id: [] for v in variants}
     trackers: dict[str, OpportunityTracker] = {}
@@ -265,55 +404,38 @@ def replay_variant_group(
     truncated_tail = 0
 
     for symbol in symbols:
-        rows = dataset.cache.get((symbol, execution_interval))
-        if rows is None:
-            raise SwingLabError(
-                f"the dataset holds no {execution_interval} series for {symbol}"
-            )
-        full_series = decode_full_series(symbol, execution_interval, rows)
-        bars = to_price_bars(full_series)
-        index_of: dict[datetime, int] = {
-            bar.open_time: position for position, bar in enumerate(bars)
-        }
-        instants = sorted(
-            instant
-            for instant in {from_epoch_ms(row[CLOSE_TIME_INDEX] + 1) for row in rows}
-            if priming_start <= instant < window.measurement_end
-        )
+        bars, index_of = decode_symbol_bars(dataset, symbol, execution_interval)
         for variant in variants:
             trackers[variant.variant_id] = OpportunityTracker()
 
-        for instant in instants:
-            measured = window.is_measured(instant)
-            replay_transport = build_replay_transport(
-                dataset.cache, now=instant, index=dataset.index
-            )
-            try:
-                sheet = multi_timeframe_facts_for_symbol(
-                    symbol,
-                    timeframes=timeframes,
-                    limit=limit,
-                    features=regime_features(),
-                    detection=settings,
-                    transport=replay_transport,
-                    clock=lambda moment=instant: moment,
-                )
-                # The one production composition call. Every other variant is
-                # `evaluate_setup` over the SAME inputs — no second fact path.
-                inputs, baseline_assessment = setup_inputs_and_assessment_for_sheet(
-                    sheet, policy=policy, context_policy=context_policy
-                )
-            except InsufficientDataError:
-                if measured:
+        for item in replay_instants(
+            symbol,
+            timeframes=timeframes,
+            window=window,
+            segments=ordered_segments,
+            dataset=dataset,
+            index_of=index_of,
+            limit=limit,
+            identity_priming_bars=identity_priming_bars,
+            policy=policy,
+            context_policy=context_policy,
+            detection=settings,
+        ):
+            if isinstance(item, UnanalysableInstant):
+                if item.measured:
                     insufficient_measured += 1
                 else:
                     insufficient_priming += 1
                 continue
 
+            inputs = item.inputs
+            measured = item.measured
+            segment = item.segment
+
             assessments: dict[str, SetupAssessment] = {}
             for variant in variants:
                 assessments[variant.variant_id] = (
-                    baseline_assessment
+                    item.baseline_assessment
                     if variant.is_production_baseline
                     else evaluate_setup(
                         inputs,
@@ -322,15 +444,11 @@ def replay_variant_group(
                     )
                 )
 
-            execution_view = sheet.by_role[TimeframeRole.EXECUTION]
-            last_timestamp = execution_view.sheet.window.last_timestamp
-            segment = _segment_of(ordered_segments, instant) if measured else None
-
             if measured and gate_counterfactual_id is not None:
                 gate_observations.append(
                     GateObservation(
                         symbol=symbol,
-                        as_of=instant,
+                        as_of=item.as_of,
                         verdict=_gate_verdict(
                             inputs, assessments[gate_counterfactual_id]
                         ),
@@ -345,12 +463,12 @@ def replay_variant_group(
             for variant in variants:
                 assessment = assessments[variant.variant_id]
                 key, _is_new, is_first = trackers[variant.variant_id].observe(
-                    symbol, assessment.direction, assessment.state, instant
+                    symbol, assessment.direction, assessment.state, item.as_of
                 )
                 observations[variant.variant_id].append(
                     LabObservation(
                         symbol=symbol,
-                        as_of=instant,
+                        as_of=item.as_of,
                         state=assessment.state,
                         direction=assessment.direction,
                         setup_id=key,
@@ -372,10 +490,10 @@ def replay_variant_group(
                     and assessment.targets
                     and assessment.reference_price is not None
                     and assessment.risk_reward is not None
-                    and last_timestamp is not None
+                    and item.last_timestamp is not None
                 ):
                     continue
-                signal_index = index_of.get(last_timestamp)
+                signal_index = item.signal_index
                 if signal_index is None:  # pragma: no cover - series is the same one
                     continue
                 if len(bars) - signal_index - 1 < evaluation_window_bars:
@@ -388,7 +506,7 @@ def replay_variant_group(
                         setup_id=key,
                         direction=assessment.direction,
                         signal_index=signal_index,
-                        signal_at=last_timestamp,
+                        signal_at=item.last_timestamp,
                         reference_price=assessment.reference_price,
                         stop_price=assessment.stop.price,
                         target_price=assessment.targets[0].price,

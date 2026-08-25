@@ -57,6 +57,7 @@ __all__ = [
     "ContextRoleTreatment",
     "PRODUCTION_CONTEXT_ROLE_TREATMENT",
     "research_policy_id",
+    "ordered_levels",
     "evaluate_setup",
 ]
 
@@ -208,30 +209,50 @@ def _tally(factors: tuple[DirectionalFactor, ...]) -> Direction | None:
     return None
 
 
-def _nearest(
+def ordered_levels(
     levels: tuple[PriceLevel, ...], *, side: LevelSide, close: float, above: bool
-) -> PriceLevel | None:
-    """The closest level of ``side`` strictly ``above``/below ``close``, by comparison alone.
+) -> tuple[PriceLevel, ...]:
+    """Every level of ``side`` strictly ``above``/below ``close``, **nearest first**.
+
+    The single owner of this repository's level-distance ordering. `_nearest` is
+    this function's first element and nothing else, so production's choice of a
+    stop or a target and a research layer's choice of the *second* or *third*
+    such level can never disagree about what "nearer" means.
 
     Strict inequality against ``close`` is load-bearing: it is what guarantees a
     selected stop or target can never equal the reference price, so a computed
     risk or reward can never be exactly zero. Ties on price break on the
     origin's bar index, the same total order `structural_facts._level_sort_key`
-    uses, so two runs over identical levels choose identically.
+    uses, so two runs over identical levels order identically.
+
+    Above ``close``, nearer means *lower* price; below it, nearer means *higher*.
+    Both directions are produced by one sort key read forwards or backwards
+    rather than by two hand-written comparisons that could drift apart.
     """
-    candidates = tuple(
-        level
-        for level in levels
-        if level.side is side and (level.price > close if above else level.price < close)
-    )
-    if not candidates:
-        return None
 
     def key(level: PriceLevel) -> tuple[float, int]:
         origin_index = level.origin.index if level.origin is not None else -1
         return (level.price, origin_index)
 
-    return min(candidates, key=key) if above else max(candidates, key=key)
+    candidates = [
+        level
+        for level in levels
+        if level.side is side and (level.price > close if above else level.price < close)
+    ]
+    return tuple(sorted(candidates, key=key, reverse=not above))
+
+
+def _nearest(
+    levels: tuple[PriceLevel, ...], *, side: LevelSide, close: float, above: bool
+) -> PriceLevel | None:
+    """The closest level of ``side`` strictly ``above``/below ``close``, by comparison alone.
+
+    Exactly `ordered_levels`' first element. Kept as a named function because
+    every production call site asks for the nearest and reading ``[0]`` at each
+    of them would make the *intent* a detail of the indexing.
+    """
+    candidates = ordered_levels(levels, side=side, close=close, above=above)
+    return candidates[0] if candidates else None
 
 
 def _latest_matching_break(

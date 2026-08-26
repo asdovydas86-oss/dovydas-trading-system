@@ -292,6 +292,43 @@ tests, full suite **11,271 passing** under `-W error`, 91–99 % statement and b
 new modules, **42/42 mutation probes killed**, and
 [report 0034](reports/0034_2026-08-25_SWING_TRADE_GEOMETRY_RESEARCH.md).
 
+**`BY` — Pre-Registered Swing Geometry Validation & Execution Mechanics — is DONE (2026-08-26), and
+was an owner-directed research task, not a NOW selection.** It sits on the same footing as `AT`,
+`AU`, `AV`, `BH`–`BN`, the `BG-D1` line, `BR`, `BS`, `BT`, `BU`, `BV`, `BW` and `BX`: explicitly
+scoped by the owner, delivered against that scope, and **it does not satisfy the exactly-one-NOW
+rule**, which remains outstanding. It is the third milestone whose deliverable is an **answer**, and
+the first to seal its hypotheses before measuring them. Evidence: ten new modules in
+`src/fmis/swing_lab/`, `fmits research validation`, the read-only `/validation` dashboard page, 323
+new tests, full suite **11,701 passing** under `-W error`, 84–99 % statement and branch coverage of
+the new modules, **50 mutation probes — 48 killed, 2 proven equivalent**, 27 hostile probes with 0
+failures, and
+[report 0035](reports/0035_2026-08-26_PREREGISTERED_SWING_GEOMETRY_VALIDATION.md).
+
+> **What the owner can do after `BY` that was impossible before:** state a hypothesis, **seal it with
+> a digest**, and have the repository refuse to promote anything that was not in the seal — however
+> good its numbers look afterwards. `fmits research validation` takes no universe, no window and no
+> threshold, because all three are part of what was frozen.
+
+> **`BY` promoted nothing, and it refuted the hypothesis it was built to test.** `BX`'s post-hoc
+> finding — a 4H stop ≥ 0.5 ATR plus a real 1D target paying 2R — is **positive on development
+> (+0.1995R cost-inclusive) and negative on both unseen samples**: −0.1761R on the later period and
+> −0.2361R on twenty-one symbols this repository had never measured. All eleven sealed hypotheses
+> are REJECTED. The production stop and target rules are byte-for-byte unchanged.
+>
+> **The mechanism is a decay.** The rule earned **+0.2336R in 2023H2** and lost money in every
+> subsequent half-year. `BX`'s finding was one six-month window.
+>
+> **Three things did survive, and none of them is a candidate.** Structure beats distance — a
+> non-structural control at the same numbers earned +0.0240R against the structural rule's +0.1995R.
+> `BX`'s "NOT MEASURABLE" is now measurable — real 1H/15m candles resolved **17 of 19** ambiguous 4H
+> bars on development and **18 of 21** on the holdout, refusing the rest rather than guessing. And
+> exit management is worth about **+0.30R per trade** on both samples while still leaving production
+> geometry deeply negative.
+>
+> **`BW`'s `swing_1d4h1h_roles` is measured at last and REJECTED** — worse on all eleven policies,
+> admitting seven times the setups and losing on them. An INCONCLUSIVE standing since `BW` is
+> resolved.
+
 > **What the owner can do after `BX` that was impossible before:** ask *which stop and which target*
 > — not just *which timeframe* — and get a measured answer against a symbol set the repository has
 > never looked at, with every criterion for promotion reported by name. `fmits research geometry`

@@ -7,13 +7,83 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BX — Swing Trade Geometry Research & Policy Candidates (2026-08-25): the
-second milestone whose deliverable is an **answer**. `fmits research geometry` replays history once
-and measures thirteen pre-declared stop/target rules against a development sample and a set of
-symbols this repository had never looked at. Full record:
-[report 0034](../../reports/0034_2026-08-25_SWING_TRADE_GEOMETRY_RESEARCH.md).
+**Last updated for:** BY — Pre-Registered Swing Geometry Validation & Execution Mechanics
+(2026-08-26): the third milestone whose deliverable is an **answer**, and the first with a
+**sealed pre-registration**. `fmits research validation` runs eleven hypotheses that were frozen and
+digested before a single result was read, against a development period, a later validation period
+and twenty-one symbols this repository had never measured. Full record:
+[report 0035](../../reports/0035_2026-08-26_PREREGISTERED_SWING_GEOMETRY_VALIDATION.md).
 
 ---
+
+## Milestone BY — Pre-Registered Swing Geometry Validation & Execution Mechanics
+
+- **The headline: the pre-registered hypothesis was REFUTED. There is no candidate.** Milestone BX's
+  post-hoc finding — a 4H stop at least 0.5 ATR away plus a real 1D target paying 2R — was sealed as
+  BY's primary hypothesis and then measured on unseen data. It is **positive on development
+  (+0.1995R cost-inclusive) and negative on both unseen samples**: −0.1761R on the later period and
+  −0.2361R on twenty-one never-measured symbols. All eleven sealed hypotheses are REJECTED.
+
+- **The mechanism is a decay, and the walk-forward shows it in one line.** The primary rule earned
+  **+0.2336R in 2023H2** and was negative in every subsequent half-year (−0.039, −0.080, −0.049,
+  −0.350, −0.101). BX's finding was **one six-month window**; the development sample was positive
+  only because it contained that window.
+
+- **A sealed pre-registration is the milestone's real deliverable.**
+  `fmis.swing_lab.preregistration` fixes every hypothesis id, threshold, symbol list, window
+  boundary, cost scenario and candidate criterion and pins their SHA-256
+  (`a81b6ab8314bd3cf2e8a6358f3a19cf8d6bb6c152cef9efd55fbffd9883d640a`). The seal and the content
+  live in the same file, so a change to either without the other is a red test. A post-hoc policy
+  **cannot** be promoted: `pre_registered` is the first criterion and is decided by set membership
+  in the sealed manifest, not by a flag a caller passes.
+
+- **Structure beats distance.** A pre-declared **non-structural control** — the same 0.5 ATR and 2R
+  numbers, but with both prices invented rather than selected from real levels — earned **+0.0240R**
+  on development against the structural rule's **+0.1995R**. Where the geometry earned anything,
+  the structural levels earned it. The control is permanently ineligible for promotion whatever it
+  measures.
+
+- **BX's "NOT MEASURABLE" is now measurable.** Real 1H and 15m candles resolved **17 of 19**
+  ambiguous 4H bars on development (89.5 %) and **18 of 21** on the holdout (85.7 %). Ordering uses
+  only facts four prices contain — a bar that reached one level, or opened beyond one — and
+  otherwise descends, then **refuses**. Lower-timeframe data resolves an OUTCOME and never reaches a
+  decision; an architecture guard asserts the policy modules cannot even import it.
+
+- **Exit management is worth about +0.30R per trade and cannot rescue a broken geometry.** Moving
+  the stop to break-even at +1R took production geometry from −0.599R to −0.296R on development and
+  from −0.484R to −0.213R on the holdout. Both are still large losses. BX's ordering — fix the stop
+  first, then re-open exits — is confirmed.
+
+- **BW's `swing_1d4h1h_roles` is measured at last, and REJECTED.** Shifting every role down a
+  step (1D context, 4H setup, 1H execution) is worse on **all eleven** sealed policies, admits
+  **seven times** the setups on the same six symbols over the same window (364 against 54), and
+  loses on them. An INCONCLUSIVE that has stood since BW is now resolved.
+
+- **The two axes of the geometry behave differently.** The **reward requirement is a
+  ROBUST_PLATEAU** (1.5R / 2.0R / 2.5R all positive on development); the **stop floor is a
+  FRAGILE_SPIKE** (+0.246 / +0.200 / +0.138 / −0.067 across 0.35 / 0.50 / 0.65 / 0.80 ATR).
+
+- **New modules in `fmis.swing_lab`** (10): `preregistration`, `nonstructural`, `intrabar`, `entry`,
+  `exits`, `validation`, `validation_study`, `validation_mechanics`, `validation_artifact`,
+  `validation_render`. Plus `fmits research validation` — which takes **no universe, no window and
+  no threshold**, because all three are sealed — and a read-only `/validation` dashboard page.
+
+- **Verification.** Full repository **11,701 passing under `-W error`** (from 11,285 at BX);
+  50 mutation probes with **48 killed and 2 shown equivalent by byte-identical results over 246 real
+  candidates**; 27 hostile probes, 0 failures; no-lookahead proven on the real captures with a
+  non-vacuity control for every claim. The primary capture reproduced BX's **246 candidates from
+  104,130 instants exactly**.
+
+- **One defect the real run exposed (BY-D1).** The plateau neighbourhood was keyed on matching
+  threshold *numbers*, and the 1D-invalidation alternative — which shares (0.50, 2.0) with the
+  primary point while being a different rule — silently displaced it, so every primary policy's
+  plateau was classified against the wrong measurement. Fixed by reading the sealed **family**; a
+  collision now raises by name, with four regression tests.
+
+---
+
+**Previously:** Milestone BX — Swing Trade Geometry Research & Policy Candidates
+(2026-08-25).
 
 ## Milestone BX — Swing Trade Geometry Research & Policy Candidates
 

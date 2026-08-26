@@ -353,3 +353,49 @@ def test_the_snapshot_holds_no_method_that_writes() -> None:
         assert name.lower() not in forbidden, name
     with pytest.raises((AttributeError, TypeError)):
         snapshot.refreshed_at = AT  # type: ignore[misc]
+
+
+# ------------------------------------------------- artifact sections wiring ---
+#
+# `refresh()` grew `geometry` and `validation` parameters and forwarded neither,
+# so `fmits dashboard --geometry-artifact ... --validation-artifact ...` decoded
+# both artifacts, handed them to the refresher, and both pages still reported
+# that nothing was loaded. A parameter accepted and dropped is worse than one
+# that does not exist, because the caller has no way to tell.
+
+
+def test_refresh_forwards_every_artifact_section_it_accepts() -> None:
+    """Static: every artifact parameter must reach `build_snapshot`.
+
+    Asserted over the parameter list rather than by naming two fields, so a
+    third artifact section added later cannot be dropped the same way.
+    """
+    import inspect
+
+    from fmis.operator_dashboard.compose import refresh
+
+    source = inspect.getsource(refresh)
+    call = source[source.index("return build_snapshot("):]
+    for name in ("lab", "geometry", "validation"):
+        assert name in inspect.signature(refresh).parameters, name
+        assert f"{name}={name}" in call, f"refresh() drops {name} on the floor"
+
+
+def test_a_forwarded_validation_artifact_reaches_the_snapshot() -> None:
+    """Functional: the section is present, not merely the keyword."""
+    from fmis.operator_dashboard.models import ValidationView
+
+    view = ValidationView(experiment_id="probe", policies=())
+    snapshot = refresh(refreshed_at=AT, validation=view, **_runners())
+    assert snapshot.validation is not None
+    assert snapshot.validation.data is view
+
+
+def test_a_forwarded_geometry_artifact_reaches_the_snapshot() -> None:
+    """The same defect existed for `--geometry-artifact` and is fixed with it."""
+    from fmis.operator_dashboard.models import GeometryView
+
+    view = GeometryView(experiment_id="probe", policies=())
+    snapshot = refresh(refreshed_at=AT, geometry=view, **_runners())
+    assert snapshot.geometry is not None
+    assert snapshot.geometry.data is view

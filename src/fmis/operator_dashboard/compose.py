@@ -493,4 +493,12 @@ def refresh(
         statistics=statistics,
         statistics_error=statistics_error,
         lab=lab,
+        # `geometry` and `validation` are forwarded for the same reason `lab`
+        # is. Omitting them made both `--geometry-artifact` and
+        # `--validation-artifact` INERT: the CLI decoded the artifact, handed it
+        # to the refresher, and the page still reported that nothing was loaded.
+        # A parameter accepted and dropped is worse than one that does not
+        # exist, because the caller has no way to tell.
+        geometry=geometry,
+        validation=validation,
     )

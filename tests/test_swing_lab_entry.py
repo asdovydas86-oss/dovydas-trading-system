@@ -312,3 +312,31 @@ def test_a_fill_refuses_a_negative_index() -> None:
             index=-1, price=Decimal("1"), at=T0, interval="4h",
             bars_waited=0, gapped=False,
         )
+
+
+def test_a_truncated_EXECUTION_series_is_not_blamed_on_the_1h_data() -> None:
+    """Two different facts must not share one reason.
+
+    A refinement rung that does not reach back far enough is NOT MEASURABLE; an
+    execution series that does not is a dataset shortfall. Reporting both as
+    `REFINEMENT_UNAVAILABLE` would blame the 1H data for a 4H problem.
+    """
+    late = tuple(_bar(index, "100", "104", "99", "103") for index in range(100, 104))
+    miss = resolve_entry(
+        IMMEDIATE, path=late, signal_at=T0, signal_close_at=T0 + FOUR_HOURS,
+        reference_price=REFERENCE, direction=Direction.LONG,
+    )
+    assert isinstance(miss, EntryMiss)
+    assert miss.reason is MissReason.NO_BARS_AFTER_SIGNAL
+
+
+def test_a_truncated_REFINEMENT_series_still_reports_not_measurable() -> None:
+    late = tuple(
+        _bar(index, "100", "104", "99", "103", interval="1h")
+        for index in range(100, 104)
+    )
+    miss = resolve_entry(
+        ONE_HOUR, path=late, signal_at=T0 - FOUR_HOURS, signal_close_at=T0,
+        reference_price=REFERENCE, direction=Direction.LONG,
+    )
+    assert miss.reason is MissReason.REFINEMENT_UNAVAILABLE

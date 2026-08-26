@@ -51,6 +51,7 @@ __all__ = [
     "classify_plateau",
     "CandidateAssessment",
     "assess_candidate",
+    "criteria_index",
 ]
 
 
@@ -180,10 +181,24 @@ def classify_plateau(readings: Sequence[NeighbourReading]) -> PlateauReading:
         SwingLabError: the neighbourhood does not hold exactly one primary point.
     """
     primaries = [item for item in readings if item.is_primary]
-    if len(primaries) != 1:
+    if not primaries:
+        raise SwingLabError("a neighbourhood must hold a primary point, got none")
+    # A policy can sit at the centre of BOTH axes of the cross, in which case it
+    # appears once per axis. That is one point measured twice, not two points:
+    # the readings must name the same policy and must agree, or the caller has
+    # assembled a neighbourhood around two different centres.
+    if len({item.policy_id for item in primaries}) != 1:
         raise SwingLabError(
-            f"a neighbourhood must hold exactly one primary point, got "
-            f"{len(primaries)}"
+            "a neighbourhood must hold exactly one primary POLICY, got "
+            f"{sorted({item.policy_id for item in primaries})}"
+        )
+    values = {
+        None if item.expectancy is None else str(item.expectancy) for item in primaries
+    }
+    if len(values) != 1:
+        raise SwingLabError(
+            f"the primary point {primaries[0].policy_id} reports different "
+            f"measurements on different axes: {sorted(values, key=str)}"
         )
     primary = primaries[0]
     detail = _describe(readings)

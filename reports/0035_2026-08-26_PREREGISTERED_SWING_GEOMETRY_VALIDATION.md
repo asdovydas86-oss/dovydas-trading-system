@@ -45,15 +45,26 @@ and try to falsify it**. It falsified it, and the mechanism is legible:
 | Validation · same symbols · 2025-06 → 2026-08 | **−0.1761R** | 80 | 0.79 |
 | **Holdout · 21 unseen symbols · 2024-06 → 2026-08** | **−0.2361R** | 200 | 0.72 |
 
-And the walk-forward says *why*, in one line:
+And the two walk-forward curves say *why* — one per universe, because pooling
+them would change what is being measured half-way along (§7, defect BY-D6):
 
-| window | 23H2 | 24H1 | 24H2 | 25H1 | 25H2 | 26H1 |
+| **15 primary symbols** | 23H2 | 24H1 | 24H2 | 25H1 | 25H2 | 26H1 |
 |---|---|---|---|---|---|---|
-| expectancy | **+0.2336** | −0.0387 | −0.0796 | −0.0488 | −0.3504 | −0.1012 |
+| expectancy | **+0.2336** | −0.0387 | **+0.3522** | **+0.2592** | **−0.4504** | **−0.1500** |
 
-**BX's finding was one six-month window.** Every subsequent window is negative.
-The development sample was positive only because it contained that window; the
-validation period and the holdout, which do not, are both negative.
+| **21 holdout symbols** | — | — | 24H2 | 25H1 | 25H2 | 26H1 |
+|---|---|---|---|---|---|---|
+| expectancy | | | −0.3585 | −0.3568 | −0.3015 | −0.0605 |
+
+**The rule fails two independent generalisation tests, and it fails them
+differently.** On the fifteen symbols it was developed on it worked for two
+years — positive in three of its first four windows — and then **broke at
+exactly the development/validation boundary**, 2025-06-01, losing in every
+window after it. On twenty-one symbols it had never seen it **never worked at
+all**, losing in every window from its first.
+
+So it does not generalise across *time* on its own universe, and it does not
+generalise across *universe* at any time. Either failure alone would refute it.
 
 **What did survive.** Three findings that are not candidates but are worth
 carrying forward:
@@ -301,24 +312,71 @@ measurement of the policy whose id it names.
 correct; the code selecting what to classify was not, and only real data with a
 threshold collision in it could show that.
 
-### Decomposition (primary rule, all samples pooled, cost-inclusive)
+### Defects BY-D2 … BY-D8 — found by an independent code review AFTER release
+
+Report 0035 was published and its two commits pushed before an independent
+`/code-review` pass over the same diff. It raised thirteen findings; eight were
+verified against the real captures and fixed, and the two most severe changed
+what this report says. They are recorded here rather than quietly corrected,
+because a reader who read the first version was told something false.
+
+| # | defect | how it was verified | effect |
+|---|---|---|---|
+| **BY-D6** | **The walk-forward and every decomposition pooled all three samples.** The traded universe doubled at 2024-06 (13 symbols before, 33 after) as the holdout entered, so each window after that boundary described a different market from the windows before it | counted symbols per window on the real study | **The published "BX's finding was one six-month window" was wrong.** Corrected: the rule is positive in three of its first four windows on its own universe and breaks at the validation boundary; the holdout loses in every window. Two decomposition rows also reversed |
+| **BY-D7** | **`--validation-artifact` and `--geometry-artifact` were inert.** `compose.refresh()` accepted both and forwarded neither, so the CLI decoded the artifact and the page still said nothing was loaded | `'validation=validation' in inspect.getsource(refresh)` → `False` | The shipped dashboard flag did nothing. Now forwarded; `--geometry-artifact` had the same pre-existing defect and is fixed with it |
+| **BY-D8** | **The no-ladder exit control did not reproduce `simulate_trade`,** contrary to `exit_full_target`'s **sealed** hypothesis text, because `_process` consulted `opened_beyond` with no ladder | reproduced on a bar that opens beyond the stop and reaches the target: control gave `STOP −1.5R`, `simulate_trade` gave `AMBIGUOUS` | The seal is the contract, so the **code** was fixed. **§10's figures are unaffected** — measured on the real captures, `simulate_trade` ambiguity is **19** on development, exactly the count already reported |
+| BY-D9 | The §9 exit comparison was not like-for-like: a managed mechanic watches a third level, so bars that ran +1R and then stopped became ambiguous for it and a clean −1R for the control | reasoned from `_State.levels`, confirmed by the ambiguous counts (2 → 20) | A **comparable** column now re-measures every mechanic over the setups all of them could measure, and the report says to read that one |
+| BY-D10 | The entire §7–§9 mechanics layer was unreachable from any shipped command | no caller outside `tests/` | `fmits research validation --with-mechanics` now runs it |
+| BY-D11 | `_neighbourhood_for` returned the first matching axis, so the primary point's plateau was decided by the stop axis alone | read from the branch order | Both axes are now evaluated and both must hold. **The verdict is unchanged** — the stop axis was already FRAGILE_SPIKE |
+| BY-D12 | `bars_within` claimed a bisect but ran two O(n) passes in front of it, on every call, against ~26k rows | read from the body | Ordering validated once at `BarLadder` construction; the search is now genuinely O(log n) |
+| BY-D13 | Four smaller defects: `verify_result_digest` hard-coded the cost scenarios and the frictionless id; `mean_mfe_captured` averaged an unbounded ratio; a `NO_ENTRY_BAR` record carried an entry; a truncated *execution* series was reported as a lower-timeframe gap | read and reproduced | all fixed |
+
+**The result digest is unchanged at `fadf2971…`.** Every one of these was a
+defect in analysis, presentation or reachability; none touched a measurement,
+and the verdict — **NO_CANDIDATE, all eleven hypotheses REJECTED** — is
+unaffected. Five findings were investigated and **not** accepted as defects, and
+one of those is worth naming: `PlansGeometry` as a `runtime_checkable` Protocol
+was queried, and data-member protocols do support `isinstance` (only
+`issubclass` is forbidden), which was verified rather than assumed.
+
+### Decomposition (primary rule, cost-inclusive) — **two universes, kept apart**
+
+**Primary universe** — the 15 symbols, development + validation, 216 trades,
+pooled +0.0604R:
 
 | cut | result |
 |---|---|
-| direction | long −0.1338 (128) · short −0.0591 (288) — **agree in sign** |
-| symbol class | major **+0.0791** (76) · non-major **−0.1182** (340) — **disagree** |
-| largest single symbol share | **10.2 %** of gross \|R\| — well below the 40 % bound |
-| per symbol | **34 of 36 cohorts below the 20-trade floor**; expectancy refused |
-| context regime | trending −0.0821 (416) — the gate admits nothing else |
-| setup structural trend | neutral −0.1286 · sustained_higher −0.1307 · sustained_lower **+0.0203** — **disagree** |
+| direction | long −0.0166 (88) · short **+0.1134** (128) — **disagree in sign** |
+| symbol class | major +0.0791 (76) · non-major +0.0503 (140) — **agree, both positive** |
+| largest single symbol share | **10.2 %** of gross \|R\| on development — well below the 40 % bound |
+| per symbol | **every cohort below the 20-trade floor**; expectancy refused |
+| context regime | trending +0.0604 (216) — the gate admits nothing else |
+| setup structural trend | neutral +0.0525 · sustained_higher +0.0556 · sustained_lower +0.0807 — **agree, all positive** |
 
-The symbol-class split is the one a reader should not skip: the majors are
-positive and the rest are not, on a universe where the majors are one sixth of
-the symbols and the holdout is entirely non-major. That is consistent with the
-rule being executable-but-unprofitable on liquid instruments and simply
-unprofitable elsewhere — and it is **not** evidence of an edge, because the major
-cohort is 76 trades pooled across three samples and is not a pre-registered
-sample.
+**Holdout universe** — the 21 symbols, 200 trades, pooled −0.2361R:
+
+| cut | result |
+|---|---|
+| direction | long −0.3917 (40) · short −0.1972 (160) — **agree, both negative** |
+| symbol class | non_major −0.2361 (200) — the holdout contains no major |
+| context regime | trending −0.2361 (200) |
+
+**What this actually says, now that the two universes are not mixed.** On its own
+universe the rule is *pooled positive* and its cohorts largely agree — majors and
+non-majors both positive, all three structural-trend cohorts positive. The one
+disagreement is direction: **short +0.1134 against long −0.0166**, which on a
+universe and period crypto spent broadly rising is the opposite of the
+market-call artefact one would fear, and is not a result at 88 and 128 trades.
+
+The pooled +0.0604R is not an edge. It is the arithmetic of +0.1995R over 136
+development trades and −0.1761R over 80 validation trades, and the walk-forward
+above shows the whole gain is earned before 2025-06 and given back after.
+
+**An earlier version of this table pooled all three samples and reported the
+opposite on two rows** — "long and short agree, both negative" and "majors
+positive, non-majors negative". Both were artefacts of mixing a 15-symbol
+universe with a 21-symbol one whose trades are entirely non-major and entirely
+negative. See defect **BY-D6**.
 
 ---
 
@@ -566,7 +624,7 @@ convention is how a four-hour lookahead gets in.
 
 ## 14. Hostile review (§20)
 
-**27 probes, 0 failures.** Each attack tries to make the milestone say something
+**31 probes, 0 failures.** Each attack tries to make the milestone say something
 it should not, run against the real result rather than a fixture.
 
 | attack | outcome |
@@ -578,8 +636,8 @@ it should not, run against the real result rather than a fixture.
 | one symbol creates all the profits | largest share **10.2 %**, bound is 40 % |
 | one giant winner creates the PF | largest win 6.72R of 27.13R total — 25 % |
 | thin sample | 136 / 80 / 200 measurable, floor is 20 |
-| long works / short fails | both negative, **agree in sign** |
-| bull only / bear only | **exactly this** — one positive window of six, and the walk-forward says so |
+| long works / short fails | primary universe **disagrees** — short +0.1134 (128), long −0.0166 (88); holdout loses in **both** directions |
+| bull only / bear only | **the primary curve changes sign** and every gain is earned before the validation boundary; the holdout curve is negative in every window |
 | lower-timeframe missing / gaps | a partial cover **refuses to descend**; a one-rung ladder behaves as BX did |
 | ambiguous event remains ambiguous | 2 of 19 and 3 of 21 — refused, never guessed |
 | stop widened to a nonsensical level | 0.80 ATR measured and negative; the rule is a *selection* among real levels |
@@ -597,8 +655,8 @@ it should not, run against the real result rather than a fixture.
 
 ## 15. Mutation testing (§21)
 
-**50 probes · 48 killed · 2 analysed and shown non-defective · 0 genuine
-survivors.** Byte-exact restoration verified by SHA-256; `__pycache__` cleared
+**57 probes · 55 killed · 2 analysed and shown non-defective · 0 genuine
+survivors.** Seven were added after the code review, one per defect it found. Byte-exact restoration verified by SHA-256; `__pycache__` cleared
 before every run.
 
 Probed invariants: the seal · a threshold moved after freeze · a dropped
@@ -661,10 +719,10 @@ settled empirically rather than by argument:
 
 | gate | result |
 |---|---|
-| **Full repository under `-W error`** | **11,701 passing**, 0 failures (from 11,285 at BX) |
-| Focused BY suite | **323 tests** across 12 new files |
-| **Mutation probes** | **50 run · 48 killed · 2 equivalent · 0 survivors** |
-| **Hostile review** | **27 probes, 0 failures** |
+| **Full repository under `-W error`** | **11,726 passing**, 0 failures (from 11,285 at BX) |
+| Focused BY suite | **345 tests** across 12 new files |
+| **Mutation probes** | **57 run · 55 killed · 2 equivalent · 0 survivors** |
+| **Hostile review** | **31 probes, 0 failures** |
 | **No-lookahead on real captures** | 3 claims, 3 non-vacuous controls, all held |
 | **BX capture reproduced** | 246 candidates / 104,130 instants — **exact** |
 | Determinism | result digest stable across `PYTHONHASHSEED` 0 / 1 / 12345 |
@@ -830,8 +888,18 @@ written down before it was measured:
 * `parameter_plateau` — **FRAGILE_SPIKE** on the stop axis, required ROBUST_PLATEAU.
 
 It did **not** fail for want of data, for want of trades, for concentration, for
-drawdown, or for costs. It cleared all of those. It failed because **the effect
-was one six-month window**, and neither unseen sample contains that window.
+drawdown, or for costs. It cleared all of those. It failed **two independent
+generalisation tests**: on the fifteen symbols it was developed on the effect
+persisted through several windows and then broke at the development/validation
+boundary, and on twenty-one symbols it had never seen it was absent from the
+first window onward. Either failure alone would refute it.
+
+**Stated no more strongly than the evidence allows.** Six half-year windows on
+one universe and four on another cannot establish *why* the effect stopped —
+regime, crowding, liquidity or chance are all consistent with what was measured,
+and this milestone distinguishes none of them. What it establishes is narrower
+and sufficient: the rule did not generalise across time on its own universe, and
+did not generalise across universe at any time.
 
 No strategy earned CANDIDATE status. **Production remains the current policy, and
 nothing here is proposed for shadow, paper or forward testing.**

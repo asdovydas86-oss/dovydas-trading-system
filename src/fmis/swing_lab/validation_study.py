@@ -136,6 +136,11 @@ __all__ = [
 #: Bumped whenever a persisted validation artifact changes shape.
 VALIDATION_SCHEMA_VERSION: Final[int] = 1
 
+#: The rung below the execution timeframe, used to order two events inside one
+#: bar. Declared here rather than passed in: a study that could be asked for a
+#: different refinement interval could be asked for a coarser one.
+REFINEMENT_INTERVAL: Final[str] = "1h"
+
 #: Rolling walk-forward window length. Six months on a 3.2-year span gives six
 #: windows, which is enough to see whether a frozen policy behaves consistently
 #: and few enough that each window can still clear the sample floor. Declared
@@ -583,15 +588,17 @@ def _neighbourhood_for(policy: PlansGeometry) -> tuple[tuple[str, float, bool], 
     if not _on_the_cross(policy):
         return ()
     stop, target = policy.min_stop_atr, policy.min_planned_rr
+    axes: list[tuple[str, float, bool]] = []
+    # BOTH axes, not the first that matches. The primary point sits on the stop
+    # sweep AND the target sweep, and returning only the first meant its
+    # `parameter_plateau` was decided by one axis while the other was never
+    # applied to it — which is not what "whether EACH parameter sits on a
+    # plateau" says. A policy on both must satisfy both.
     if target == PRIMARY_TARGET_R and stop in STOP_ATR_NEIGHBOURHOOD:
-        return tuple(
-            ("stop_atr", value, value == stop) for value in STOP_ATR_NEIGHBOURHOOD
-        )
+        axes += [("stop_atr", value, value == stop) for value in STOP_ATR_NEIGHBOURHOOD]
     if stop == PRIMARY_STOP_ATR and target in TARGET_R_NEIGHBOURHOOD:
-        return tuple(
-            ("target_r", value, value == target) for value in TARGET_R_NEIGHBOURHOOD
-        )
-    return ()
+        axes += [("target_r", value, value == target) for value in TARGET_R_NEIGHBOURHOOD]
+    return tuple(axes)
 
 
 @dataclass(frozen=True, slots=True)
@@ -657,8 +664,21 @@ class ValidationStudy:
 
     manifest: ValidationManifest
     policies: tuple[PolicyValidation, ...]
+    #: The primary universe's chronological curve — development and validation
+    #: only, which are the SAME fifteen symbols over one continuous span.
+    #: **The holdout is deliberately excluded and carried separately.** Mixing
+    #: them doubled the traded universe at 2024-06 (13 symbols before, 33 after)
+    #: and made every window after that boundary describe a different market
+    #: from the windows before it: a curve that changes what it measures
+    #: half-way along cannot separate a decay in time from a change in universe,
+    #: and reading one as the other is exactly the mistake it invites.
     walk_forward: tuple[WalkForwardWindow, ...]
+    #: The holdout universe's own curve, over its own window.
+    holdout_walk_forward: tuple[WalkForwardWindow, ...]
+    #: Cuts over the primary universe, on the same footing as `walk_forward`.
     decompositions: tuple[Decomposition, ...]
+    #: Cuts over the holdout universe, kept apart for the same reason.
+    holdout_decompositions: tuple[Decomposition, ...]
     walk_forward_policy_id: str
 
     def policy(self, policy_id: str) -> PolicyValidation:
@@ -931,23 +951,55 @@ def run_validation_study(
     ordered = tuple(validations)
 
     # ---- walk-forward and decompositions, on the PRIMARY hypothesis ----
-    primary_policy_id = PRE_REGISTRATION.hypothesis_for(
+    # Read off the PARAMETER, never the module global: `preregistration` is a
+    # supported input (offline tests substitute one) and reaching past it for
+    # the subject would make a substituted manifest raise a bare StopIteration
+    # below instead of the named error this function documents.
+    primary_policy_id = preregistration.hypothesis_for(
         f"by_stop_{_slug(PRIMARY_STOP_ATR)}atr_target_{_slug(PRIMARY_TARGET_R)}r"
     ).policy_id
-    primary_validation = next(v for v in ordered if v.policy_id == primary_policy_id)
-    across_samples = tuple(
-        trade
-        for measurement in primary_validation.measurements
-        if measurement.cost_policy_id == deciding.policy_id
-        for trade in measurement.trades
+    primary_validation = next(
+        (v for v in ordered if v.policy_id == primary_policy_id), None
     )
+    if primary_validation is None:
+        raise SwingLabError(
+            f"the walk-forward subject {primary_policy_id!r} is not among the "
+            f"measured policies ({', '.join(v.policy_id for v in ordered)}). A "
+            "substituted pre-registration must still declare the primary point."
+        )
+
+    def trades_of(*samples: str) -> tuple[LabTrade, ...]:
+        wanted = set(samples)
+        return tuple(
+            trade
+            for measurement in primary_validation.measurements
+            if measurement.cost_policy_id == deciding.policy_id
+            and measurement.sample in wanted
+            for trade in measurement.trades
+        )
+
+    # The primary universe is development + validation: the SAME fifteen symbols
+    # over one continuous span, so a window boundary is a date and nothing else.
+    primary_trades = trades_of(development_spec.name, validation_spec.name)
     windows = walk_forward(
-        across_samples,
+        primary_trades,
         start=development_spec.signal_start,
-        end=max(validation_spec.signal_end, holdout_spec.signal_end),
+        end=validation_spec.signal_end,
         label=primary_policy_id,
     )
-    cuts = decompose(across_samples)
+    holdout_trades = trades_of(holdout_spec.name)
+    holdout_windows = (
+        walk_forward(
+            holdout_trades,
+            start=holdout_spec.signal_start,
+            end=holdout_spec.signal_end,
+            label=f"{primary_policy_id}:holdout",
+        )
+        if holdout_trades
+        else ()
+    )
+    cuts = decompose(primary_trades)
+    holdout_cuts = decompose(holdout_trades) if holdout_trades else ()
 
     manifest = ValidationManifest(
         experiment_id=experiment_id,
@@ -977,7 +1029,9 @@ def run_validation_study(
         manifest=manifest,
         policies=ordered,
         walk_forward=windows,
+        holdout_walk_forward=holdout_windows,
         decompositions=cuts,
+        holdout_decompositions=holdout_cuts,
         walk_forward_policy_id=primary_policy_id,
     )
 
@@ -997,7 +1051,8 @@ def run_validation_experiment(
     limit: int = DEFAULT_BACKTEST_LIMIT,
     transport: Transport | None = None,
     base_url: str | None = None,
-) -> ValidationStudy:
+    with_mechanics: bool = False,
+) -> "tuple[ValidationStudy, Any | None]":
     """Fetch, capture and judge — with **every input read from the sealed manifest**.
 
     There is deliberately no symbol argument, no window argument and no threshold
@@ -1036,7 +1091,7 @@ def run_validation_experiment(
         if open_holdout
         else None
     )
-    return run_validation_study(
+    study = run_validation_study(
         primary,
         holdout=holdout,
         experiment_id=experiment_id,
@@ -1045,6 +1100,86 @@ def run_validation_experiment(
         candle_limit=limit,
         no_lookahead_proven=no_lookahead_proven,
         preregistration=preregistration,
+    )
+    mechanics = (
+        _mechanics_for(
+            primary,
+            preregistration=preregistration,
+            spec=development,
+            evaluation_window_bars=evaluation_window_bars,
+            transport=transport,
+            base_url=base_url,
+        )
+        if with_mechanics
+        else None
+    )
+    return study, mechanics
+
+
+def _mechanics_for(
+    capture: GeometryCapture,
+    *,
+    preregistration: Preregistration,
+    spec: SampleSpec,
+    evaluation_window_bars: int,
+    transport: Transport | None,
+    base_url: str | None,
+) -> "Any":
+    """Fetch the 1H rung and run the entry, exit and ambiguity studies.
+
+    Kept behind a flag because it costs a second fetch — ~400k 1H rows for the
+    primary universe — and because §7–§9 answer a different question from the
+    sealed hypotheses. Without it `fmits research validation` printed "NOT
+    MEASURED for this run" unconditionally, which made the entire mechanics
+    layer unreachable from any shipped command and its published figures
+    irreproducible outside a scratch script.
+
+    The subject is the **production geometry**, because that is where Milestone
+    BX found the ambiguity it declared NOT MEASURABLE; the primary rule's wider
+    stop removes almost all of it, so measuring §8 on the primary rule would
+    report a resolution rate for a problem it does not have.
+    """
+    from fmis.swing_lab.validation_mechanics import (
+        MechanicsStudy,
+        ambiguity_reading,
+        fetch_refinement_bars,
+        ladder_set,
+        run_entry_study,
+        run_exit_study,
+    )
+
+    cut = narrow_to_sample(capture, spec)
+    geometry = preregistration.hypothesis_for("geom_production").policy
+    execution = capture.metadata.get("timeframes", {}).get("execution", "4h")
+    refinement = fetch_refinement_bars(
+        spec.symbols, REFINEMENT_INTERVAL,
+        start=spec.signal_start,
+        end=spec.signal_end
+        + evaluation_window_bars * interval_duration(execution),
+        transport=transport, base_url=base_url,
+    )
+    ladders = ladder_set(
+        cut, execution_interval=execution,
+        refinement=refinement, refinement_interval=REFINEMENT_INTERVAL,
+    )
+    costs = next(
+        item for item in preregistration.cost_scenarios
+        if item.policy_id == preregistration.deciding_cost_policy_id
+    )
+    exits = run_exit_study(
+        cut, geometry=geometry, ladders=ladders, costs=costs,
+        execution_window_bars=evaluation_window_bars, sample=spec.name,
+    )
+    entries = run_entry_study(
+        cut, geometry=geometry, ladders=ladders, costs=costs,
+        execution_window_bars=evaluation_window_bars, sample=spec.name,
+    )
+    return MechanicsStudy(
+        geometry_policy_id=geometry.policy_id,
+        sample=spec.name,
+        entries=entries,
+        exits=exits,
+        ambiguity=ambiguity_reading(exits),
     )
 
 

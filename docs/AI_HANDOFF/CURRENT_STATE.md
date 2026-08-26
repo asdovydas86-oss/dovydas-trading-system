@@ -24,10 +24,12 @@ and twenty-one symbols this repository had never measured. Full record:
   (+0.1995R cost-inclusive) and negative on both unseen samples**: −0.1761R on the later period and
   −0.2361R on twenty-one never-measured symbols. All eleven sealed hypotheses are REJECTED.
 
-- **The mechanism is a decay, and the walk-forward shows it in one line.** The primary rule earned
-  **+0.2336R in 2023H2** and was negative in every subsequent half-year (−0.039, −0.080, −0.049,
-  −0.350, −0.101). BX's finding was **one six-month window**; the development sample was positive
-  only because it contained that window.
+- **The rule fails two independent generalisation tests, and it fails them differently.** On the
+  fifteen symbols it was developed on it worked for two years — **+0.234, −0.039, +0.352, +0.259** —
+  and then broke at exactly the development/validation boundary (2025-06-01): **−0.450, −0.150**. On
+  the twenty-one holdout symbols it **never** worked, losing in every window from its first
+  (−0.359, −0.357, −0.302, −0.061). It does not generalise across TIME on its own universe, and it
+  does not generalise across UNIVERSE at any time; either failure alone refutes it.
 
 - **A sealed pre-registration is the milestone's real deliverable.**
   `fmis.swing_lab.preregistration` fixes every hypothesis id, threshold, symbol list, window
@@ -68,13 +70,22 @@ and twenty-one symbols this repository had never measured. Full record:
   `validation_render`. Plus `fmits research validation` — which takes **no universe, no window and
   no threshold**, because all three are sealed — and a read-only `/validation` dashboard page.
 
-- **Verification.** Full repository **11,701 passing under `-W error`** (from 11,285 at BX);
+- **Verification.** Full repository **11,726 passing under `-W error`** (from 11,285 at BX);
   50 mutation probes with **48 killed and 2 shown equivalent by byte-identical results over 246 real
   candidates**; 27 hostile probes, 0 failures; no-lookahead proven on the real captures with a
   non-vacuity control for every claim. The primary capture reproduced BX's **246 candidates from
   104,130 instants exactly**.
 
-- **One defect the real run exposed (BY-D1).** The plateau neighbourhood was keyed on matching
+- **Eight defects found and fixed, two of them AFTER the release commits were pushed.** An
+  independent code-review pass over the pushed diff found that the walk-forward and every
+  decomposition **pooled all three samples**, doubling the traded universe mid-curve — which made
+  the originally published "one six-month window" claim wrong, and reversed two decomposition rows.
+  It also found `--validation-artifact` and `--geometry-artifact` were **inert** (`refresh()`
+  accepted both and forwarded neither), and that the no-ladder exit control did not reproduce
+  `simulate_trade` as its **sealed** text requires. All are fixed and recorded in report 0035; the
+  result digest is unchanged at `fadf2971…` and the verdict is unaffected.
+
+- **One defect the first real run exposed (BY-D1).** The plateau neighbourhood was keyed on matching
   threshold *numbers*, and the 1D-invalidation alternative — which shares (0.50, 2.0) with the
   primary point while being a different rule — silently displaced it, so every primary policy's
   plateau was classified against the wrong measurement. Fixed by reading the sealed **family**; a

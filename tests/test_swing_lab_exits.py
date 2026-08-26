@@ -415,3 +415,60 @@ def test_the_trail_ignores_a_prior_bar_whose_extreme_is_behind_the_stop() -> Non
     # so the dip to 101 takes it out at 103 rather than running on.
     assert result.trade.exit_reason is LabExitReason.STOP
     assert result.trade.exit_price == Decimal("103")
+
+
+def test_the_no_ladder_control_refuses_a_bar_that_OPENED_beyond_one_level() -> None:
+    """The case the original `_PATHS` fixtures did not contain.
+
+    `exit_full_target`'s **sealed** hypothesis says the no-ladder run "must
+    reproduce simulate_trade exactly". `opened_beyond` is a genuine extra fact —
+    a bar that opened past a level reached it at its first price — but
+    `simulate_trade` does not use it, so consulting it without a ladder made the
+    control resolve a bar the coarse simulator refuses. The seal is the
+    contract, so the code was fixed rather than the claim.
+    """
+    bars = [
+        _bar(0, "100", "101", "99", "100"),
+        _bar(1, "100", "105", "99", "104"),
+        _bar(2, "85", "121", "84", "110"),   # opens below the stop AND reaches the target
+    ]
+    control = _managed(bars, FULL, ladder=None).trade
+    expected = _reference(bars)
+    assert expected.exit_reason is LabExitReason.AMBIGUOUS_SAME_BAR
+    assert control.exit_reason == expected.exit_reason
+    assert control.net_r == expected.net_r
+
+
+def test_a_ladder_DOES_use_the_open_to_order_the_same_bar() -> None:
+    """The extra fact belongs to the laddered run, where it is reported as resolution."""
+    bars = [
+        _bar(0, "100", "101", "99", "100"),
+        _bar(1, "100", "105", "99", "104"),
+        _bar(2, "85", "121", "84", "110"),
+    ]
+    fine = tuple(
+        _bar(index, "85", "121", "84", "110", interval="1h")
+        for index in range(8, 12)
+    )
+    ladder = BarLadder("BTCUSDT", (("4h", tuple(bars)), ("1h", fine)))
+    result = _managed(bars, FULL, ladder=ladder).trade
+    assert result.exit_reason is LabExitReason.STOP
+    assert result.exit_price == Decimal("85")   # the open, which came first
+
+
+def test_a_gap_past_the_target_records_no_position_at_all() -> None:
+    """`simulate_trade._unentered` leaves entry_at and entry_price ABSENT; so must this.
+
+    A record that carries a fill while claiming no position was opened makes
+    `entry_price is not None` an unreliable test for "this setup traded".
+    """
+    bars = [
+        _bar(0, "100", "101", "99", "100"),
+        _bar(1, "130", "135", "129", "134"),   # opens beyond the target of 120
+    ]
+    result = _managed(bars, FULL).trade
+    expected = _reference(bars)
+    assert result.exit_reason is LabExitReason.NO_ENTRY_BAR
+    assert result.exit_reason == expected.exit_reason
+    assert result.entry_at is None and expected.entry_at is None
+    assert result.entry_price is None and expected.entry_price is None

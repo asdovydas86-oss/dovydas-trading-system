@@ -31,10 +31,10 @@ machinery, and both controls are asserted rather than assumed.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Final
 
 from fmis.paper.models import PriceBar
 from fmis.swing_lab.entry import (
@@ -59,6 +59,10 @@ from fmis.swing_lab.metrics import VariantMetrics, compute_lab_metrics
 from fmis.swing_lab.models import LabExitReason, LabTrade, SwingLabError
 from fmis.swing_setup.research_models import interval_duration
 from fmis.trade_lifecycle import PaperCostPolicy
+
+#: The smallest favourable excursion for which "share of MFE captured" means
+#: anything. Below it the ratio's denominator is noise and the quotient explodes.
+_MFE_FLOOR: Final[Decimal] = Decimal("0.25")
 
 __all__ = [
     "LadderSet",
@@ -205,6 +209,17 @@ class ExitMeasurement:
     ambiguous: int
     resolved_by_descent: int
     mean_mfe_captured: Decimal | None
+    #: The same mechanic measured over the setups **every** mechanic could
+    #: measure. This is the only column of the §9 table that compares like with
+    #: like: a managed mechanic watches a third level at +1R, so a bar touching
+    #: both the arming price and the stop is ambiguous for it and a clean stop
+    #: for the control. The trades that drop out are exactly the ones that ran a
+    #: full R in favour and then stopped — losers that had been winners — so
+    #: each managed mechanic's own `metrics` is computed over a sample depleted
+    #: of its worst cases while the control keeps them at -1R. Printing those two
+    #: side by side flatters management by construction.
+    comparable_metrics: VariantMetrics | None = None
+    negligible_excursions: int = 0
 
     def payload(self) -> dict[str, Any]:
         value = self.metrics.expectancy_r.value
@@ -228,6 +243,17 @@ class ExitMeasurement:
             "max_drawdown_r": str(self.metrics.max_drawdown.max_drawdown_r),
             "mean_mfe_captured": (
                 None if self.mean_mfe_captured is None else str(self.mean_mfe_captured)
+            ),
+            "negligible_excursions": self.negligible_excursions,
+            "comparable_measurable_trades": (
+                None if self.comparable_metrics is None
+                else self.comparable_metrics.measurable_trades
+            ),
+            "comparable_expectancy_r": (
+                None
+                if self.comparable_metrics is None
+                or self.comparable_metrics.expectancy_r.value is None
+                else str(self.comparable_metrics.expectancy_r.value)
             ),
         }
 
@@ -468,7 +494,7 @@ def run_exit_study(
 
     for policy, use_ladder in variants:
         trades: list[LabTrade] = []
-        armed = ambiguous = descents = 0
+        armed = ambiguous = descents = negligible = 0
         captured: list[Decimal] = []
         suffix = "" if use_ladder else "_no_ladder"
 
@@ -519,8 +545,16 @@ def run_exit_study(
             if managed.descents:
                 descents += 1
             net, mfe = managed.trade.net_r, managed.trade.mfe_r
-            if net is not None and mfe is not None and mfe > 0:
+            # Guarded by a MEANINGFUL excursion, not merely a positive one. The
+            # ratio's denominator is unbounded below: a trade whose MFE was
+            # +0.001R and whose net was -1R contributes -1000, and a handful of
+            # those decide the mean. Trades that never ran a quarter of an R in
+            # favour have no "share of MFE captured" worth averaging, and are
+            # counted separately rather than allowed to dominate.
+            if net is not None and mfe is not None and mfe >= _MFE_FLOOR:
                 captured.append(net / mfe)
+            elif net is not None:
+                negligible += 1
 
         frozen = tuple(trades)
         results.append(
@@ -537,9 +571,29 @@ def run_exit_study(
                 mean_mfe_captured=(
                     None if not captured else sum(captured) / len(captured)
                 ),
+                negligible_excursions=negligible,
             )
         )
-    return tuple(results)
+
+    # Every mechanic re-measured over the setups ALL of them could measure, so
+    # the §9 table has one column that is a like-for-like comparison.
+    frozen = tuple(results)
+    common: set[str] | None = None
+    for item in frozen:
+        measurable = {t.setup_id for t in item.trades if t.is_measurable}
+        common = measurable if common is None else (common & measurable)
+    shared = common or set()
+    return tuple(
+        replace(
+            item,
+            comparable_metrics=compute_lab_metrics(
+                tuple(t for t in item.trades if t.setup_id in shared),
+                label=f"{item.policy.policy_id}"
+                      f"{'' if item.used_ladder else '_no_ladder'}:{sample}:comparable",
+            ),
+        )
+        for item in frozen
+    )
 
 
 def unresolved_spans(measurements: Sequence[ExitMeasurement]) -> tuple[tuple[str, str], ...]:

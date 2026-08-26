@@ -281,14 +281,33 @@ def test_bars_within_refuses_an_inverted_span() -> None:
         bars_within((), T0 + _hours(3), T0)
 
 
-def test_bars_within_refuses_unordered_input() -> None:
-    """A binary search over unsorted rows returns a wrong slice, silently."""
+def test_an_unordered_rung_is_refused_at_ladder_construction() -> None:
+    """A binary search over unsorted rows returns a wrong slice, silently.
+
+    The check lives on `BarLadder` rather than inside `bars_within`: it is the
+    ladder that owns the series, the cost is paid once instead of once per
+    search, and re-validating on every call made the documented bisect
+    decorative — an O(n) scan in front of an O(log n) search, run thousands of
+    times over ~26k rows.
+    """
     out_of_order = (
         _bar("1h", _hours(3), "100", "101", "99", "100"),
         _bar("1h", _hours(1), "100", "101", "99", "100"),
     )
-    with pytest.raises(SwingLabError, match="ordered by open_time"):
-        bars_within(out_of_order, T0, T0 + _hours(5))
+    with pytest.raises(SwingLabError, match="not ordered by open_time"):
+        BarLadder("BTCUSDT", (("4h", ()), ("1h", out_of_order)))
+
+
+def test_bars_within_is_a_real_bisect_and_not_a_scan() -> None:
+    """Guards the fix: no per-call key list, no per-call ordering scan."""
+    import inspect
+
+    from fmis.swing_lab import intrabar
+
+    body = inspect.getsource(intrabar.bars_within)
+    assert "bisect_left" in body and "bisect_right" in body
+    assert "for bar in bars" not in body      # no materialised key list
+    assert "zip(times" not in body            # no pairwise ordering scan
 
 
 # ------------------------------------------------------------- validation ---

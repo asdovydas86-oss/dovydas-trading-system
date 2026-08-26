@@ -143,14 +143,65 @@ def test_the_minimum_point_count_is_three() -> None:
     assert MIN_PLATEAU_POINTS == 3
 
 
-def test_a_neighbourhood_needs_exactly_one_centre() -> None:
-    with pytest.raises(SwingLabError, match="exactly one primary point"):
+def test_a_neighbourhood_needs_a_centre() -> None:
+    with pytest.raises(SwingLabError, match="must hold a primary point"):
         classify_plateau([_reading("stop_atr", 0.5, _metrics("a"))])
-    with pytest.raises(SwingLabError, match="exactly one primary point"):
+
+
+def test_two_DIFFERENT_centres_are_refused() -> None:
+    """Two policies at the centre means the neighbourhood was assembled wrongly."""
+    with pytest.raises(SwingLabError, match="exactly one primary POLICY"):
         classify_plateau(
             [
                 _reading("stop_atr", 0.35, _metrics("a"), primary=True),
                 _reading("stop_atr", 0.50, _metrics("b"), primary=True),
+            ]
+        )
+
+
+def test_one_policy_may_be_the_centre_of_BOTH_axes() -> None:
+    """The primary point sits on the stop sweep AND the target sweep.
+
+    It then appears once per axis — one point measured twice, not two points —
+    and both axes must be satisfied for the plateau to hold.
+    """
+    centre = _metrics("p", net_r="0.4")
+    reading = classify_plateau(
+        [
+            _reading("stop_atr", 0.35, _metrics("a", net_r="0.2")),
+            NeighbourReading("p", "stop_atr", 0.50, True, centre),
+            _reading("stop_atr", 0.65, _metrics("c", net_r="0.1")),
+            _reading("target_r", 1.5, _metrics("d", net_r="0.3")),
+            NeighbourReading("p", "target_r", 2.0, True, centre),
+            _reading("target_r", 2.5, _metrics("e", net_r="0.2")),
+        ]
+    )
+    assert reading.classification is PlateauClass.ROBUST_PLATEAU
+
+
+def test_a_failure_on_EITHER_axis_makes_the_centre_fragile() -> None:
+    centre = _metrics("p", net_r="0.4")
+    reading = classify_plateau(
+        [
+            _reading("stop_atr", 0.35, _metrics("a", net_r="0.2")),
+            NeighbourReading("p", "stop_atr", 0.50, True, centre),
+            _reading("stop_atr", 0.65, _metrics("c", net_r="0.1")),
+            _reading("target_r", 1.5, _metrics("d", net_r="-0.3")),
+            NeighbourReading("p", "target_r", 2.0, True, centre),
+            _reading("target_r", 2.5, _metrics("e", net_r="0.2")),
+        ]
+    )
+    assert reading.classification is PlateauClass.FRAGILE_SPIKE
+
+
+def test_the_same_centre_reporting_different_numbers_is_refused() -> None:
+    """One policy cannot have two development expectancies; that is a wiring bug."""
+    with pytest.raises(SwingLabError, match="different measurements on different axes"):
+        classify_plateau(
+            [
+                NeighbourReading("p", "stop_atr", 0.50, True, _metrics("p", net_r="0.4")),
+                _reading("stop_atr", 0.65, _metrics("c", net_r="0.1")),
+                NeighbourReading("p", "target_r", 2.0, True, _metrics("p", net_r="0.9")),
             ]
         )
 

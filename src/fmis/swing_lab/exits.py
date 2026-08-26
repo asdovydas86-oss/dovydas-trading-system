@@ -372,10 +372,22 @@ def _process(
     # Two or more levels in one bar. A level the bar OPENED beyond was reached at
     # the bar's first price and nothing inside it can have preceded that; several
     # such levels are past the open simultaneously and cannot be ordered at all.
-    opened = [
-        level for level in hits
-        if bar.opened_beyond(state.side, level.price, favourable=level.favourable)
-    ]
+    #
+    # **Only consulted when a ladder is present.** `fmis.swing_lab.trades.simulate_trade`
+    # does not use this fact, and `exit_full_target`'s sealed hypothesis requires
+    # the no-ladder run to reproduce it *exactly* — so a run that resolved a bar
+    # the coarse simulator refused would not be the control the pre-registration
+    # defines, and the ambiguity count it produces would not be the one Milestone
+    # BX measured. The extra fact belongs to the laddered run, beside the finer
+    # candles, where it is reported as lower-timeframe resolution.
+    opened = (
+        [
+            level for level in hits
+            if bar.opened_beyond(state.side, level.price, favourable=level.favourable)
+        ]
+        if ladder is not None
+        else []
+    )
     if len(opened) == 1:
         price, _ = fill_at_level(
             state.side, bar, opened[0].price, favourable=opened[0].favourable
@@ -489,6 +501,30 @@ def simulate_managed_trade(
             armed_at=None if state is None else state.armed_at,
         )
 
+    def _unentered_record(reason: LabExitReason) -> ManagedResult:
+        """A record with no position: no fill, no exit, no R. Matches `simulate_trade`."""
+        return ManagedResult(
+            trade=LabTrade(
+                variant_id=variant_id, symbol=symbol, setup_id=setup_id,
+                direction=direction, signal_at=signal_at, entry_at=None,
+                entry_price=None, initial_stop=stop_price, target=target_price,
+                planned_reference_price=reference_price, exit_at=None,
+                exit_price=None, exit_reason=reason, bars_held=0,
+                gross_r=None, net_r=None, mfe_r=None, mae_r=None,
+                cost_policy_id=costs.policy_id,
+                planned_risk_reward=planned_risk_reward, segment=segment,
+                context_regime_structure=context_regime_structure,
+                context_structural_trend=context_structural_trend,
+                setup_structural_trend=setup_structural_trend,
+                metadata={
+                    "exit_policy_id": policy.policy_id,
+                    "exit_mechanic": policy.mechanic.value,
+                    "legs": [],
+                },
+            ),
+            legs=(), descents=0, ambiguous_bar_at=None, armed_at=None,
+        )
+
     risk = side.sign * (entry_price - stop_price)
     if risk <= 0:
         # The entry is already at or beyond the stop. Recorded as a full loss at
@@ -499,7 +535,13 @@ def simulate_managed_trade(
             Decimal("-1"), Decimal("-1"), Decimal("0"), Decimal("0"), None, None,
         )
     if side.sign * (target_price - entry_price) <= 0:
-        return _record(None, None, LabExitReason.NO_ENTRY_BAR, 0, None, None, None, None, None, None)
+        # The entry gapped past the target: there is no longer a trade to take.
+        # `simulate_trade._unentered` records this with entry_at and entry_price
+        # ABSENT, and so must this — a record that carries a fill while claiming
+        # no position was opened makes `entry_price is not None` an unreliable
+        # test for "this setup traded", which is how the unentered counts and the
+        # ENTRY_NOT_TRIGGERED accounting drift apart.
+        return _unentered_record(LabExitReason.NO_ENTRY_BAR)
 
     state = _State(
         side=side, entry=entry_price, risk=risk, stop=stop_price,
@@ -551,7 +593,7 @@ def simulate_managed_trade(
 
     if step is not _Step.TERMINAL:
         if not window:  # pragma: no cover - entry_index addresses a bar
-            return _record(None, None, LabExitReason.NO_ENTRY_BAR, 0, None, None, None, None, state, None)
+            return _unentered_record(LabExitReason.NO_ENTRY_BAR)
         last = window[-1]
         state.close(
             state.remaining, last.close, last.open_time, LabExitReason.TIME_STOP, last.interval

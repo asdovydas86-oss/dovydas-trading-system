@@ -557,3 +557,113 @@ def test_a_collision_on_EITHER_axis_alone_is_refused(stop, target, axis) -> None
     )
     with pytest.raises(SwingLabError, match=f"'{axis}'"):
         _study(prereg=colliding)
+
+
+# ---------------------------------------------- the walk-forward's universe ---
+#
+# The walk-forward and every decomposition originally pooled all three samples,
+# so the traded universe doubled mid-curve as the holdout entered. A curve that
+# changes what it measures half-way along cannot separate a decay in time from a
+# change in universe, and reading one as the other is exactly what it invites.
+
+
+def test_the_walk_forward_holds_one_universe_for_its_whole_length() -> None:
+    study = _study()
+    holdout = set(HOLD_SYMBOLS)
+    subject = study.policy(study.walk_forward_policy_id)
+    traded = {
+        trade.symbol
+        for measurement in subject.measurements
+        if measurement.cost_policy_id == DECIDING_COST_POLICY_ID
+        and measurement.sample in ("development", "validation")
+        for trade in measurement.trades
+    }
+    assert traded
+    assert not traded & holdout, "the primary curve must contain no holdout symbol"
+
+
+def test_the_holdout_gets_its_own_curve_over_its_own_window() -> None:
+    study = _study()
+    assert study.holdout_walk_forward
+    spec = _fixture_samples()[2]
+    assert study.holdout_walk_forward[0].start == spec.signal_start
+    assert study.holdout_walk_forward[-1].end <= spec.signal_end
+
+
+def test_the_primary_curve_spans_development_through_validation() -> None:
+    study = _study()
+    development, validation, _ = _fixture_samples()
+    assert study.walk_forward[0].start == development.signal_start
+    assert study.walk_forward[-1].end <= validation.signal_end
+
+
+def test_the_decompositions_are_kept_per_universe() -> None:
+    """Pooling reversed two rows: `symbol_class` and `direction` both flipped."""
+    study = _study()
+    assert study.decompositions and study.holdout_decompositions
+    cut = next(item for item in study.decompositions if item.name == "symbol")
+    labels = {item.label.split(":")[-1] for item in cut.cohorts}
+    assert not labels & set(HOLD_SYMBOLS)
+
+
+def test_a_closed_holdout_leaves_the_holdout_curve_empty_rather_than_absent() -> None:
+    study = _study(holdout=False)
+    assert study.holdout_walk_forward == ()
+    assert study.holdout_decompositions == ()
+    assert study.walk_forward
+
+
+def test_a_substituted_manifest_without_the_primary_point_is_named_not_a_StopIteration() -> None:
+    """The subject is read off the PARAMETER, so a substitution fails by name."""
+    trimmed = replace(
+        _fixture_prereg(),
+        hypotheses=tuple(
+            item for item in PRE_REGISTRATION.hypotheses
+            if item.policy_id != "by_stop_0_5atr_target_2r"
+        ),
+    )
+    # `hypothesis_for` refuses first, by name. Either way the point holds: a
+    # substituted manifest missing the primary point raises a NAMED SwingLabError
+    # rather than the bare StopIteration the original `next(...)` produced.
+    with pytest.raises(SwingLabError, match="NOT pre-registered"):
+        _study(prereg=trimmed)
+
+
+def test_the_primary_point_is_on_BOTH_axes_of_the_cross() -> None:
+    """`stop=0.50, target=2.0` centres the stop sweep AND the target sweep.
+
+    `_neighbourhood_for` originally returned the first matching axis, so the
+    primary point's `parameter_plateau` was decided by the stop axis alone while
+    the target axis was never applied to it — which is not what "whether EACH
+    parameter sits on a plateau" says.
+    """
+    from fmis.swing_lab.preregistration import (
+        PRIMARY_POLICY,
+        STOP_ATR_NEIGHBOURHOOD,
+        TARGET_R_NEIGHBOURHOOD,
+    )
+    from fmis.swing_lab.validation_study import _neighbourhood_for
+
+    axes = _neighbourhood_for(PRIMARY_POLICY)
+    assert {axis for axis, _, _ in axes} == {"stop_atr", "target_r"}
+    assert len(axes) == len(STOP_ATR_NEIGHBOURHOOD) + len(TARGET_R_NEIGHBOURHOOD)
+    assert sum(1 for _, _, is_primary in axes if is_primary) == 2   # one per axis
+
+
+def test_an_off_centre_primary_policy_sits_on_one_axis_only() -> None:
+    """Only the point where the two sweeps meet belongs to both."""
+    from fmis.swing_lab.preregistration import PRE_REGISTRATION
+    from fmis.swing_lab.validation_study import _neighbourhood_for
+
+    off = PRE_REGISTRATION.hypothesis_for("by_stop_0_65atr_target_2r").policy
+    assert {axis for axis, _, _ in _neighbourhood_for(off)} == {"stop_atr"}
+    off = PRE_REGISTRATION.hypothesis_for("by_stop_0_5atr_target_2_5r").policy
+    assert {axis for axis, _, _ in _neighbourhood_for(off)} == {"target_r"}
+
+
+def test_the_primary_points_plateau_covers_both_axes(  ) -> None:
+    """End to end: the sealed study's primary neighbourhood spans both sweeps."""
+    study = _study()
+    plateau = study.policy("by_stop_0_5atr_target_2r").plateau
+    assert plateau is not None
+    assert {point.axis for point in plateau.readings} == {"stop_atr", "target_r"}

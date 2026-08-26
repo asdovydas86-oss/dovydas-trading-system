@@ -298,8 +298,8 @@ was an owner-directed research task, not a NOW selection.** It sits on the same 
 scoped by the owner, delivered against that scope, and **it does not satisfy the exactly-one-NOW
 rule**, which remains outstanding. It is the third milestone whose deliverable is an **answer**, and
 the first to seal its hypotheses before measuring them. Evidence: ten new modules in
-`src/fmis/swing_lab/`, `fmits research validation`, the read-only `/validation` dashboard page, 323
-new tests, full suite **11,701 passing** under `-W error`, 84–99 % statement and branch coverage of
+`src/fmis/swing_lab/`, `fmits research validation`, the read-only `/validation` dashboard page, 345
+new tests, full suite **11,726 passing** under `-W error`, 84–99 % statement and branch coverage of
 the new modules, **50 mutation probes — 48 killed, 2 proven equivalent**, 27 hostile probes with 0
 failures, and
 [report 0035](reports/0035_2026-08-26_PREREGISTERED_SWING_GEOMETRY_VALIDATION.md).
@@ -309,14 +309,22 @@ failures, and
 > good its numbers look afterwards. `fmits research validation` takes no universe, no window and no
 > threshold, because all three are part of what was frozen.
 
+> **Eight defects were found and fixed, two of them AFTER the release commits were pushed.** An
+> independent code-review pass over the pushed diff found that the walk-forward and every
+> decomposition **pooled all three samples**, doubling the traded universe mid-curve — which made
+> the originally published "one six-month window" claim wrong and reversed two decomposition rows —
+> and that `--validation-artifact` and `--geometry-artifact` were **inert**. All are fixed and
+> recorded in report 0035 §7; the result digest is unchanged and the verdict is unaffected.
+
 > **`BY` promoted nothing, and it refuted the hypothesis it was built to test.** `BX`'s post-hoc
 > finding — a 4H stop ≥ 0.5 ATR plus a real 1D target paying 2R — is **positive on development
 > (+0.1995R cost-inclusive) and negative on both unseen samples**: −0.1761R on the later period and
 > −0.2361R on twenty-one symbols this repository had never measured. All eleven sealed hypotheses
 > are REJECTED. The production stop and target rules are byte-for-byte unchanged.
 >
-> **The mechanism is a decay.** The rule earned **+0.2336R in 2023H2** and lost money in every
-> subsequent half-year. `BX`'s finding was one six-month window.
+> **The rule fails two independent generalisation tests.** On its own fifteen symbols it worked for
+> two years (+0.234, −0.039, +0.352, +0.259) and broke at exactly the validation boundary (−0.450,
+> −0.150); on twenty-one unseen symbols it never worked at all. Neither time nor universe carries it.
 >
 > **Three things did survive, and none of them is a candidate.** Structure beats distance — a
 > non-structural control at the same numbers earned +0.0240R against the structural rule's +0.1995R.

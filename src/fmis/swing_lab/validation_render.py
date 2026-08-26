@@ -286,10 +286,19 @@ def render_costs(study: ValidationStudy) -> str:
 
 
 def render_walk_forward(
-    windows: tuple[WalkForwardWindow, ...], policy_id: str
+    windows: tuple[WalkForwardWindow, ...], policy_id: str, *, universe: str = "",
 ) -> str:
-    """The frozen policy across time. Empty windows are printed, never omitted."""
-    lines = _heading(f"WALK-FORWARD — {policy_id}, frozen, no re-optimisation")
+    """The frozen policy across time. Empty windows are printed, never omitted.
+
+    ``universe`` names which symbols the curve covers, and it is printed rather
+    than assumed. A curve whose universe changes half-way along cannot separate
+    a decay in time from a change in what is being traded, so the two universes
+    are drawn as two curves and each says which one it is.
+    """
+    suffix = f" · {universe}" if universe else ""
+    lines = _heading(
+        f"WALK-FORWARD — {policy_id}, frozen, no re-optimisation{suffix}"
+    )
     lines.append("")
     lines.append(
         "   window                        trd    n          win rate"
@@ -387,24 +396,42 @@ def render_mechanics(study: MechanicsStudy | None) -> str:
     lines.append(" §9 EXIT MECHANICS")
     lines.append(
         "      policy                          ladder   amb    n           "
-        "expectancy      avgWin     avgLoss"
+        "expectancy   |  comparable n     comparable expectancy"
     )
     for item in study.exits:
+        comparable = item.comparable_metrics
         lines.append(
             f"      {item.policy.policy_id:<31} "
             f"{'yes' if item.used_ladder else 'NO ':>6} {item.ambiguous:>5} "
             f"{item.metrics.measurable_trades:>4} "
-            f"{_measure(item.metrics.expectancy_r):>20} "
-            f"{_measure(item.metrics.average_win_r, 3):>12} "
-            f"{_measure(item.metrics.average_loss_r, 3):>12}"
+            f"{_measure(item.metrics.expectancy_r):>20}   | "
+            + (
+                f"{comparable.measurable_trades:>12} {_measure(comparable.expectancy_r):>23}"
+                if comparable is not None
+                else f"{_ABSENT:>12} {_ABSENT:>23}"
+            )
         )
     lines.append("")
     lines.extend(
         _wrap(
-            "The 'NO ladder' row is the control: it must reproduce "
-            "simulate_trade exactly, so any difference between it and the "
-            "'yes' row of the same policy is the lower-timeframe evidence and "
-            "not the management rule."
+            "The 'NO ladder' row is the control: it reproduces simulate_trade "
+            "exactly, so any difference between it and the 'yes' row of the "
+            "same policy is the lower-timeframe evidence and not the management "
+            "rule."
+        )
+    )
+    lines.append("")
+    lines.extend(
+        _wrap(
+            "**Read the COMPARABLE column, not the one beside it.** A managed "
+            "mechanic watches a third level at +1R, so a bar touching both the "
+            "arming price and the stop is ambiguous for it and a clean stop for "
+            "the control — and the trades that drop out are exactly the ones "
+            "that ran a full R in favour and then stopped out. Each mechanic's "
+            "own expectancy is therefore computed over a sample depleted of its "
+            "worst cases while the control keeps them at -1R. The comparable "
+            "column re-measures every mechanic over the setups ALL of them "
+            "could measure."
         )
     )
     return "\n".join(lines)
@@ -432,8 +459,22 @@ def render_validation_study(
     )
 
     blocks.append(render_costs(study))
-    blocks.append(render_walk_forward(study.walk_forward, study.walk_forward_policy_id))
+    blocks.append(
+        render_walk_forward(
+            study.walk_forward, study.walk_forward_policy_id,
+            universe="development + validation (the same symbols, one continuous span)",
+        )
+    )
+    if study.holdout_walk_forward:
+        blocks.append(
+            render_walk_forward(
+                study.holdout_walk_forward, study.walk_forward_policy_id,
+                universe="holdout symbols, their own window",
+            )
+        )
     blocks.append(render_decompositions(study.decompositions))
+    if study.holdout_decompositions:
+        blocks.append(render_decompositions(study.holdout_decompositions))
     blocks.append(render_mechanics(mechanics))
 
     limitations = _heading("LIMITATIONS")

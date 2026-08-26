@@ -165,12 +165,23 @@ class BarLadder:
                     f"{[interval for interval, _ in self.rungs]} is not"
                 )
         for interval, bars in self.rungs:
+            previous = None
             for bar in bars:
                 if bar.symbol != self.symbol:
                     raise SwingLabError(
                         f"ladder for {self.symbol} holds a {bar.symbol} bar on "
                         f"the {interval} rung"
                     )
+                # Ordering is validated ONCE here rather than on every
+                # `bars_within` call: an unsorted rung would make the binary
+                # search return a wrong slice silently, and paying O(n) per
+                # search to catch it defeated the search.
+                if previous is not None and bar.open_time < previous:
+                    raise SwingLabError(
+                        f"the {interval} rung of {self.symbol} is not ordered by "
+                        f"open_time at {bar.open_time.isoformat()}"
+                    )
+                previous = bar.open_time
 
     @property
     def intervals(self) -> tuple[str, ...]:
@@ -214,18 +225,33 @@ def bars_within(
 ) -> tuple[PriceBar, ...]:
     """Every bar whose open lies in ``[start, end)``, by binary search.
 
-    The sequence must already be ordered by ``open_time``, which every decoded
-    `fmis.data.CandleSeries` is. A linear scan here would be run once per
-    ambiguous bar over years of 1H rows, so the search is a `bisect` — and the
-    ordering it assumes is asserted rather than hoped for, since an unsorted
-    input would silently return a wrong slice rather than fail.
+    **Precondition: ``bars`` is ordered by ``open_time``.** `BarLadder` validates
+    that once, at construction, for every rung it holds — which is where the
+    check belongs, because `refine` calls this once per multi-level bar against
+    the complete finer series. The first version re-validated the whole sequence
+    on every call: an O(n) scan and an O(n) key list in front of an O(log n)
+    search, run thousands of times over ~26k 1H rows, which made the documented
+    bisect decorative.
     """
     if end < start:
         raise SwingLabError("end must not precede start")
-    times = [bar.open_time for bar in bars]
-    if any(later < earlier for earlier, later in zip(times, times[1:], strict=False)):
-        raise SwingLabError("bars must be ordered by open_time")
+    times = _KeyView(bars)
     return tuple(bars[bisect_left(times, start) : bisect_right(times, end - _TICK)])
+
+
+class _KeyView(Sequence):
+    """A zero-copy ``open_time`` view, so `bisect` needs no materialised key list."""
+
+    __slots__ = ("_bars",)
+
+    def __init__(self, bars: Sequence[PriceBar]) -> None:
+        self._bars = bars
+
+    def __len__(self) -> int:
+        return len(self._bars)
+
+    def __getitem__(self, index):  # type: ignore[no-untyped-def]
+        return self._bars[index].open_time
 
 
 #: The smallest gap that keeps ``[start, end)`` half-open under `bisect_right`.

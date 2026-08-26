@@ -34,6 +34,7 @@ from fmis.swing_lab.geometry_study import canonical_trade
 from fmis.swing_lab.metrics import VariantMetrics, compute_lab_metrics
 from fmis.swing_lab.models import LabTrade, SwingLabError
 from fmis.swing_lab.preregistration import verify_preregistration
+from fmis.swing_lab.trades import FRICTIONLESS_COSTS
 from fmis.swing_lab.validation_study import VALIDATION_SCHEMA_VERSION, ValidationStudy
 
 __all__ = [
@@ -91,12 +92,12 @@ def _measurement_payload(measurement: Any) -> dict[str, Any]:
         # geometry records travel with them for the same reason.
         "trades": (
             [trade_payload(trade) for trade in measurement.trades]
-            if measurement.cost_policy_id == "swing-lab-frictionless"
+            if measurement.cost_policy_id == FRICTIONLESS_COSTS.policy_id
             else []
         ),
         "geometry": (
             [dict(item) for item in measurement.geometry]
-            if measurement.cost_policy_id == "swing-lab-frictionless"
+            if measurement.cost_policy_id == FRICTIONLESS_COSTS.policy_id
             else []
         ),
     }
@@ -137,8 +138,14 @@ def encode_validation_study(study: ValidationStudy) -> dict[str, Any]:
             for item in study.policies
         ],
         "walk_forward": [window.payload() for window in study.walk_forward],
+        "holdout_walk_forward": [
+            window.payload() for window in study.holdout_walk_forward
+        ],
         "decompositions": [
             _decomposition_payload(item) for item in study.decompositions
+        ],
+        "holdout_decompositions": [
+            _decomposition_payload(item) for item in study.holdout_decompositions
         ],
     }
 
@@ -222,7 +229,9 @@ class ValidationArtifact:
 
     def trades(self, policy_id: str, sample: str) -> tuple[LabTrade, ...]:
         """The stored frictionless trades. **The path, which no cost scenario changes.**"""
-        measurement = self.measurement(policy_id, sample, "swing-lab-frictionless")
+        measurement = self.measurement(
+            policy_id, sample, FRICTIONLESS_COSTS.policy_id
+        )
         return tuple(trade_from_payload(item) for item in measurement["trades"])
 
     def geometry(self, policy_id: str, sample: str) -> tuple[Mapping[str, Any], ...]:
@@ -233,7 +242,9 @@ class ValidationArtifact:
         the timeframe and swing label that produced them, and the ATR the
         distances were normalised by — without re-running an hour-long replay.
         """
-        measurement = self.measurement(policy_id, sample, "swing-lab-frictionless")
+        measurement = self.measurement(
+            policy_id, sample, FRICTIONLESS_COSTS.policy_id
+        )
         return tuple(measurement["geometry"])
 
     def metrics(self, policy_id: str, sample: str) -> VariantMetrics:
@@ -296,6 +307,22 @@ def verify_result_digest(artifact: ValidationArtifact) -> bool:
     from fmis.swing_lab.preregistration import VALIDATION_COST_SCENARIOS
     from fmis.swing_lab.trades import reprice
 
+    # The scenarios the STUDY measured, read off the manifest — not the module
+    # constant. `run_validation_study` takes `cost_scenarios` as a parameter, so
+    # a study run with a different list would write an artifact whose digest
+    # could never verify, and the dashboard would report an honest file as
+    # NOT VERIFIED.
+    known = {item.policy_id: item for item in VALIDATION_COST_SCENARIOS}
+    measured = []
+    for policy_id in artifact.manifest["cost_policy_ids"]:
+        if policy_id not in known:
+            raise SwingLabError(
+                f"this artifact was measured under cost scenario {policy_id!r}, "
+                "which this build does not define; its digest cannot be "
+                "recomputed and must not be reported as unverified"
+            )
+        measured.append(known[policy_id])
+
     rows = sorted(
         (
             canonical_trade(
@@ -303,7 +330,7 @@ def verify_result_digest(artifact: ValidationArtifact) -> bool:
             )
             for policy_id in artifact.policy_ids
             for sample in artifact.sample_names
-            for costs in VALIDATION_COST_SCENARIOS
+            for costs in measured
             for trade in _stored(artifact, policy_id, sample)
         ),
         key=lambda row: (row[0], row[16], row[1], row[4], row[2]),

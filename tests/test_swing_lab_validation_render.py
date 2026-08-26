@@ -132,7 +132,12 @@ def test_a_failing_plateau_neighbour_is_printed_not_summarised(study) -> None:
         text = render_plateau(item.plateau, item.policy_id)
         for point in item.plateau.readings:
             assert f"{point.threshold:g}" in text
-        assert text.count("*") == 1     # exactly one centre marked
+        # The primary point sits on BOTH axes of the cross, so it is marked once
+        # per axis it centres — one point measured twice, never two points.
+        marked = [p for p in item.plateau.readings if p.is_primary]
+        assert marked
+        assert len({p.policy_id for p in marked}) == 1
+        assert text.count("*") == len(marked)
 
 
 def test_a_policy_without_a_neighbourhood_says_so(study) -> None:

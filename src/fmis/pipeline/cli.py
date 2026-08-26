@@ -3500,6 +3500,15 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
         help="geometry only: skip the parameter-sensitivity grids (faster)",
     )
     parser.add_argument(
+        "--with-mechanics", action="store_true",
+        help=(
+            "validation only: also run the entry, exit and intrabar-ambiguity "
+            "studies (Milestone BY §7-§9). Costs a second fetch of ~400k 1H "
+            "rows. Omitted, the report says those sections were NOT MEASURED "
+            "rather than printing an empty table"
+        ),
+    )
+    parser.add_argument(
         "--open-holdout", action="store_true",
         help=(
             "validation only: also replay the held-back symbols. Omitted, the "
@@ -3749,10 +3758,11 @@ def _run_validation_research(args: argparse.Namespace) -> int:
             )
             return EXIT_FAILURE
     try:
-        study = run_validation_experiment(
+        study, mechanics = run_validation_experiment(
             run_at=datetime.now(timezone.utc),
             experiment_id="by-validation",
             open_holdout=args.open_holdout,
+            with_mechanics=args.with_mechanics,
             # The suite is a repository-level fact this command cannot verify
             # from inside a run, so it is reported as UNPROVEN here and the
             # criterion blocks. A promotion therefore needs the milestone's own
@@ -3763,7 +3773,7 @@ def _run_validation_research(args: argparse.Namespace) -> int:
     except SwingLabError as error:
         print(f"fmits research validation: {error}", file=sys.stderr)
         return EXIT_FAILURE
-    print(render_validation_study(study))
+    print(render_validation_study(study, mechanics))
     if not args.open_holdout:
         print(
             "\nNOTE: the holdout was NOT opened. Every holdout criterion is "

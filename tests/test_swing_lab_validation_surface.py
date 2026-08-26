@@ -151,7 +151,9 @@ def test_the_view_carries_the_plateau_including_failing_neighbours(view) -> None
     assert with_plateau
     for item in with_plateau:
         assert len(item.plateau.points) >= 3
-        assert sum(1 for point in item.plateau.points if point.is_primary) == 1
+        centres = [point for point in item.plateau.points if point.is_primary]
+        assert centres
+        assert len({point.expectancy for point in centres}) == 1
 
 
 def test_the_view_never_approves_trading(view) -> None:
@@ -270,3 +272,56 @@ def test_the_limitations_reach_the_page_in_full(view) -> None:
     assert view.limitations
     for item in view.limitations[:4]:
         assert item[:40].replace("&", "&amp;") in html
+
+
+# ------------------------------------------------- the REAL server chain ---
+#
+# `refresh()` accepted `geometry` and `validation` and forwarded neither, so
+# `fmits dashboard --validation-artifact v.json` decoded the artifact, handed it
+# to the refresher, and the page still said nothing was loaded. The tests above
+# build a snapshot by hand and so could not see that; these drive the production
+# chain end to end — SnapshotHolder -> refresh -> build_snapshot -> render_page —
+# which is the only path the shipped command actually uses.
+
+
+def _refresher():
+    from functools import partial
+
+    from fmis.operator_dashboard.compose import refresh
+    from tests.test_operator_dashboard_compose import _runners
+
+    return partial(refresh, **_runners())
+
+
+def test_a_validation_artifact_reaches_the_page_through_the_real_chain(view) -> None:
+    from fmis.operator_dashboard.server import SnapshotHolder
+
+    holder = SnapshotHolder(refresher=_refresher(), symbols=(), validation=view)
+    snapshot = holder.current()
+    assert snapshot.validation is not None
+    assert snapshot.validation.data is view
+    html = render_page(snapshot, "/validation")
+    assert "No validation study is loaded" not in html
+    assert "NO FORWARD-TEST CANDIDATE" in html
+
+
+def test_a_geometry_artifact_reaches_the_page_through_the_real_chain() -> None:
+    """The same defect existed for `--geometry-artifact` since Milestone BX."""
+    from fmis.operator_dashboard.models import GeometryView
+    from fmis.operator_dashboard.server import SnapshotHolder
+
+    subject = GeometryView(experiment_id="wiring-probe", policies=())
+    snapshot = SnapshotHolder(
+        refresher=_refresher(), symbols=(), geometry=subject
+    ).current()
+    assert snapshot.geometry is not None
+    assert snapshot.geometry.data is subject
+
+
+def test_the_real_chain_still_says_so_when_no_artifact_is_supplied() -> None:
+    """The negative control: the wiring must not fabricate a section."""
+    from fmis.operator_dashboard.server import SnapshotHolder
+
+    snapshot = SnapshotHolder(refresher=_refresher(), symbols=()).current()
+    assert snapshot.validation is None
+    assert "No validation study is loaded" in render_page(snapshot, "/validation")

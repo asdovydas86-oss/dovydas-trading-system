@@ -79,7 +79,11 @@ def test_the_plateau_points_are_stored_including_the_failing_ones(artifact) -> N
     for stored in with_plateau:
         points = stored["assessment"]["plateau"]["points"]
         assert len(points) >= 3
-        assert sum(1 for point in points if point["is_primary"]) == 1
+        # A policy at the centre of BOTH axes is marked once per axis: one point
+        # measured twice, never two points.
+        centres = [point for point in points if point["is_primary"]]
+        assert centres
+        assert len({point["expectancy_r"] for point in centres}) == 1
 
 
 def test_trades_are_stored_once_and_re_priced_on_read(artifact) -> None:

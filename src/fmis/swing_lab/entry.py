@@ -353,13 +353,25 @@ def resolve_entry(
         )
     side = _DIRECTION_TO_TRADE[direction]
 
+    # A series that begins AFTER this setup confirmed cannot fill it, and the
+    # two causes are different facts: a refinement rung that does not reach back
+    # this far is NOT MEASURABLE, while an execution series that does not is a
+    # dataset shortfall. Reporting both as a lower-timeframe gap would blame the
+    # 1H data for a 4H problem. Checked BEFORE the index lookup, because an
+    # empty or late series makes that lookup return `None` and the distinction
+    # would be lost behind a generic refusal.
+    if not path or path[0].open_time > signal_close_at:
+        return EntryMiss(
+            reason=(
+                MissReason.REFINEMENT_UNAVAILABLE
+                if policy.path is PathRole.REFINEMENT
+                else MissReason.NO_BARS_AFTER_SIGNAL
+            ),
+            bars_waited=0,
+        )
     start = _index_at_or_after(path, signal_close_at)
     if start is None:
         return EntryMiss(reason=MissReason.NO_BARS_AFTER_SIGNAL, bars_waited=0)
-    if not path or path[0].open_time > signal_close_at:
-        # The refinement series begins after this setup confirmed, so this rule
-        # cannot be measured here. Never estimated from the coarse series.
-        return EntryMiss(reason=MissReason.REFINEMENT_UNAVAILABLE, bars_waited=0)
 
     if policy.rule is EntryRule.IMMEDIATE:
         bar = path[start]

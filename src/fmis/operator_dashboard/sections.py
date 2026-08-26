@@ -70,6 +70,16 @@ from fmis.operator_dashboard.models import (
     SwingView,
     UnreadableRow,
     WarningRow,
+    ValidationCriterionRow,
+    ValidationSampleRow,
+    ValidationCellRow,
+    ValidationPolicyRow,
+    ValidationPlateauPointRow,
+    ValidationPlateauRow,
+    ValidationWindowRow,
+    ValidationCohortRow,
+    ValidationDecompositionRow,
+    ValidationView,
 )
 
 __all__ = [
@@ -84,6 +94,7 @@ __all__ = [
     "warning_rows",
     "lab_view",
     "geometry_view",
+    "validation_view",
 ]
 
 
@@ -1095,4 +1106,172 @@ def geometry_view(artifact: Any, *, digest_verified: bool) -> GeometryView:
             )
         ),
         limitations=tuple(manifest["limitations"]),
+    )
+
+
+# --------------------------------------------------------------- validation ---
+
+
+def _validation_cell(entry: Any, *, deciding: str) -> "ValidationCellRow":
+    """One (sample, cost) cell. Every figure arrived reduced; nothing is computed.
+
+    The stored metrics payload is read directly rather than recomputed from the
+    trades, because the artifact stores metrics per scenario and re-deriving them
+    here would let the page disagree with the artifact it is displaying.
+    """
+    metrics = entry["metrics"]
+    expectancy = metrics["expectancy_r"]
+    return ValidationCellRow(
+        sample=entry["sample"],
+        cost_policy_id=entry["cost_policy_id"],
+        is_deciding=entry["cost_policy_id"] == deciding,
+        trades=metrics["trades"],
+        measurable=metrics["measurable_trades"],
+        ambiguous=metrics["ambiguous_trades"],
+        refused=entry["refused"],
+        win_rate=metrics["win_rate"]["value"],
+        expectancy=expectancy["value"],
+        expectancy_reason=expectancy["reason"],
+        profit_factor=metrics["profit_factor"]["value"],
+        total_r=metrics["total_r"],
+        max_drawdown=metrics["max_drawdown_r"],
+        largest_symbol_share=entry["largest_symbol_share"],
+    )
+
+
+def _validation_plateau(entry: Any) -> "ValidationPlateauRow | None":
+    if entry is None:
+        return None
+    return ValidationPlateauRow(
+        classification=entry["classification"],
+        statement=entry["statement"],
+        detail=entry["detail"],
+        points=tuple(
+            ValidationPlateauPointRow(
+                axis=point["axis"],
+                threshold=f"{point['threshold']:g}",
+                is_primary=point["is_primary"],
+                measurable=point["measurable_trades"],
+                expectancy=point["expectancy_r"],
+            )
+            for point in entry["points"]
+        ),
+    )
+
+
+def validation_view(
+    artifact: Any, *, digest_verified: bool, seal_matches: bool
+) -> ValidationView:
+    """Adapt one validation artifact into the page's read model. A copy, never a measure.
+
+    Policy order is the artifact's own, which is **pre-registration order** —
+    deliberately not an order by result, because a table sorted by expectancy is
+    a table that has chosen a winner.
+
+    ``seal_matches`` is supplied rather than derived here for the same reason
+    ``digest_verified`` is: verifying a digest is work, this layer performs none,
+    and a contract guard asserts it.
+    """
+    manifest = artifact.manifest
+    deciding = manifest["deciding_cost_policy_id"]
+    membership = manifest["sample_membership"]
+
+    policies: list[ValidationPolicyRow] = []
+    for policy_id in artifact.policy_ids:
+        entry = artifact.policy(policy_id)
+        assessment = entry["assessment"]
+        policies.append(
+            ValidationPolicyRow(
+                hypothesis_id=entry["hypothesis_id"],
+                policy_id=policy_id,
+                role=entry["role"],
+                family=entry["family"],
+                title=entry["title"],
+                hypothesis=entry["hypothesis"],
+                prediction=entry["prediction"],
+                refuted_by=entry["refuted_by"],
+                is_structural=entry["is_structural"],
+                verdict=assessment["verdict"],
+                verdict_statement=assessment["statement"],
+                cells=tuple(
+                    _validation_cell(cell, deciding=deciding)
+                    for cell in entry["measurements"]
+                ),
+                criteria=tuple(
+                    ValidationCriterionRow(
+                        name=item["name"],
+                        requirement=item["requirement"],
+                        passed=item["passed"],
+                        observed=item["observed"],
+                    )
+                    for item in assessment["criteria"]
+                ),
+                blocking_criteria=tuple(
+                    item["name"]
+                    for item in assessment["criteria"]
+                    if item["passed"] is not True
+                ),
+                plateau=_validation_plateau(assessment["plateau"]),
+            )
+        )
+
+    return ValidationView(
+        experiment_id=manifest["experiment_id"],
+        preregistration_id=manifest["preregistration_id"],
+        preregistration_digest=manifest["preregistration_digest"],
+        seal_matches=seal_matches,
+        deciding_cost_policy_id=deciding,
+        cost_policy_ids=tuple(manifest["cost_policy_ids"]),
+        holdout_opened=manifest["holdout_candidate_count"] > 0,
+        no_lookahead_proven=manifest["no_lookahead_proven"],
+        result_digest=manifest["result_digest"],
+        digest_verified=digest_verified,
+        samples=tuple(
+            ValidationSampleRow(
+                name=spec["name"],
+                role=spec["role"],
+                symbols=tuple(spec["symbols"]),
+                signal_start=spec["signal_start"],
+                signal_end=spec["signal_end"],
+                contamination=spec["contamination"],
+                candidates=membership.get(spec["name"], 0),
+            )
+            for spec in manifest["samples"]
+        ),
+        unclaimed_candidates=membership.get("unclaimed", 0),
+        policies=tuple(policies),
+        walk_forward_policy_id=artifact.payload["walk_forward_policy_id"],
+        walk_forward=tuple(
+            ValidationWindowRow(
+                label=window["label"],
+                trades=window["trades"],
+                measurable=window["measurable_trades"],
+                win_rate=window["win_rate"],
+                expectancy=window["expectancy_r"],
+                profit_factor=window["profit_factor"],
+                total_r=window["total_r"],
+                max_drawdown=window["max_drawdown_r"],
+            )
+            for window in artifact.payload["walk_forward"]
+        ),
+        decompositions=tuple(
+            ValidationDecompositionRow(
+                name=cut["name"],
+                question=cut["question"],
+                agrees_on_sign=cut["agrees_on_sign"],
+                cohorts=tuple(
+                    ValidationCohortRow(
+                        label=cohort["label"].split(":")[-1],
+                        measurable=cohort["measurable_trades"],
+                        expectancy=cohort["expectancy_r"]["value"],
+                        expectancy_reason=cohort["expectancy_r"]["reason"],
+                        total_r=cohort["total_r"],
+                    )
+                    for cohort in cut["cohorts"]
+                ),
+            )
+            for cut in artifact.payload["decompositions"]
+        ),
+        limitations=tuple(manifest["limitations"]),
+        candidate_policy_ids=artifact.candidate_policy_ids,
     )

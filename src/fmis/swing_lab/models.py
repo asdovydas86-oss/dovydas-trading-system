@@ -183,6 +183,14 @@ class LabExitReason(str, Enum):
     `ENTRY_GAPPED_THROUGH_STOP` is the case where the bar that filled the entry
     had already opened beyond the stop. The trade is recorded as a loss at the
     fill, never skipped: skipping it would remove exactly the worst fills.
+
+    `ENTRY_NOT_TRIGGERED` (Milestone BY) is a setup whose **entry rule** declined
+    or failed to fill — a confirmation that never came, or a resting limit price
+    never traded back to. It is not a flat trade and not a dataset shortfall:
+    the position was never opened, so there is no R to state, and the count is
+    reported beside every entry rule's expectancy. A rule that improves the
+    trades it takes by declining the ones that would have lost is making a
+    *selection* claim, and this reason is what makes that claim visible.
     """
 
     TARGET = "target"
@@ -191,6 +199,7 @@ class LabExitReason(str, Enum):
     AMBIGUOUS_SAME_BAR = "ambiguous_same_bar"
     ENTRY_GAPPED_THROUGH_STOP = "entry_gapped_through_stop"
     NO_ENTRY_BAR = "no_entry_bar"
+    ENTRY_NOT_TRIGGERED = "entry_not_triggered"
 
     @property
     def is_measurable(self) -> bool:

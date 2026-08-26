@@ -43,7 +43,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Final
+from typing import Any, Final, Protocol, runtime_checkable
 
 from fmis.level_crossing import LevelSide, PriceLevel
 from fmis.swing_lab.models import SwingLabError
@@ -58,6 +58,7 @@ __all__ = [
     "TargetRule",
     "VolatilitySource",
     "GeometryPolicy",
+    "PlansGeometry",
     "SkipReason",
     "GeometrySkip",
     "GeometryPlan",
@@ -205,11 +206,25 @@ class StopRule(str, Enum):
     * `EXECUTION_BEYOND_VOLATILITY` — the nearest execution-timeframe protective
       level that is at least ``min_stop_atr`` ATR away. Not a widened stop: a
       *different, real* level, skipped entirely if none qualifies.
+    * `SETUP_BEYOND_VOLATILITY` — the same rule read on the **setup** timeframe
+      (1D under production). Added by Milestone BY to separate two questions BX
+      could only ask together: *does the invalidation belong on the higher
+      timeframe*, and *must it clear ordinary noise*. `NEAREST_SETUP` answers the
+      first alone and this answers both.
     """
 
     NEAREST_EXECUTION = "nearest_execution"
     NEAREST_SETUP = "nearest_setup"
     EXECUTION_BEYOND_VOLATILITY = "execution_beyond_volatility"
+    SETUP_BEYOND_VOLATILITY = "setup_beyond_volatility"
+
+
+#: The stop rules that select a level *by* a volatility floor and are therefore
+#: meaningless without one. Derived from the enum rather than listed twice, so a
+#: new member cannot be added without deciding which set it belongs to.
+_VOLATILITY_STOP_RULES: Final[frozenset["StopRule"]] = frozenset(
+    {StopRule.EXECUTION_BEYOND_VOLATILITY, StopRule.SETUP_BEYOND_VOLATILITY}
+)
 
 
 class TargetRule(str, Enum):
@@ -383,7 +398,11 @@ def _select_stop(
         levels = candidate.setup_stop_levels
         return (levels[0], None) if levels else (None, SkipReason.NO_STOP_LEVEL)
 
-    levels = candidate.execution_stop_levels
+    levels = (
+        candidate.setup_stop_levels
+        if policy.stop_rule is StopRule.SETUP_BEYOND_VOLATILITY
+        else candidate.execution_stop_levels
+    )
     if not levels:
         return None, SkipReason.NO_STOP_LEVEL
     atr = policy.volatility_of(candidate)
@@ -392,7 +411,7 @@ def _select_stop(
     floor = policy.min_stop_atr
     if floor is None:  # pragma: no cover - forbidden by GeometryPolicy.__post_init__
         raise SwingLabError(
-            "EXECUTION_BEYOND_VOLATILITY requires min_stop_atr; "
+            f"{policy.stop_rule.value} requires min_stop_atr; "
             "GeometryPolicy should have refused this policy at construction"
         )
     required = floor * atr
@@ -488,10 +507,10 @@ class GeometryPolicy:
         # A rule that reads a parameter must be given one. Defaulting a missing
         # threshold to zero would turn "volatility-aware" into "no filter" and
         # the result table would show a variant that quietly ran as the baseline.
-        if self.stop_rule is StopRule.EXECUTION_BEYOND_VOLATILITY and self.min_stop_atr is None:
+        if self.stop_rule in _VOLATILITY_STOP_RULES and self.min_stop_atr is None:
             raise SwingLabError(
-                "StopRule.EXECUTION_BEYOND_VOLATILITY needs min_stop_atr; without "
-                "one it would silently be the production stop rule"
+                f"StopRule.{self.stop_rule.name} needs min_stop_atr; without "
+                "one it would silently be the corresponding nearest-level rule"
             )
         if (
             self.target_rule is TargetRule.FIRST_SETUP_SUPPORTING_RR
@@ -517,6 +536,34 @@ class GeometryPolicy:
         if self.volatility_source is VolatilitySource.EXECUTION_ATR:
             return candidate.execution_atr
         return candidate.setup_atr
+
+    def plan(self, candidate: GeometryCandidate) -> "GeometryPlan | GeometrySkip":
+        """This policy applied to one candidate. Satisfies `PlansGeometry`."""
+        return plan_geometry(candidate, self)
+
+
+@runtime_checkable
+class PlansGeometry(Protocol):
+    """What a replay needs from a geometry policy, and nothing else.
+
+    Milestone BY adds a **non-structural** policy family — a stop at a multiple
+    of ATR, a target at a multiple of R — which the brief permits only when it is
+    labelled as such and kept separate. It cannot live in this module: a guard
+    asserts `fmis.swing_lab.geometry` never constructs a level, and that guard is
+    load-bearing. So it lives in `fmis.swing_lab.nonstructural` with its own
+    type, and the replay depends on this protocol rather than on either concrete
+    class — which means the *structural* guarantee stays a property of a module
+    rather than of a convention, and a policy that manufactures a price is
+    findable by import path alone.
+    """
+
+    @property
+    def policy_id(self) -> str: ...
+
+    @property
+    def family(self) -> str: ...
+
+    def plan(self, candidate: GeometryCandidate) -> "GeometryPlan | GeometrySkip": ...
 
 
 def plan_geometry(

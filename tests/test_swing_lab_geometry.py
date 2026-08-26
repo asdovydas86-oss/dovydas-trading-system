@@ -615,3 +615,82 @@ def test_the_volatility_floor_admits_a_level_exactly_at_the_requirement() -> Non
     plan = plan_geometry(candidate(execution_atr=1.0), policy)
     assert isinstance(plan, GeometryPlan)
     assert plan.stop.price == 98.0
+
+
+# --------------------------------------------------------------- Milestone BY ---
+#
+# Two invariants the BX suite left unguarded, found by mutation probes
+# `geometry:no-trade-refusal-bypassed` and `geometry:setup-rung-read-as-execution`
+# and closed here rather than by deleting the probes.
+
+
+def test_the_volatility_stop_takes_the_NEXT_level_when_the_nearest_is_too_close() -> None:
+    """**The rule's whole point.** Not a widened stop: a different, real level.
+
+    Without this, a mutation that returned the nearest level regardless survives
+    — the volatility floor in `plan_geometry` would then refuse the trade, and a
+    reader would see a skip where the rule should have found a deeper structural
+    invalidation and traded it.
+    """
+    from tests.swing_lab_helpers import candidate, ref
+    from fmis.level_crossing import LevelSide
+
+    subject = candidate(
+        execution_atr=1.0,
+        execution_stop_levels=(
+            ref(99.7, LevelSide.LOWER),              # 0.3 ATR — inside the floor
+            ref(99.0, LevelSide.LOWER, index=2),     # 1.0 ATR — the answer
+        ),
+    )
+    policy = GeometryPolicy(
+        policy_id="probe", title="t", family="F", hypothesis="h",
+        stop_rule=StopRule.EXECUTION_BEYOND_VOLATILITY,
+        target_rule=TargetRule.NEAREST_SETUP,
+        min_stop_atr=0.5,
+    )
+    plan = plan_geometry(subject, policy)
+    assert isinstance(plan, GeometryPlan)
+    assert plan.stop.price == 99.0
+    assert plan.stop.origin_index == 2
+
+
+def test_the_setup_timeframe_volatility_stop_reads_the_SETUP_levels() -> None:
+    """`SETUP_BEYOND_VOLATILITY` must not quietly be the execution rule."""
+    from tests.swing_lab_helpers import candidate, ref
+    from fmis.level_crossing import LevelSide
+
+    subject = candidate(
+        execution_atr=1.0,
+        execution_stop_levels=(ref(99.0, LevelSide.LOWER),),
+        setup_stop_levels=(ref(95.0, LevelSide.LOWER, interval="1d"),),
+    )
+    policy = GeometryPolicy(
+        policy_id="probe", title="t", family="F", hypothesis="h",
+        stop_rule=StopRule.SETUP_BEYOND_VOLATILITY,
+        target_rule=TargetRule.NEAREST_SETUP,
+        min_stop_atr=0.5,
+    )
+    plan = plan_geometry(subject, policy)
+    assert isinstance(plan, GeometryPlan)
+    assert plan.stop.price == 95.0
+    assert plan.stop.interval == "1d"
+
+
+def test_the_setup_volatility_stop_still_refuses_when_no_setup_level_qualifies() -> None:
+    from tests.swing_lab_helpers import candidate, ref
+    from fmis.level_crossing import LevelSide
+
+    subject = candidate(
+        execution_atr=1.0,
+        execution_stop_levels=(ref(90.0, LevelSide.LOWER),),   # would qualify
+        setup_stop_levels=(ref(99.9, LevelSide.LOWER, interval="1d"),),
+    )
+    policy = GeometryPolicy(
+        policy_id="probe", title="t", family="F", hypothesis="h",
+        stop_rule=StopRule.SETUP_BEYOND_VOLATILITY,
+        target_rule=TargetRule.NEAREST_SETUP,
+        min_stop_atr=0.5,
+    )
+    skip = plan_geometry(subject, policy)
+    assert isinstance(skip, GeometrySkip)
+    assert skip.reason is SkipReason.STOP_INSIDE_VOLATILITY

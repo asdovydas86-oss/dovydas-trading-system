@@ -78,9 +78,17 @@ from fmis.swing_lab.geometry_artifact import (
     write_geometry_study,
 )
 from fmis.swing_lab.geometry_render import render_geometry_study
+from fmis.swing_lab.validation_artifact import (
+    read_validation_artifact,
+    verify_preregistration_seal,
+    verify_result_digest,
+    write_validation_study,
+)
+from fmis.swing_lab.validation_render import render_validation_study
+from fmis.swing_lab.validation_study import run_validation_experiment
 from fmis.swing_lab.geometry_study import run_geometry_experiment
 from fmis.swing_lab.render import render_robustness, render_study
-from fmis.operator_dashboard.sections import geometry_view, lab_view
+from fmis.operator_dashboard.sections import geometry_view, lab_view, validation_view
 from fmis.swing_setup import (
     BacktestError,
     DEFAULT_BACKTEST_DAYS,
@@ -3332,6 +3340,18 @@ def _configure_dashboard(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--validation-artifact",
+        default=None,
+        metavar="PATH",
+        dest="validation_artifact",
+        help=(
+            "show a saved pre-registered Validation study on the /validation "
+            "page. Read and decoded by this command, never by the dashboard, "
+            "on the same footing as --lab-artifact and --geometry-artifact. "
+            "Omitted, /validation says no study is loaded"
+        ),
+    )
+    parser.add_argument(
         "--geometry-artifact",
         default=None,
         metavar="PATH",
@@ -3377,6 +3397,18 @@ def _run_dashboard(args: argparse.Namespace) -> int:
             print(f"fmits dashboard: {error}", file=sys.stderr)
             return EXIT_FAILURE
 
+    validation = None
+    if args.validation_artifact is not None:
+        try:
+            record = read_validation_artifact(args.validation_artifact)
+            validation = validation_view(
+                record,
+                digest_verified=verify_result_digest(record),
+                seal_matches=verify_preregistration_seal(record),
+            )
+        except SwingLabError as error:
+            print(f"fmits dashboard: {error}", file=sys.stderr)
+            return EXIT_FAILURE
     geometry = None
     if args.geometry_artifact is not None:
         try:
@@ -3411,6 +3443,7 @@ def _run_dashboard(args: argparse.Namespace) -> int:
                 with_relationships=not args.no_relationships,
                 lab=lab,
                 geometry=geometry,
+                validation=validation,
             ),
             allow_public=args.allow_public,
             quiet=True,
@@ -3426,13 +3459,17 @@ def _run_dashboard(args: argparse.Namespace) -> int:
 def _configure_research(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "area",
-        choices=("swing", "geometry"),
+        choices=("swing", "geometry", "validation"),
         help=(
             "which research question to run. 'swing' is the Swing Strategy "
             "Laboratory's timeframe-policy comparison (Milestone BW); "
             "'geometry' is the Swing Trade Geometry Laboratory's stop/target "
             "comparison (Milestone BX), which needs --development and --holdout "
-            "instead of a positional universe"
+            "instead of a positional universe; 'validation' runs Milestone BY's "
+            "SEALED pre-registration and takes no universe, no window and no "
+            "threshold at all — every one of them is part of what was frozen, "
+            "and a study whose symbols could be renamed at a shell prompt would "
+            "not be a pre-registered study"
         ),
     )
     parser.add_argument(
@@ -3463,7 +3500,17 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
         help="geometry only: skip the parameter-sensitivity grids (faster)",
     )
     parser.add_argument(
-        "--start", required=True, metavar="ISO8601",
+        "--open-holdout", action="store_true",
+        help=(
+            "validation only: also replay the held-back symbols. Omitted, the "
+            "holdout is NOT EVEN FETCHED, every holdout criterion reports as "
+            "unevaluable and no policy can reach candidate status. That is the "
+            "development pass, and it is the default so the holdout cannot be "
+            "inspected by habit"
+        ),
+    )
+    parser.add_argument(
+        "--start", default=None, metavar="ISO8601",
         help=(
             "start of the MEASUREMENT window. Warm-up history is derived and "
             "fetched before it; a window the provider cannot warm is refused "
@@ -3527,6 +3574,28 @@ def _run_research(args: argparse.Namespace) -> int:
     strategy and promotes nothing: a variant that measures well here is a
     candidate for forward testing, which is a later, explicit owner decision.
     """
+    if args.area == "validation":
+        # Dispatched BEFORE the window is read, because this study HAS no window
+        # argument: its dates are sealed. Parsing --start here would let a
+        # caller believe they had moved a boundary that the pre-registration
+        # fixed, which is worse than the flag simply not existing.
+        for name, value in (("start", args.start), ("end", args.end)):
+            if value is not None:
+                print(
+                    f"fmits research validation: --{name} is not accepted. The "
+                    "measurement windows are part of the sealed "
+                    "pre-registration; moving one would make this a different "
+                    "experiment measured under the same digest",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        return _run_validation_research(args)
+    if args.start is None:
+        print(
+            "fmits research: --start is required for this area",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
     end = _reference_time(args.end, omit=False)
     start = datetime.fromisoformat(args.start)
     if start.tzinfo is None:
@@ -3657,11 +3726,70 @@ def _run_geometry_research(
     return EXIT_OK
 
 
+def _run_validation_research(args: argparse.Namespace) -> int:
+    """Run Milestone BY's SEALED pre-registered validation and print its report.
+
+    **Read-only research.** Replays history, measures the sealed hypotheses on
+    the sealed samples under the sealed cost scenarios, and prints what each
+    concluded. It writes no trading record, changes no production strategy and
+    promotes nothing: the strongest verdict it can produce means *worth testing
+    forward*, which is a later, explicit owner decision.
+
+    The holdout is **not fetched** unless `--open-holdout` is given, so a
+    development pass cannot inspect it by accident.
+    """
+    for name in ("development", "holdout", "symbols", "variant"):
+        value = getattr(args, name, None)
+        if value:
+            print(
+                f"fmits research validation: {name} is not accepted. Every "
+                "symbol, window and threshold is sealed in the "
+                "pre-registration",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
+    try:
+        study = run_validation_experiment(
+            run_at=datetime.now(timezone.utc),
+            experiment_id="by-validation",
+            open_holdout=args.open_holdout,
+            # The suite is a repository-level fact this command cannot verify
+            # from inside a run, so it is reported as UNPROVEN here and the
+            # criterion blocks. A promotion therefore needs the milestone's own
+            # verification, never a bare CLI invocation.
+            no_lookahead_proven=False,
+            limit=DEFAULT_BACKTEST_LIMIT if args.limit is None else args.limit,
+        )
+    except SwingLabError as error:
+        print(f"fmits research validation: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_validation_study(study))
+    if not args.open_holdout:
+        print(
+            "\nNOTE: the holdout was NOT opened. Every holdout criterion is "
+            "unevaluable and no policy can reach candidate status. Re-run with "
+            "--open-holdout once, and only once, when development is finished."
+        )
+    if args.save is not None:
+        try:
+            written = write_validation_study(study, args.save)
+        except SwingLabError as error:
+            print(f"fmits research validation: {error}", file=sys.stderr)
+            return EXIT_FAILURE
+        print(f"\nResearch artifact written to {written}")
+    return EXIT_OK
+
+
 RESEARCH_COMMAND = Command(
     name="research",
     help="replay policy variants over real history and compare them (read-only)",
     description=(
-        "Two read-only laboratories. 'geometry' (Milestone BX) replays history "
+        "Three read-only laboratories. 'validation' (Milestone BY) runs a SEALED "
+        "pre-registration: every hypothesis, threshold, symbol, window, cost "
+        "scenario and promotion criterion was fixed and digested before any "
+        "result was read, so the command takes no universe, no window and no "
+        "threshold, and nothing outside the seal can be promoted whatever it "
+        "measures. 'geometry' (Milestone BX) replays history "
         "once and compares pre-declared stop/target rules against a development "
         "sample and a held-back one, reporting expectancy, planned reward-to-"
         "risk, volatility-normalised stop distance, parameter sensitivity and a "

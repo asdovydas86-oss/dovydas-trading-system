@@ -190,6 +190,7 @@ def build_snapshot(
     statistics_error: BaseException | None = None,
     lab: LabView | None = None,
     geometry: Any | None = None,
+    validation: Any | None = None,
 ) -> OperatorDashboardSnapshot:
     """Assemble one snapshot from engine outputs that have already been read.
 
@@ -356,6 +357,24 @@ def build_snapshot(
         )
     )
 
+    # --- pre-registered validation -------------------------------------------
+    # Milestone BY, on the same footing: decoded by the caller, handed in already
+    # parsed, so this package still opens nothing.
+    validation_section = (
+        None
+        if validation is None
+        else _section(
+            "validation",
+            validation,
+            as_of=None,
+            source=(
+                f"saved validation artifact · {validation.experiment_id} · "
+                f"seal {validation.preregistration_id}"
+            ),
+            empty=not validation.policies,
+        )
+    )
+
     return OperatorDashboardSnapshot(
         refreshed_at=refreshed_at,
         reference_time=reference_time,
@@ -369,6 +388,7 @@ def build_snapshot(
         health=health_section,
         lab=lab_section,
         geometry=geometry_section,
+        validation=validation_section,
         warnings=warnings,
         limitations=DASHBOARD_LIMITATIONS,
         schema_version=DASHBOARD_SCHEMA_VERSION,
@@ -389,6 +409,7 @@ def refresh(
     statistics_runner: Callable[..., Any] = report_for_store,
     lab: LabView | None = None,
     geometry: Any | None = None,
+    validation: Any | None = None,
 ) -> OperatorDashboardSnapshot:
     """Perform one refresh: four reads, each isolated, then one snapshot.
 

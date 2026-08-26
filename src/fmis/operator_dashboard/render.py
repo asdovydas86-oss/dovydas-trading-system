@@ -69,6 +69,7 @@ PAGES: tuple[tuple[str, str], ...] = (
     ("/performance", "Performance"),
     ("/lab", "Swing Lab"),
     ("/geometry", "Trade Geometry"),
+    ("/validation", "Validation"),
     ("/system", "System"),
 )
 
@@ -1547,6 +1548,267 @@ def _lab(snapshot: OperatorDashboardSnapshot) -> str:
     )
 
 
+def _validation(snapshot: OperatorDashboardSnapshot) -> str:
+    """The Pre-Registered Validation page. **Designed for a decision, not completeness.**
+
+    The order is the argument, and it is the same one the terminal report makes:
+
+    1. **the verdict first**, because a reader who stops after one screen must
+       not come away with a different impression from one who reads to the end;
+    2. **the seal** — which pre-registration these numbers were judged under, and
+       whether it still matches the repository;
+    3. the samples, each with its contamination **beside** it rather than in a
+       footnote;
+    4. the results, in pre-registration order and never sorted by expectancy;
+    5. the plateau, with the failing neighbours shown as rows like any other;
+    6. costs, with the deciding scenario marked;
+    7. walk-forward and the decompositions;
+    8. the limitations, in full.
+
+    There is no ranked table and no "best rule". Sorting by result would be
+    choosing one, and the sealed criteria exist so that choice is not a
+    judgement call.
+    """
+    section = snapshot.validation
+    if section is None or not section.is_available or section.data is None:
+        return _panel(
+            "Pre-Registered Validation",
+            "<p class='muted'>No validation study is loaded. Run one with "
+            "<code>fmits research validation --open-holdout --save "
+            "validation.json</code> and start the dashboard with "
+            "<code>--validation-artifact validation.json</code>. This page shows "
+            "a saved research record; it never runs a replay itself and never "
+            "changes a strategy.</p>",
+        )
+    view = section.data
+
+    seal = (
+        "<dl class='meta'>"
+        f"<dt>Experiment</dt><dd>{_e(view.experiment_id)}</dd>"
+        f"<dt>Pre-registration</dt><dd>{_e(view.preregistration_id)}"
+        f"<small><code>{_e(view.preregistration_digest)}</code></small></dd>"
+        "<dt>Seal</dt><dd>"
+        + (
+            _chip("matches this repository", "ok")
+            if view.seal_matches
+            else _chip("DOES NOT MATCH — judged under different rules", "bad")
+        )
+        + "</dd>"
+        f"<dt>Deciding cost scenario</dt><dd>{_e(view.deciding_cost_policy_id)}"
+        "<small>no candidate may be selected on the frictionless column</small></dd>"
+        "<dt>Holdout</dt><dd>"
+        + (
+            _chip("opened", "warn")
+            if view.holdout_opened
+            else _chip("NOT opened — development pass", "muted")
+        )
+        + "</dd><dt>No-lookahead suite</dt><dd>"
+        + (
+            _chip("proven for this capture", "ok")
+            if view.no_lookahead_proven
+            else _chip("NOT PROVEN", "bad")
+        )
+        + "</dd>"
+        f"<dt>Digest</dt><dd><code>{_e(view.result_digest)}</code> "
+        f"({'verified' if view.digest_verified else 'NOT VERIFIED'})</dd>"
+        "</dl>"
+    )
+
+    winners = view.candidate_policy_ids
+    if winners:
+        verdict_html = (
+            f"<p><strong>{len(winners)} of {len(view.policies)}</strong> "
+            "pre-registered hypotheses met every sealed criterion:</p><ul>"
+            + "".join(f"<li><code>{_e(item)}</code></li>" for item in winners)
+            + "</ul><p class='muted'><strong>RESEARCH CANDIDATE — NOT LIVE.</strong> "
+            "A candidate for forward testing is <strong>worth testing "
+            "forward</strong> and nothing more. It is not approval to trade, and "
+            "production remains the current policy.</p>"
+        )
+    else:
+        verdict_html = (
+            "<p><strong>NO FORWARD-TEST CANDIDATE.</strong> No pre-registered "
+            "hypothesis met every sealed criterion, so none is proposed for "
+            "forward or shadow testing.</p>"
+            "<p class='muted'>This is a result, not a missing measurement — the "
+            "criteria each hypothesis failed are listed below by name.</p>"
+        )
+
+    samples_html = "".join(
+        f"<details><summary><strong>{_e(row.name.upper())}</strong> "
+        f"{_e(row.signal_start[:10])} → {_e(row.signal_end[:10])} · "
+        f"{len(row.symbols)} symbols · {row.candidates} candidates</summary>"
+        f"<p>{_e(row.contamination)}</p>"
+        f"<p class='muted'><small>{_e(', '.join(row.symbols))}</small></p>"
+        "</details>"
+        for row in view.samples
+    )
+    if view.unclaimed_candidates:
+        samples_html += (
+            f"<p class='muted'>{view.unclaimed_candidates} captured candidates "
+            "fall in no sample and are measured by nothing. Reported rather "
+            "than dropped.</p>"
+        )
+
+    def cell(value: str | None, reason: str | None = None) -> str:
+        if value is None:
+            return f"<td class='absent'>unavailable<small>{_e(reason or '')}</small></td>"
+        return f"<td>{_e(value)}</td>"
+
+    rows = []
+    for policy in view.policies:
+        deciding = [item for item in policy.cells if item.is_deciding]
+        for index, item in enumerate(deciding):
+            rows.append(
+                "<tr>"
+                + (
+                    f"<th scope='row' rowspan='{len(deciding)}'>"
+                    f"<code>{_e(policy.policy_id)}</code>"
+                    f" <span class='tag'>{_e(policy.role)}</span>"
+                    + (
+                        ""
+                        if policy.is_structural
+                        else " <span class='tag'>NON-STRUCTURAL</span>"
+                    )
+                    + f"<small>{_e(policy.hypothesis_id)} · {_e(policy.title)}</small></th>"
+                    f"<td class='verdict' rowspan='{len(deciding)}'>"
+                    f"{_e(policy.verdict.replace('_', ' '))}</td>"
+                    if index == 0
+                    else ""
+                )
+                + f"<td>{_e(item.sample)}</td>"
+                f"<td>{item.trades}</td><td>{item.refused}</td>"
+                f"<td>{item.measurable}</td><td>{item.ambiguous}</td>"
+                + cell(item.win_rate)
+                + cell(item.expectancy, item.expectancy_reason)
+                + cell(item.profit_factor)
+                + f"<td>{_e(item.total_r)}</td><td>{_e(item.max_drawdown)}</td>"
+                "</tr>"
+            )
+    table = (
+        "<table><thead><tr><th>Hypothesis</th><th>Verdict</th><th>Sample</th>"
+        "<th>Trades</th><th>Refused</th><th>Measurable</th><th>Ambiguous</th>"
+        "<th>Win rate</th><th>Expectancy R</th><th>Profit factor</th>"
+        "<th>Total R</th><th>Max DD (R)</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+    )
+
+    criteria_html = ""
+    for policy in view.policies:
+        marks = "".join(
+            "<li>"
+            + _chip(
+                {True: "pass", False: "fail", None: "not evaluable"}[item.passed],
+                {True: "ok", False: "bad", None: "warn"}[item.passed],
+            )
+            + f" <strong>{_e(item.name)}</strong> — {_e(item.observed)}"
+            f"<br><small>{_e(item.requirement)}</small></li>"
+            for item in policy.criteria
+        )
+        criteria_html += (
+            f"<details><summary><code>{_e(policy.policy_id)}</code> — "
+            f"{_e(policy.verdict_statement)}</summary>"
+            f"<p>{_e(policy.hypothesis)}</p>"
+            f"<p class='muted'><small>PREDICTED: {_e(policy.prediction)}</small></p>"
+            f"<p class='muted'><small>REFUTED BY: {_e(policy.refuted_by)}</small></p>"
+            f"<ul class='criteria'>{marks}</ul></details>"
+        )
+
+    plateau_html = ""
+    for policy in view.policies:
+        if policy.plateau is None:
+            continue
+        points = "".join(
+            f"<tr><td>{'★' if point.is_primary else ''}</td>"
+            f"<td>{_e(point.axis)}</td><td>{_e(point.threshold)}</td>"
+            f"<td>{point.measurable}</td>"
+            f"<td>{_e(point.expectancy or '—')}</td></tr>"
+            for point in policy.plateau.points
+        )
+        plateau_html += (
+            f"<h3><code>{_e(policy.policy_id)}</code> — "
+            f"{_e(policy.plateau.classification.replace('_', ' ').upper())}</h3>"
+            f"<p class='muted'>{_e(policy.plateau.statement)}</p>"
+            "<table><thead><tr><th></th><th>Axis</th><th>Threshold</th>"
+            "<th>Measurable</th><th>Expectancy R</th></tr></thead>"
+            f"<tbody>{points}</tbody></table>"
+        )
+
+    cost_rows = "".join(
+        f"<tr><td><code>{_e(policy.policy_id)}</code></td>"
+        f"<td>{_e(item.sample)}</td><td>{_e(item.cost_policy_id)}"
+        + (" <span class='tag'>deciding</span>" if item.is_deciding else "")
+        + "</td>"
+        + cell(item.expectancy, item.expectancy_reason)
+        + f"<td>{item.measurable}</td></tr>"
+        for policy in view.policies
+        for item in policy.cells
+    )
+    costs_html = (
+        "<table><thead><tr><th>Hypothesis</th><th>Sample</th><th>Cost scenario</th>"
+        "<th>Expectancy R</th><th>Measurable</th></tr></thead>"
+        f"<tbody>{cost_rows}</tbody></table>"
+    )
+
+    window_rows = "".join(
+        f"<tr><td>{_e(row.label)}</td><td>{row.trades}</td><td>{row.measurable}</td>"
+        + cell(row.win_rate) + cell(row.expectancy) + cell(row.profit_factor)
+        + f"<td>{_e(row.total_r)}</td><td>{_e(row.max_drawdown)}</td></tr>"
+        for row in view.walk_forward
+    )
+    walk_html = (
+        f"<p class='muted'>The frozen policy <code>"
+        f"{_e(view.walk_forward_policy_id)}</code> across time, with no "
+        "re-optimisation inside any window. Empty windows are shown, never "
+        "omitted.</p>"
+        "<table><thead><tr><th>Window</th><th>Trades</th><th>Measurable</th>"
+        "<th>Win rate</th><th>Expectancy R</th><th>Profit factor</th>"
+        "<th>Total R</th><th>Max DD (R)</th></tr></thead>"
+        f"<tbody>{window_rows}</tbody></table>"
+    )
+
+    decomposition_html = ""
+    for cut in view.decompositions:
+        agreement = {
+            True: _chip("cohorts agree on sign", "ok"),
+            False: _chip("cohorts DISAGREE on sign", "bad"),
+            None: _chip("too few cohorts to compare", "warn"),
+        }[cut.agrees_on_sign]
+        cohorts = "".join(
+            f"<tr><td>{_e(row.label)}</td><td>{row.measurable}</td>"
+            + cell(row.expectancy, row.expectancy_reason)
+            + f"<td>{_e(row.total_r)}</td></tr>"
+            for row in cut.cohorts
+        )
+        decomposition_html += (
+            f"<details><summary><strong>{_e(cut.name)}</strong> {agreement}</summary>"
+            f"<p class='muted'>{_e(cut.question)}</p>"
+            "<table><thead><tr><th>Cohort</th><th>Measurable</th>"
+            "<th>Expectancy R</th><th>Total R</th></tr></thead>"
+            f"<tbody>{cohorts}</tbody></table></details>"
+        )
+
+    limitations_html = "<ul>" + "".join(
+        f"<li>{_e(item)}</li>" for item in view.limitations
+    ) + "</ul>"
+
+    return "".join(
+        (
+            _panel("Validation verdict", verdict_html),
+            _panel("Pre-registration", seal),
+            _panel("Samples", samples_html),
+            _panel("Results — cost-inclusive, in pre-registration order", table),
+            _panel("Criteria, by hypothesis", criteria_html),
+            _panel("Parameter plateau", plateau_html or "<p class='muted'>No "
+                   "hypothesis declares a neighbourhood.</p>"),
+            _panel("Cost sensitivity", costs_html),
+            _panel("Walk-forward", walk_html),
+            _panel("Decomposition", decomposition_html),
+            _panel("Limitations", limitations_html),
+        )
+    )
+
+
 def _geometry(snapshot: OperatorDashboardSnapshot) -> str:
     """The Trade Geometry page. **Designed for a decision, not for completeness.**
 
@@ -1763,6 +2025,7 @@ def render_page(
             "/performance": _performance,
             "/lab": _lab,
             "/geometry": _geometry,
+            "/validation": _validation,
             "/system": _system,
         }[path](snapshot)
     return (

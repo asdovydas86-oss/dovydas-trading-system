@@ -49,10 +49,9 @@ from fmis.pipeline.structural_facts import DetectionSettings
 from fmis.swing_lab.geometry import (
     GeometryCandidate,
     GeometryPlan,
-    GeometryPolicy,
     GeometrySkip,
+    PlansGeometry,
     level_refs,
-    plan_geometry,
 )
 from fmis.swing_lab.models import LabTrade, LabVariant, SwingLabError
 from fmis.swing_lab.replay import (
@@ -365,7 +364,7 @@ class PolicyOutcome:
     list alone cannot tell them apart.
     """
 
-    policy: GeometryPolicy
+    policy: PlansGeometry
     trades: tuple[LabTrade, ...]
     plans: tuple[GeometryPlan, ...]
     skips: tuple[GeometrySkip, ...]
@@ -381,7 +380,7 @@ class PolicyOutcome:
 
 def trades_for_policy(
     capture: GeometryCapture,
-    policy: GeometryPolicy,
+    policy: PlansGeometry,
     *,
     costs: PaperCostPolicy,
     evaluation_window_bars: int,
@@ -399,14 +398,21 @@ def trades_for_policy(
     """
     if not isinstance(capture, GeometryCapture):
         raise TypeError("capture must be a GeometryCapture")
-    if not isinstance(policy, GeometryPolicy):
-        raise TypeError("policy must be a GeometryPolicy")
+    if not isinstance(policy, PlansGeometry):
+        # `PlansGeometry` rather than `GeometryPolicy`: Milestone BY's
+        # non-structural control lives in its own module by design (see
+        # `fmis.swing_lab.nonstructural`), and measuring a control with different
+        # machinery would make it useless as a control.
+        raise TypeError(
+            "policy must satisfy PlansGeometry — policy_id, family and "
+            f"plan(candidate); {type(policy).__name__} does not"
+        )
 
     trades: list[LabTrade] = []
     plans: list[GeometryPlan] = []
     skips: list[GeometrySkip] = []
     for candidate in capture.candidates:
-        outcome = plan_geometry(candidate, policy)
+        outcome = policy.plan(candidate)
         if isinstance(outcome, GeometrySkip):
             skips.append(outcome)
             continue

@@ -27,6 +27,8 @@ _PACKAGE = _SOURCE_ROOT / "swing_lab"
 _MODULES = (
     "__init__.py",
     "artifact.py",
+    "entry.py",
+    "exits.py",
     "gate.py",
     "geometry.py",
     "geometry_artifact.py",
@@ -37,13 +39,21 @@ _MODULES = (
     "geometry_study.py",
     "geometry_variants.py",
     "geometry_verdict.py",
+    "intrabar.py",
     "metrics.py",
     "models.py",
+    "nonstructural.py",
+    "preregistration.py",
     "render.py",
     "replay.py",
     "robustness.py",
     "study.py",
     "trades.py",
+    "validation.py",
+    "validation_artifact.py",
+    "validation_mechanics.py",
+    "validation_render.py",
+    "validation_study.py",
     "variants.py",
 )
 
@@ -51,6 +61,10 @@ _MODULES = (
 #: than the rest of the package: these are the ones a lookahead or a fabricated
 #: level would have to pass through.
 _GEOMETRY_POLICY_MODULES = ("geometry.py", "geometry_variants.py")
+
+#: The only modules permitted to touch a file. One per milestone that persists a
+#: research record, and each is additionally guarded against writing to a store.
+_ARTIFACT_MODULES = ("artifact.py", "geometry_artifact.py", "validation_artifact.py")
 
 
 def _source(name: str) -> str:
@@ -156,14 +170,22 @@ class TestNoProductionSideEffects:
 
     @pytest.mark.parametrize("name", _MODULES)
     def test_only_the_artifact_module_touches_the_filesystem(self, name: str) -> None:
-        """One module may write, and it writes a research record, never a store."""
+        """Only the artifact modules may write, and they write research records.
+
+        Milestone BY adds `validation_artifact.py` to the exempt set on exactly
+        the same footing as BW's and BX's: it is the ONE module of its milestone
+        that touches a file, it writes a JSON research record, and
+        `test_the_artifact_modules_write_no_store_record` below covers it too. No
+        other BY module is exempt, and the renderer, the study, the mechanics and
+        the pre-registration all fail this guard if they ever open a path.
+        """
         text = _source(name)
-        if name in ("artifact.py", "geometry_artifact.py"):
+        if name in _ARTIFACT_MODULES:
             return
         for token in ("open(", "write_text", "mkdir", "unlink", "Path("):
             assert token not in text, f"{name} touches the filesystem via {token}"
 
-    @pytest.mark.parametrize("name", ("artifact.py", "geometry_artifact.py"))
+    @pytest.mark.parametrize("name", _ARTIFACT_MODULES)
     def test_the_artifact_modules_write_no_store_record(self, name: str) -> None:
         text = _source(name)
         for token in ("fmis.records", "fmis.persistence", "fmis.archive", "fmis.ledger"):

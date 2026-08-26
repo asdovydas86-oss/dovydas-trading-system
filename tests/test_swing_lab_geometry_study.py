@@ -874,7 +874,12 @@ def test_trades_for_policy_refuses_arguments_of_the_wrong_type() -> None:
     with pytest.raises(TypeError, match="capture must be"):
         trades_for_policy(object(), PRODUCTION_GEOMETRY,
                           costs=FRICTIONLESS_COSTS, evaluation_window_bars=_WINDOW)
-    with pytest.raises(TypeError, match="policy must be"):
+    # Milestone BY widened the contract from `GeometryPolicy` to the
+    # `PlansGeometry` protocol so its non-structural control — which must live
+    # outside `fmis.swing_lab.geometry`, whose guard forbids constructing a
+    # level — is measured by this same replay. The refusal is still total: an
+    # object with neither `policy_id` nor `plan` is rejected.
+    with pytest.raises(TypeError, match="policy must satisfy PlansGeometry"):
         trades_for_policy(_capture(_many(1)), object(),
                           costs=FRICTIONLESS_COSTS, evaluation_window_bars=_WINDOW)
 

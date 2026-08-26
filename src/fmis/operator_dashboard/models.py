@@ -82,6 +82,16 @@ __all__ = [
     "GeometryShareRow",
     "GeometryFindingRow",
     "GeometryView",
+    "ValidationCriterionRow",
+    "ValidationSampleRow",
+    "ValidationCellRow",
+    "ValidationPolicyRow",
+    "ValidationPlateauPointRow",
+    "ValidationPlateauRow",
+    "ValidationWindowRow",
+    "ValidationCohortRow",
+    "ValidationDecompositionRow",
+    "ValidationView",
     "OperatorDashboardSnapshot",
 ]
 
@@ -889,6 +899,187 @@ class GeometryView:
     is_approved_for_trading: bool = False
 
 
+# --------------------------------------------------------------- validation ---
+#
+# Milestone BY. The page shows a SEALED pre-registration and what it measured,
+# and the read models below exist so it can show two things BX's page could not:
+# **which pre-registration a number was judged under**, and **which cost
+# scenario decided it**. Both travel as data rather than as page copy, because a
+# figure whose basis is written in prose beside it is a figure that can be
+# quoted without its basis.
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationCriterionRow:
+    """One sealed requirement, and the measurement that decided it.
+
+    ``passed`` is tri-state for `fmis.swing_lab.validation`'s reason: a criterion
+    that could not be evaluated is not a failure, and a page rendering both as a
+    red mark would report a policy nobody measured as one that lost money.
+    """
+
+    name: str
+    requirement: str
+    passed: bool | None
+    observed: str
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationSampleRow:
+    """One sample's identity and its contamination, carried together.
+
+    The contamination sentence is a **required field on the sample**, not page
+    copy beside a table. Milestone BX had to spend a report paragraph explaining
+    that its holdout was a low-liquidity symbol split; here the caveat cannot be
+    separated from the row it qualifies.
+    """
+
+    name: str
+    role: str
+    symbols: tuple[str, ...]
+    signal_start: str
+    signal_end: str
+    contamination: str
+    candidates: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationCellRow:
+    """One policy on one sample under one cost scenario. Text, reduced upstream."""
+
+    sample: str
+    cost_policy_id: str
+    is_deciding: bool
+    trades: int = 0
+    measurable: int = 0
+    ambiguous: int = 0
+    refused: int = 0
+    win_rate: str | None = None
+    expectancy: str | None = None
+    expectancy_reason: str | None = None
+    profit_factor: str | None = None
+    total_r: str = ""
+    max_drawdown: str = ""
+    largest_symbol_share: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationPlateauPointRow:
+    """One neighbourhood point. **Failing neighbours are rows like any other.**"""
+
+    axis: str
+    threshold: str
+    is_primary: bool
+    measurable: int
+    expectancy: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationPlateauRow:
+    """A policy's neighbourhood, its classification and the rule that produced it."""
+
+    classification: str
+    statement: str
+    detail: str
+    points: tuple[ValidationPlateauPointRow, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationPolicyRow:
+    """One sealed hypothesis: what it claims, what it measured, what blocked it."""
+
+    hypothesis_id: str
+    policy_id: str
+    role: str
+    family: str
+    title: str
+    hypothesis: str
+    prediction: str
+    refuted_by: str
+    is_structural: bool
+    verdict: str
+    verdict_statement: str
+    cells: tuple[ValidationCellRow, ...] = ()
+    criteria: tuple[ValidationCriterionRow, ...] = ()
+    #: A **field**, not a filter. Selecting rows is the work this layer exists
+    #: not to do, and `fmis.swing_lab.validation` already decided which blocked.
+    blocking_criteria: tuple[str, ...] = ()
+    plateau: ValidationPlateauRow | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationWindowRow:
+    """One chronological window of the frozen policy. Empty windows are rows too."""
+
+    label: str
+    trades: int
+    measurable: int
+    win_rate: str | None
+    expectancy: str | None
+    profit_factor: str | None
+    total_r: str
+    max_drawdown: str
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationCohortRow:
+    """One cohort of one decomposition, with its absence reason when it has one."""
+
+    label: str
+    measurable: int
+    expectancy: str | None
+    expectancy_reason: str | None
+    total_r: str
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationDecompositionRow:
+    """One way of cutting the primary policy's trades, and what it showed."""
+
+    name: str
+    question: str
+    agrees_on_sign: bool | None
+    cohorts: tuple[ValidationCohortRow, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationView:
+    """One completed pre-registered validation, read from a supplied artifact.
+
+    **Not a live engine read**, for `LabView`'s reason: the study replays years
+    of history across two universes and takes over an hour. With no artifact
+    loaded the page says so plainly rather than rendering an empty table, which
+    here would read as *"nothing works"* rather than *"nothing was measured"*.
+    """
+
+    experiment_id: str = ""
+    preregistration_id: str = ""
+    preregistration_digest: str = ""
+    #: Whether the sealed rules in the repository still match the ones these
+    #: numbers were judged against. Carried as data because a mismatch does not
+    #: make the numbers wrong — it makes the CRITERIA different — and only the
+    #: page can say that in words a reader will act on.
+    seal_matches: bool = False
+    deciding_cost_policy_id: str = ""
+    cost_policy_ids: tuple[str, ...] = ()
+    holdout_opened: bool = False
+    no_lookahead_proven: bool = False
+    result_digest: str = ""
+    digest_verified: bool = False
+    samples: tuple[ValidationSampleRow, ...] = ()
+    unclaimed_candidates: int = 0
+    policies: tuple[ValidationPolicyRow, ...] = ()
+    walk_forward_policy_id: str = ""
+    walk_forward: tuple[ValidationWindowRow, ...] = ()
+    decompositions: tuple[ValidationDecompositionRow, ...] = ()
+    limitations: tuple[str, ...] = ()
+    #: Every policy the STUDY judged worth forward testing. Usually empty, and
+    #: that is a result rather than a missing measurement.
+    candidate_policy_ids: tuple[str, ...] = ()
+    #: Always ``False``, carried as data so the contract itself states it.
+    is_approved_for_trading: bool = False
+
+
 @dataclass(frozen=True, slots=True)
 class OperatorDashboardSnapshot:
     """Everything one refresh produced. The root of the presentation contract.
@@ -914,6 +1105,7 @@ class OperatorDashboardSnapshot:
     health: DashboardSection[DataHealthView]
     lab: DashboardSection[LabView] | None = None
     geometry: DashboardSection[GeometryView] | None = None
+    validation: DashboardSection[ValidationView] | None = None
     warnings: tuple[WarningRow, ...] = ()
     limitations: tuple[tuple[str, str], ...] = ()
     schema_version: int = DASHBOARD_SCHEMA_VERSION

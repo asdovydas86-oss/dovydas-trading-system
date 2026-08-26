@@ -127,6 +127,7 @@ class SnapshotHolder:
         with_relationships: bool = True,
         lab: Any | None = None,
         geometry: Any | None = None,
+        validation: Any | None = None,
     ) -> None:
         self._refresher = refresher
         self._clock = clock or (lambda: datetime.now(timezone.utc))
@@ -139,6 +140,7 @@ class SnapshotHolder:
         #: access exists here at all.
         self._lab = lab
         self._geometry = geometry
+        self._validation = validation
         self._lock = threading.Lock()
         self._snapshot: OperatorDashboardSnapshot | None = None
         #: Counts every completed refresh. A test asserts that navigating four
@@ -154,6 +156,7 @@ class SnapshotHolder:
             with_relationships=self._with_relationships,
             lab=self._lab,
             geometry=self._geometry,
+            validation=self._validation,
         )
         self._snapshot = snapshot
         self.refresh_count += 1

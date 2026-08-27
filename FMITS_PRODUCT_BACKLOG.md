@@ -292,6 +292,62 @@ tests, full suite **11,271 passing** under `-W error`, 91–99 % statement and b
 new modules, **42/42 mutation probes killed**, and
 [report 0034](reports/0034_2026-08-25_SWING_TRADE_GEOMETRY_RESEARCH.md).
 
+**`BZ` — Swing Thesis Persistence & Exit Mechanics — is DONE (2026-08-26), and was an
+owner-directed research task, not a NOW selection.** It sits on the same footing as every
+owner-scoped milestone before it and **does not satisfy the exactly-one-NOW rule**, which remains
+outstanding. It is the fourth milestone whose deliverable is an **answer**, and the first to ask what
+happens to a trade *after* it opens. Evidence: five new modules in `src/fmis/swing_lab/`,
+`fmits research persistence`, 226 new focused tests, full suite **11,997 passing** under `-W error`,
+88 % statement and branch coverage of the new scope, **47 mutation probes — 47 killed, 0 survivors**,
+33 hostile probes with 0 failures, and
+[report 0036](reports/0036_2026-08-26_SWING_THESIS_PERSISTENCE_RESEARCH.md).
+
+> **What the owner can do after `BZ` that was impossible before:** see what the structural engines
+> said at **every bar of an open position**, not only at the bar that admitted it — and read a
+> post-entry thesis state that is causal by construction. One replay now yields both the candidates
+> and the timeline, so a claim about a state *transition* rests on one dataset rather than two.
+
+> **`BZ` answered its primary question YES and its promotion question NO, and the two are
+> different.** Post-entry thesis persistence **exists and is measurable causally**: under production
+> geometry the thesis is INTACT for 149 of 151 development positions at bar 1 and for 41 of 151 at
+> bar 60, decaying monotonically. **No exit mechanism built on it earned promotion.** All five sealed
+> families are REJECTED on both geometries — ten judgements, ten rejections — every one failing the
+> pre-declared +0.10R development bar against a best measured figure of +0.0134R.
+
+> **Why they fail, in one number.** Under BY's geometry, 99 of 136 development positions reached
+> +2R and the **median realised return of those was −1.05R**, while the policy's mean expectancy is
+> +0.1906R. The return distribution is almost entirely tail, so a give-back cap, a stagnation exit
+> and a structural trail each remove upside before they remove losers.
+
+> **The result that is not a candidate.** Every mechanism helps the holdout and hurts development.
+> Give-back protection is worth **+0.1992R** on twenty-one unseen symbols and **−0.0772R** on the
+> sample it was developed on, taking BY's geometry on the holdout from −0.2110R to −0.0118R. A
+> mechanism whose sign flips between samples is a property of one sample, and the sealed criteria
+> caught it without a judgement call.
+
+> **Two defects found and fixed, and one of them would have manufactured evidence.** **BZ-D1**: a
+> below-floor or never-run sample was reported as a *failed* criterion rather than as unmeasurable,
+> so a development-only pass would have reported five refutations it had not earned — BZ's own
+> sealed rules say a thin sample is INCONCLUSIVE. **BZ-D2**: one trade's TIME_STOP exit differs from
+> BY's run by 1.21R; the walker is proven equivalent over 4,000 randomised paths and BY persisted no
+> capture, so the cause could not be closed. Both are recorded in report 0036 §7 and §16.
+
+> **What BZ did not deliver, stated plainly:** no dashboard page, and the sealed robustness
+> neighbourhood was **not measured** — the `robust` criterion reports as unmeasurable, which
+> changes no verdict but leaves the plateau question open.
+
+> **Completion pass (2026-08-27) — BZ is now a reproducible experiment.** BZ was held back from
+> release because its result could not be re-derived: no milestone in this series had ever persisted
+> its *inputs*. `persistence_artifact.py` now writes a digested **capture** — every bar, candidate
+> and structural observation, with full provenance — and `fmits research persistence
+> --from-capture` re-measures from it **without touching the network**, proven by a regression that
+> makes a fetch fatal. Every result is unchanged: seal verified, ten judgements REJECTED, zero
+> candidates, NO_CANDIDATE. **BZ-D2 is reconciled mechanically** to one knife-edge trade worth
+> 1.2113R against an observed 1.2086R gap, with the root cause classified **UNRESOLVED_PROVENANCE**
+> — BY's level lists no longer exist. Two further defects were caught by the new mutation probes: a
+> gzip header that made identical captures produce different files, and a `Decimal` decode that
+> would have lost precision on high-precision instruments.
+
 **`BY` — Pre-Registered Swing Geometry Validation & Execution Mechanics — is DONE (2026-08-26), and
 was an owner-directed research task, not a NOW selection.** It sits on the same footing as `AT`,
 `AU`, `AV`, `BH`–`BN`, the `BG-D1` line, `BR`, `BS`, `BT`, `BU`, `BV`, `BW` and `BX`: explicitly

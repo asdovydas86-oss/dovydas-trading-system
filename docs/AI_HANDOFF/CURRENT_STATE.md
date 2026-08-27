@@ -7,12 +7,67 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BY — Pre-Registered Swing Geometry Validation & Execution Mechanics
-(2026-08-26): the third milestone whose deliverable is an **answer**, and the first with a
-**sealed pre-registration**. `fmits research validation` runs eleven hypotheses that were frozen and
-digested before a single result was read, against a development period, a later validation period
-and twenty-one symbols this repository had never measured. Full record:
-[report 0035](../../reports/0035_2026-08-26_PREREGISTERED_SWING_GEOMETRY_VALIDATION.md).
+**Last updated for:** BZ — Swing Thesis Persistence & Exit Mechanics (2026-08-26): the fourth
+milestone whose deliverable is an **answer**, and the first to look at what happens to a trade
+**after** it opens. `fmits research persistence` measures post-entry thesis persistence causally and
+then tests five sealed exit families against it. **Persistence exists and is measurable; no exit
+mechanism earned promotion.** Full record:
+[report 0036](../../reports/0036_2026-08-26_SWING_THESIS_PERSISTENCE_RESEARCH.md).
+
+---
+
+## Milestone BZ — Swing Thesis Persistence & Exit Mechanics
+
+**Status: DONE (2026-08-26), uncommitted.** Research only. No production trading policy changed, no
+order placed, no exchange contacted.
+
+**The question.** Three milestones had searched setup geometry. BZ asks a different one: *does a
+swing setup exhibit measurable post-entry persistence, and can its deterioration be identified from
+information available at that instant?*
+
+**The answer — and it is two answers.** **Persistence exists and is measurable.** Under production
+geometry, the structural thesis is INTACT for 149 of 151 development positions at bar 1 and for 41
+of 151 at bar 60, decaying monotonically, with every reading confirmed by its own bar. **No exit
+mechanism built on it earned promotion.** All five sealed families are REJECTED on both geometries;
+every one fails the pre-declared +0.10R development bar, and the best figure measured anywhere is
++0.0134R.
+
+**Why they fail, in one number.** Under BY's geometry, 99 of 136 development positions reached +2R
+and the *median realised return of those was −1.05R* — while the policy's mean expectancy is
++0.1906R. The distribution is almost entirely tail, so a give-back cap, a stagnation exit and a
+structural trail all remove upside before they remove losers.
+
+**The finding that is not a candidate.** Every mechanism helps the holdout and hurts development —
+give-back protection is worth +0.1992R on twenty-one unseen symbols and −0.0772R on the sample it
+was developed on. A mechanism whose sign flips between samples is a property of one sample.
+
+- **New modules in `fmis.swing_lab`** (5): `persistence`, `persistence_replay`,
+  `persistence_preregistration`, `persistence_study`, `persistence_render`.
+- **Sealed pre-registration** `4d089ff43ec11e24e7e43e0a0f7ca377da996ee5a6391bb8f9c70d6922a3a175`,
+  pinned **before** the first capture ran and verified by the run script before a candle was fetched.
+- **One new seam, additive:** `capture_geometry_candidates` grew an `observer` sink so one replay
+  yields both the geometry candidates and a per-instant structural timeline. A regression asserts a
+  capture taken with a collector is byte-identical to one taken without.
+- **BY's pinned seal `a81b6ab8…` is byte-identical** after BZ extended `exits.py`.
+- **Surface:** `fmits research persistence` — takes no universe, no window and no threshold, and
+  refuses them by name. No dashboard page: BZ writes no artifact, so there was nothing to present
+  thinly.
+- **Verification:** full suite **11,997 passing** under `-W error` (from 11,726); 226 focused tests;
+  **47 mutation probes, 47 killed, 0 survivors**; 33 hostile probes, 0 failures; control equivalence
+  over **4,000 randomised paths, 0 mismatches**; 88 % statement + branch coverage; BY's production
+  control reproduced exactly (−0.5990, n=132, ambiguity 19).
+- **Two defects found and fixed.** **BZ-D1**: a below-floor sample was reported as a *failed*
+  criterion rather than unmeasurable, so a development-only pass would have claimed five refutations
+  it had not earned. **BZ-D2**: one trade's TIME_STOP exit differs from BY's run by 1.21R.
+- **Completion pass (2026-08-27) — reproducibility.** `persistence_artifact.py` persists the
+  **capture** (bars, candidates, structural timeline, full provenance, content digest
+  `fcd0991b…`), the first artifact here to persist inputs rather than a result.
+  `fmits research persistence --from-capture` re-measures **offline**, proven by a regression that
+  makes a network fetch fatal. **BZ-D2 is now reconciled mechanically** — one trade sitting 0.0612R
+  from its target accounts for 1.2113R against an observed gap of 1.2086R, a residual inside BY's
+  own quoted precision — with the root cause classified **UNRESOLVED_PROVENANCE**, because BY's
+  level lists were never stored. No scientific result changed; BZ reproduces itself exactly across
+  two independent replays a day apart.
 
 ---
 

@@ -47,7 +47,7 @@ Examples:
 - Reports are **never deleted** unless the user explicitly authorizes deletion.
 - Do **not** create generic `REPORT.md` files in the repository root.
 
-**Next available report number: `0036`**
+**Next available report number: `0037`**
 
 ## Metadata header
 
@@ -92,6 +92,7 @@ Each report should open with a short metadata table:
 | 0033 | 2026-08-25 | Implementation + Research | Swing Strategy Laboratory & Historical Replay (Milestone BW) — `fmits research`, `/lab`; the 1W gate measured | Final | `main` / uncommitted (base `d8e1b9e`) | [0033_2026-08-25_SWING_STRATEGY_LABORATORY_IMPLEMENTATION.md](0033_2026-08-25_SWING_STRATEGY_LABORATORY_IMPLEMENTATION.md) |
 | 0034 | 2026-08-25 | Implementation + Research | Swing Trade Geometry Research & Policy Candidates (Milestone BX) — `fmits research geometry`, `/geometry`; 13 geometries measured, **no candidate** | Final | `main` / uncommitted (base `f5d59df`) | [0034_2026-08-25_SWING_TRADE_GEOMETRY_RESEARCH.md](0034_2026-08-25_SWING_TRADE_GEOMETRY_RESEARCH.md) |
 | 0035 | 2026-08-26 | Implementation + Research | Pre-Registered Swing Geometry Validation & Execution Mechanics (Milestone BY) — sealed pre-registration `a81b6ab8…`, `fmits research validation`, `/validation`; 11 hypotheses on development/validation/holdout, **hypothesis refuted, no candidate** | Final | `main` / uncommitted (base `3598b4c`) | [0035_2026-08-26_PREREGISTERED_SWING_GEOMETRY_VALIDATION.md](0035_2026-08-26_PREREGISTERED_SWING_GEOMETRY_VALIDATION.md) |
+| 0036 | 2026-08-26 | Implementation + Research | Swing Thesis Persistence & Exit Mechanics (Milestone BZ) — sealed pre-registration `4d089ff4…`, `fmits research persistence`; post-entry thesis persistence measured and confirmed, 5 exit families on 2 geometries × 3 samples, **all REJECTED, no candidate** | Final | `main` / uncommitted (base `fd1270b`) | [0036_2026-08-26_SWING_THESIS_PERSISTENCE_RESEARCH.md](0036_2026-08-26_SWING_THESIS_PERSISTENCE_RESEARCH.md) |
 | 0013 | 2026-08-11 | Review | Research Harness Correction V1 — Hostile Review | Final | `main` / uncommitted (base `f9ddc54`) | [0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md](0013_2026-08-11_RESEARCH_HARNESS_CORRECTION_HOSTILE_REVIEW.md) |
 | 0012 | 2026-08-11 | Implementation | Research Harness Correction V1 — Implementation Record | Final | `main` / uncommitted (base `f9ddc54`) | [0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md](0012_2026-08-11_RESEARCH_HARNESS_CORRECTION_IMPLEMENTATION.md) |
 | 0011 | 2026-08-08 | Implementation | Swing Setup Historical Backtest Harness V1 — Implementation Record | Final | `main` / uncommitted (base `35bce7a`) | [0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md](0011_2026-08-08_SWING_SETUP_BACKTEST_V1_IMPLEMENTATION.md) |

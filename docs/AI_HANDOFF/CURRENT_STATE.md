@@ -7,12 +7,106 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** BZ — Swing Thesis Persistence & Exit Mechanics (2026-08-26): the fourth
-milestone whose deliverable is an **answer**, and the first to look at what happens to a trade
-**after** it opens. `fmits research persistence` measures post-entry thesis persistence causally and
-then tests five sealed exit families against it. **Persistence exists and is measurable; no exit
-mechanism earned promotion.** Full record:
-[report 0036](../../reports/0036_2026-08-26_SWING_THESIS_PERSISTENCE_RESEARCH.md).
+**Last updated for:** CA — Swing Admission Edge vs Random-Entry Null (2026-08-27): the fifth
+milestone whose deliverable is an **answer**, and the first to test the *admission rule itself*
+against a matched null rather than testing what is done around it. `fmits research admission`
+measures whether FMITS-selected instants and directions beat controls matched on symbol, sample,
+volatility band and calendar neighbourhood. **They do not: `NO_EDGE` on all five sealed families,
+with point estimates leaning negative.** The study is also **underpowered for its own sealed bar** —
+no realisation of this data could have produced a candidate — so `NO_EDGE` means *"no edge large
+enough to see at 155 admissions"*, not *"no edge"*. Full record:
+[report 0037](../../reports/0037_2026-08-27_SWING_ADMISSION_NULL_MODEL_RESEARCH.md).
+
+---
+
+## Milestone CA — Swing Admission Edge vs Random-Entry Null
+
+**Status: DONE (2026-08-27), uncommitted.** Research only. No production trading policy changed, no
+order placed, no exchange contacted, no AI called.
+
+**The question.** BW, BX, BY and BZ each rejected everything they tested — timeframe variants,
+thirteen geometries, one geometry's neighbourhood, five exit mechanisms — and none could distinguish
+*"the geometry is wrong"* from *"there is no signal to shape"*, because every one of their units is a
+**trade** and therefore a joint statement about admission and management. CA changes the unit to a
+**decision instant** and asks: *does the admission rule select instants and directions whose forward
+outcomes beat MATCHED entries it did not select?*
+
+**The answer. `NO_EDGE` on all five sealed null families, and the effects are negative.** At the
+sealed primary horizon of 24 execution bars, measured in ATR with no stop, target, exit or cost:
+
+| family | question | development | validation | holdout |
+|---|---|---|---|---|
+| `ca_null_matched_timing` | timing | −0.2028 | −0.3347 | −0.5337 |
+| `ca_null_random_direction_same_bar` | direction | −0.0110 | −0.2036 | −0.3125 |
+| `ca_null_matched_timing_random_direction` | combined | +0.0357 | −0.1918 | −0.3088 |
+| `ca_null_eligible_but_rejected` | gate | −0.1947 | −0.0641 | −0.1227 |
+
+**Read the limitations before the numbers — an independent code review refuted the first draft's
+strongest claim, and it was withdrawn.**
+
+- **CA is underpowered for its own sealed bar.** The development bootstrap half-width is ≈0.558 ATR
+  against a 0.10 ATR bar; an interval excluding zero would need ≈4,800 matched admissions per sample
+  against the 155 that exist. **14 of 15 bootstrap intervals span zero.** No positive edge is
+  demonstrable, and neither is a negative one — `NO_EDGE` is a statement about resolution as much as
+  about the market.
+- **The gate-ladder claim is WITHDRAWN.** The first draft reported that the `admitted` rung is the
+  worst directional rung on all three samples and that the confirmation gate "selects the wrong
+  tail". The ladder is unclustered, unmatched and unbounded: under CA's own symbol-clustered
+  estimator zero is inside the interval on all three samples, roughly 40 % of symbols point the other
+  way, and equal-symbol weighting **reverses** the holdout. The `confirmed_repeat` figure was
+  additionally **90 % one symbol** (TRXUSDT). The census is exact and remains useful; the inference
+  drawn from it does not survive.
+
+**What survives.** No sealed family cleared the +0.10 ATR bar, and no interval excludes zero on the
+positive side. After five milestones searching timeframes, geometries, geometry neighbourhoods, exit
+mechanisms and now admission itself, **there is still no measured evidence of an edge anywhere** —
+which is what makes further tuning around this rule a search inside a space nobody has shown
+contains anything.
+
+**A hypothesis worth pre-registering, not a finding.** Every family is positive at 1–6 bars (4–24
+hours) and negative by 12–24 bars, and admissions win the ±1 ATR race on two of three samples while
+losing the four-day return on all three. That shape is *consistent with* the engine confirming on a
+structure break and so entering near the end of a short impulse. CA did not establish it.
+
+**Three code defects were found by the review and fixed** — **CA-D1**, the headline effect computed
+with no `SAMPLE_FLOOR` guard, so a three-admission family could be refuted by a test its own `sample`
+criterion said could not be run (the BZ-D1 class, one layer down); **CA-D2**, a strided rung
+reporting a full count beside a sampled mean; **CA-D3**, a sealed family measurable against a pool
+its seal does not name. **The experiment was re-run after all three and every number is
+byte-identical.**
+
+**Where the two lowest rungs are silent.** `regime_blocked` and `tally_disagreed` carry no
+production direction, so a direction-normalised return is undefined for them and is **refused**
+rather than computed as a long's. CA therefore says nothing about whether the 1W regime gate or the
+two-family tally add value.
+
+- **New modules in `fmis.swing_lab`** (6): `admission`, `admission_preregistration`,
+  `admission_matching`, `admission_study`, `admission_artifact`, `admission_render`.
+- **Sealed pre-registration** `ca-swing-admission-null-model-v1`, digest
+  `910cad28001ee18d9630f685e454bfd6bf24fb7d78b907e89172371b83f25e8a`, computed and printed **before
+  the first forward outcome was computed**.
+- **Inputs are Milestone BZ's persisted capture** (`fcd0991b…`). CA extended no schema: the capture's
+  structural timeline reconstructs the production admitted set **exactly** (246/246 primary,
+  234/234 holdout), and the production ATR recomputed from its bars reproduces every captured
+  candidate's own `execution_atr` **bit for bit** (480/480).
+- **Surface:** `fmits research admission` — **requires** `--from-capture` and has no live path at
+  all, because a study that refetched mutable market data would not be reproducible even with frozen
+  code. Refuses a universe, a window and a threshold by name.
+- **No verdict CA defines can promote anything.** `CaVerdict.is_approved_for_trading` **and**
+  `earns_forward_test` are `False` for every member including `ADMISSION_EDGE_CANDIDATE`, asserted
+  over the whole enum: an admission edge with no geometry attached is not a strategy.
+- **Three behaviour-preserving extractions** so the laboratory keeps one definition each:
+  `walk_forward_boundaries` (from `validation_study`), `concentration_of_magnitudes` (from
+  `robustness`), `nearest_rank_quantile` (from `persistence_study`). BY's seal `a81b6ab8…` and BZ's
+  `4d089ff4…` are byte-identical afterwards.
+
+**Recommended next question — not started.** **Make the question answerable before asking it
+again.** The binding constraint is statistical power, not a shortage of hypotheses: at 155
+admissions no experiment of this shape can resolve a 0.10 ATR effect, so a sixth and seventh idea
+tested here would produce more `NO_EDGE` verdicts that mean nothing. Widen the universe, raise the
+detectable effect to one the sample can resolve, or change the unit — then pre-register a
+confirmation-semantics redesign. Every future seal should carry a **power calculation**; CA's did
+not, and that omission cost this milestone its headline.
 
 ---
 

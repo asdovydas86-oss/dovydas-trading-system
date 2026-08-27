@@ -348,6 +348,71 @@ happens to a trade *after* it opens. Evidence: five new modules in `src/fmis/swi
 > gzip header that made identical captures produce different files, and a `Decimal` decode that
 > would have lost precision on high-precision instruments.
 
+**`CA` — Swing Admission Edge vs Random-Entry Null — is DONE (2026-08-27), and was an
+owner-directed research task, not a NOW selection.** It sits on the same footing as every
+owner-scoped milestone before it and **does not satisfy the exactly-one-NOW rule**, which remains
+outstanding. It is the fifth milestone whose deliverable is an **answer**, and the first to put the
+**admission rule itself** on trial rather than what is done around it. Evidence: six new modules in
+`src/fmis/swing_lab/`, `fmits research admission`, sealed pre-registration `910cad28…`, 282 new
+focused tests, full suite **12,380 passing** under `-W error`, **96 % statement and branch coverage**
+of the new scope, 33 hostile probes with 0 failures, and
+[report 0037](reports/0037_2026-08-27_SWING_ADMISSION_NULL_MODEL_RESEARCH.md).
+
+> **What the owner can do after `CA` that was impossible before:** ask whether a swing admission is
+> *worth making at all*, against controls matched on symbol, sample, volatility band and calendar
+> neighbourhood — separately from the geometry and the exit that BW–BZ already refuted. Until CA,
+> *"the geometry is wrong"* and *"there is no signal to shape"* were indistinguishable.
+
+> **`CA` answered NO, and the answer is not merely an absence.** `NO_EDGE` on all five sealed null
+> families, with **negative** effects at the sealed primary horizon of 24 execution bars: timing
+> −0.2028 / −0.3347 / −0.5337, direction −0.0110 / −0.2036 / −0.3125, combined +0.0357 / −0.1918 /
+> −0.3088, gate −0.1947 / −0.0641 / −0.1227 across development / validation / holdout.
+
+> **An independent code review refuted the first draft's strongest claim, and it was withdrawn.**
+> The draft reported that the **admitted** rung is the worst directional rung on all three samples
+> and that the confirmation gate "selects the wrong tail of its own candidate set". The gate ladder
+> is **unclustered, unmatched and unbounded**: under CA's own symbol-clustered estimator zero is
+> inside the interval on all three samples ((−0.644,+0.387), (−0.996,+0.166), (−0.658,+0.220)),
+> roughly 40 % of symbols point the other way, and **equal-symbol weighting reverses the holdout**.
+> The `confirmed_repeat` figure was additionally **90 % one symbol** (TRXUSDT: +0.4102 of +0.4538).
+> Every finding was verified independently before the claim was withdrawn.
+
+> **CA is also underpowered for its own sealed bar, and that is the most important thing to carry
+> forward.** The development bootstrap half-width is ≈0.558 ATR against a 0.10 ATR bar; an interval
+> excluding zero would need ≈4,800 matched admissions per sample against the 155 that exist. **No
+> realisation of this data could have produced `ADMISSION_EDGE_CANDIDATE`.** `NO_EDGE` therefore
+> means *"no edge large enough to see at this sample size"*, not *"no edge"*.
+
+> **What survives, and it is still decisive for sequencing.** No sealed family cleared the bar and no
+> interval excludes zero on the positive side. Five milestones have now searched timeframes,
+> geometries, geometry neighbourhoods, exit mechanisms and admission itself without producing
+> measurable evidence of an edge anywhere. Continuing to tune components around this admission rule
+> is optimising inside a space nobody has shown contains anything.
+
+> **A hypothesis worth pre-registering, not a finding.** Every family is positive at 1–6 bars (4–24
+> hours) and negative by 12–24 bars, and admissions win the ±1 ATR race on two of three samples while
+> losing the four-day return on all three — a shape *consistent with* confirming on a structure break
+> and entering near the end of a short impulse. CA did not establish it.
+
+> **What CA cannot say, stated plainly.** The two lowest rungs — the 1W regime gate and the
+> two-family tally — carry no production direction, so a direction-normalised return is undefined for
+> them and is **refused** rather than computed as a long's. Three further limitations are recorded
+> rather than hidden: the sealed empirical null is **conservative** and the seal's own text
+> **overstates** its clustering (both can only produce false negatives, and neither decided a
+> verdict), and the sealed conditional-edge rule is **unmeasurable** because per-stratum bootstrap
+> and null statistics were commissioned per family and sample only.
+
+> **Three code defects were found by the review and fixed.** **CA-D1** — the headline effect was the
+> one figure exempt from `SAMPLE_FLOOR`, so a three-admission family could be reported `NO_EDGE` by a
+> test its own `sample` criterion said could not be run; this is the BZ-D1 class one layer down.
+> **CA-D2** — a strided ladder rung reported a full count beside a sampled mean. **CA-D3** — a sealed
+> family could be measured against a pool its seal does not name, and the control-identity digest
+> would still have verified. **The experiment was re-run after all three and every effect, interval,
+> percentile and verdict is byte-identical.**
+
+> **No dashboard page**, and the dashboard's 30–45 s refresh was deliberately left untouched for a
+> later UX milestone, as the brief directed.
+
 **`BY` — Pre-Registered Swing Geometry Validation & Execution Mechanics — is DONE (2026-08-26), and
 was an owner-directed research task, not a NOW selection.** It sits on the same footing as `AT`,
 `AU`, `AV`, `BH`–`BN`, the `BG-D1` line, `BR`, `BS`, `BT`, `BU`, `BV`, `BW` and `BX`: explicitly

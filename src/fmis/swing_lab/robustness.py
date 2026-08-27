@@ -27,7 +27,7 @@ hundred trades four ways leaves cohorts too small to carry a rate, and
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -40,6 +40,7 @@ __all__ = [
     "RobustnessReading",
     "measure_robustness",
     "concentration_of",
+    "concentration_of_magnitudes",
 ]
 
 
@@ -103,13 +104,35 @@ def concentration_of(
     concentrates the result exactly as much as one contributing a large gain.
     ``None`` when no trade carries an R at all.
     """
+    return concentration_of_magnitudes(
+        (key(trade) or "unattributed", abs(trade.net_r))
+        for trade in trades
+        if trade.net_r is not None
+    )
+
+
+def concentration_of_magnitudes(
+    contributions: "Iterable[tuple[str, Decimal]]",
+) -> Decimal | None:
+    """The largest single cohort's share of a total magnitude. **The formula, once.**
+
+    `concentration_of` is this function over a trade's net R. Milestone CA's unit
+    is a paired difference rather than a trade, and it reads the same measure
+    here rather than restating the arithmetic — two copies of a share
+    calculation are two places for the denominator to stop matching the
+    numerator.
+
+    ``None`` when nothing contributed any magnitude at all, which is a stated
+    absence rather than a zero share.
+    """
     totals: dict[str, Decimal] = {}
     grand = Decimal("0")
-    for trade in trades:
-        if trade.net_r is None:
-            continue
-        label = key(trade) or "unattributed"
-        magnitude = abs(trade.net_r)
+    for label, magnitude in contributions:
+        if magnitude < 0:
+            raise SwingLabError(
+                f"cohort {label!r} contributed a negative magnitude {magnitude}; "
+                "a share of a total must be taken over absolute contributions"
+            )
         totals[label] = totals.get(label, Decimal("0")) + magnitude
         grand += magnitude
     if grand == 0:

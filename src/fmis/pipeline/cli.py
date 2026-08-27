@@ -84,6 +84,12 @@ from fmis.swing_lab.validation_artifact import (
     verify_result_digest,
     write_validation_study,
 )
+from fmis.swing_lab.admission_artifact import (
+    encode_admission_study,
+    write_admission_study,
+)
+from fmis.swing_lab.admission_render import render_admission_study
+from fmis.swing_lab.admission_study import study_from_capture
 from fmis.swing_lab.persistence_artifact import (
     read_persistence_capture,
     verify_capture_digest,
@@ -3469,7 +3475,7 @@ def _run_dashboard(args: argparse.Namespace) -> int:
 def _configure_research(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "area",
-        choices=("swing", "geometry", "validation", "persistence"),
+        choices=("swing", "geometry", "validation", "persistence", "admission"),
         help=(
             "which research question to run. 'swing' is the Swing Strategy "
             "Laboratory's timeframe-policy comparison (Milestone BW); "
@@ -3482,7 +3488,11 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
             "not be a pre-registered study; 'persistence' runs Milestone BZ's "
             "SEALED post-entry study — what happens to a thesis AFTER entry, and "
             "whether a causal exit policy generalises — and takes no universe, "
-            "no window and no threshold either"
+            "no window and no threshold either; 'admission' runs Milestone CA's "
+            "SEALED null-model study — whether the admission engine selects "
+            "instants and directions better than MATCHED entries it did not "
+            "select — which is measured entirely from a saved BZ capture and "
+            "therefore REQUIRES --from-capture and touches no network at all"
         ),
     )
     parser.add_argument(
@@ -3534,10 +3544,31 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--from-capture", default=None, metavar="PATH", dest="from_capture",
         help=(
-            "persistence only: re-measure from a saved capture instead of "
-            "replaying. NO NETWORK IS TOUCHED. Refuses a corrupted digest, a "
+            "persistence and admission: re-measure from a saved capture instead "
+            "of replaying. NO NETWORK IS TOUCHED. Refuses a corrupted digest, a "
             "foreign schema version, a study artifact, or a capture missing any "
-            "data it references — it never completes a gap from the provider"
+            "data it references — it never completes a gap from the provider. "
+            "REQUIRED for 'admission', which has no live path at all"
+        ),
+    )
+    parser.add_argument(
+        "--save-study", default=None, metavar="PATH", dest="save_study",
+        help=(
+            "admission only: write the completed study as a deterministic, "
+            "digested artifact carrying both the pre-registration digest it was "
+            "measured under and the capture digest it was measured over, so a "
+            "later disagreement can be attributed to the code, the rules or the "
+            "data rather than argued about. Refuses to overwrite"
+        ),
+    )
+    parser.add_argument(
+        "--causal-proven", action="store_true", dest="causal_proven",
+        help=(
+            "admission only: assert that the milestone's no-lookahead suite "
+            "passed WITH its non-vacuity controls in this build. Off by default "
+            "and deliberately so — a run cannot verify the repository's own test "
+            "suite from inside itself, so the causal criterion blocks unless a "
+            "human states it, and a blocked criterion cannot promote"
         ),
     )
     parser.add_argument(
@@ -3615,6 +3646,27 @@ def _run_research(args: argparse.Namespace) -> int:
     strategy and promotes nothing: a variant that measures well here is a
     candidate for forward testing, which is a later, explicit owner decision.
     """
+    if args.area == "admission":
+        for name in ("symbols", "development", "holdout", "variant"):
+            value = getattr(args, name, None)
+            if value:
+                print(
+                    f"fmits research admission: {name} is not accepted. Every "
+                    "symbol, window, horizon, matching rule, seed and threshold "
+                    "is sealed in the pre-registration",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        for name in ("start", "end"):
+            if getattr(args, name, None) is not None:
+                print(
+                    f"fmits research admission: --{name} is not accepted. The "
+                    "measurement windows are part of the sealed "
+                    "pre-registration",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        return _run_admission_research(args)
     if args.area == "persistence":
         for name in ("symbols", "development", "holdout", "variant"):
             value = getattr(args, name, None)
@@ -3776,6 +3828,100 @@ def _run_geometry_research(
             print(f"fmits research geometry: {error}", file=sys.stderr)
             return EXIT_FAILURE
         print(f"\nResearch artifact written to {written}")
+    return EXIT_OK
+
+
+def _run_admission_research(args: argparse.Namespace) -> int:
+    """Run Milestone CA's sealed null-model study. **Offline, always.**
+
+    There is deliberately no live path: CA is measured over a Milestone BZ
+    capture, so `--from-capture` is required rather than optional. A live variant
+    would refetch mutable market data and the study would stop being a pure
+    function of a file — which is the exact failure BZ recorded as BZ-D2 and the
+    reason the capture exists.
+    """
+    if not args.from_capture:
+        print(
+            "fmits research admission: --from-capture is REQUIRED. Milestone CA "
+            "is measured over a saved Milestone BZ capture and has no live path: "
+            "a study that refetched mutable market data would not be "
+            "reproducible even with frozen code",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    if args.save_capture:
+        print(
+            "fmits research admission: --save-capture belongs to 'persistence'; "
+            "CA reads a capture and never writes one. Use --save-study",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    target = None
+    if args.save_study:
+        target = Path(args.save_study)
+        if target.exists():
+            print(
+                f"fmits research admission: {target} already exists; a study is "
+                "never overwritten",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
+    try:
+        artifact = read_persistence_capture(args.from_capture)
+    except SwingLabError as error:
+        print(f"fmits research admission: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    if not verify_capture_digest(artifact):
+        print(
+            f"fmits research admission: capture {args.from_capture} does not "
+            "match its own content digest; it has been edited or truncated",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    # Reported rather than resolved: a capture can be perfectly intact and still
+    # describe a different experiment, and merging those two failures would
+    # report a foreign experiment as a corrupt file.
+    if artifact.preregistration_digest != BZ_PREREGISTRATION_DIGEST:
+        print(
+            "fmits research admission: NOTE — this capture was taken under "
+            f"pre-registration {artifact.preregistration_digest}, and this build "
+            f"seals {BZ_PREREGISTRATION_DIGEST}. The capture is intact; it "
+            "describes a different Milestone BZ experiment.",
+            file=sys.stderr,
+        )
+    missing = [
+        name for name in ("primary", "holdout") if name not in artifact.universe_names
+    ]
+    if missing:
+        print(
+            f"fmits research admission: this capture holds no {', '.join(missing)} "
+            f"universe; it holds {', '.join(artifact.universe_names)}. CA needs "
+            "both, and the holdout is not optional because a study that could "
+            "not open it would report every holdout criterion as unevaluable",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    try:
+        study = study_from_capture(
+            artifact,
+            universe_for_sample={
+                "development": "primary",
+                "validation": "primary",
+                "holdout": "holdout",
+            },
+            run_at=datetime.now(timezone.utc),
+            causal_proven=bool(args.causal_proven),
+            progress=lambda message: print(message, file=sys.stderr, flush=True),
+        )
+    except SwingLabError as error:
+        print(f"fmits research admission: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_admission_study(study))
+    if target is not None:
+        written = write_admission_study(
+            encode_admission_study(study, writer="fmits research admission"), target
+        )
+        print(f"\nwrote {written}", file=sys.stderr)
     return EXIT_OK
 
 

@@ -126,6 +126,7 @@ __all__ = [
     "ValidationStudy",
     "narrow_to_sample",
     "walk_forward",
+    "walk_forward_boundaries",
     "decompose",
     "validation_digest",
     "run_validation_study",
@@ -365,6 +366,34 @@ def _add_months(moment: datetime, months: int) -> datetime:
     return moment.replace(year=year, month=month)
 
 
+def walk_forward_boundaries(
+    *, start: datetime, end: datetime, months: int = WALK_FORWARD_MONTHS
+) -> tuple[tuple[datetime, datetime], ...]:
+    """The half-open windows a walk-forward curve is cut into. **One owner.**
+
+    Extracted from `walk_forward` unchanged so Milestone CA — whose unit is a
+    paired decision instant rather than a `LabTrade` — cuts its curve on exactly
+    the same boundaries rather than deriving a second set that could drift. A
+    regression asserts `walk_forward` still produces the identical windows it did
+    before this function existed.
+
+    Raises:
+        SwingLabError: ``end`` is not after ``start``, or ``months`` is not a
+            positive int.
+    """
+    if end <= start:
+        raise SwingLabError("end must be after start")
+    if isinstance(months, bool) or not isinstance(months, int) or months <= 0:
+        raise SwingLabError("months must be a positive int")
+    boundaries: list[tuple[datetime, datetime]] = []
+    cursor = start
+    while cursor < end:
+        following = min(_add_months(cursor, months), end)
+        boundaries.append((cursor, following))
+        cursor = following
+    return tuple(boundaries)
+
+
 def walk_forward(
     trades: Sequence[LabTrade],
     *,
@@ -391,12 +420,7 @@ def walk_forward(
     if isinstance(months, bool) or not isinstance(months, int) or months <= 0:
         raise SwingLabError("months must be a positive int")
 
-    boundaries: list[tuple[datetime, datetime]] = []
-    cursor = start
-    while cursor < end:
-        following = min(_add_months(cursor, months), end)
-        boundaries.append((cursor, following))
-        cursor = following
+    boundaries = walk_forward_boundaries(start=start, end=end, months=months)
 
     buckets: dict[int, list[LabTrade]] = {index: [] for index in range(len(boundaries))}
     for trade in trades:

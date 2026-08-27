@@ -26,6 +26,12 @@ _PACKAGE = _SOURCE_ROOT / "swing_lab"
 
 _MODULES = (
     "__init__.py",
+    "admission.py",
+    "admission_artifact.py",
+    "admission_matching.py",
+    "admission_preregistration.py",
+    "admission_render.py",
+    "admission_study.py",
     "artifact.py",
     "entry.py",
     "exits.py",
@@ -75,6 +81,7 @@ _ARTIFACT_MODULES = (
     "geometry_artifact.py",
     "validation_artifact.py",
     "persistence_artifact.py",
+    "admission_artifact.py",
 )
 
 

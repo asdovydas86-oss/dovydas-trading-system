@@ -49,7 +49,37 @@ __all__ = [
     "compute_lab_metrics",
     "lab_breakdown_by",
     "classify",
+    "nearest_rank_quantile",
 ]
+
+
+def nearest_rank_quantile(values: Sequence, fraction: float):
+    """A nearest-rank quantile. **No interpolation between two real observations.**
+
+    Interpolating would report a value nothing in the sample ever took — a
+    fabricated observation, however small the error — so the rank is rounded and
+    a real element is returned. `fmis.swing_lab.persistence_study` reached this
+    conclusion first for Milestone BZ's excursion quantiles and now reads it from
+    here, so the laboratory has one quantile rule rather than one per milestone.
+
+    Generic over anything sortable: BZ quantiles `Decimal` excursions and CA
+    quantiles `float` bootstrap effects, and a second implementation for the
+    second type is exactly how two milestones stop being comparable.
+
+    ``None`` for an empty sequence — a stated absence, never a zero.
+
+    Raises:
+        SwingLabError: ``fraction`` is outside [0, 1].
+    """
+    if not isinstance(fraction, (int, float)) or isinstance(fraction, bool):
+        raise SwingLabError("fraction must be a real number")
+    if not 0.0 <= fraction <= 1.0:
+        raise SwingLabError(f"fraction must lie in [0, 1], got {fraction}")
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = int(fraction * (len(ordered) - 1) + 0.5)
+    return ordered[min(index, len(ordered) - 1)]
 
 #: The fewest measurable trades a rate or an average may be computed from.
 #: Deliberately the same number `fmis.statistics.sampling` already uses, imported

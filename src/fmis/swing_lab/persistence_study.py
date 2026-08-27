@@ -42,6 +42,7 @@ from fmis.swing_lab.metrics import (
     VariantMetrics,
     compute_lab_metrics,
     lab_breakdown_by,
+    nearest_rank_quantile,
 )
 from fmis.swing_lab.models import LabExitReason, LabTrade, SwingLabError
 from fmis.swing_lab.persistence import (
@@ -87,13 +88,12 @@ def _quantile(values: Sequence[Decimal], fraction: float) -> Decimal | None:
     """A nearest-rank quantile. **No interpolation between two real trades.**
 
     Interpolating would report a peak excursion that no position ever reached,
-    which is a fabricated observation however small the error.
+    which is a fabricated observation however small the error. The rule now lives
+    in `fmis.swing_lab.metrics.nearest_rank_quantile` so Milestone CA quantiles
+    its bootstrap effects by the identical one; this function is the same call
+    and its behaviour is unchanged.
     """
-    if not values:
-        return None
-    ordered = sorted(values)
-    index = int(fraction * (len(ordered) - 1) + 0.5)
-    return ordered[min(index, len(ordered) - 1)]
+    return nearest_rank_quantile(values, fraction)
 
 
 def _median_int(values: Sequence[int]) -> float | None:

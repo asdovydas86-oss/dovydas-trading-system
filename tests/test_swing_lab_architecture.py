@@ -43,6 +43,12 @@ _MODULES = (
     "metrics.py",
     "models.py",
     "nonstructural.py",
+    "persistence.py",
+    "persistence_artifact.py",
+    "persistence_preregistration.py",
+    "persistence_render.py",
+    "persistence_replay.py",
+    "persistence_study.py",
     "preregistration.py",
     "render.py",
     "replay.py",
@@ -64,7 +70,12 @@ _GEOMETRY_POLICY_MODULES = ("geometry.py", "geometry_variants.py")
 
 #: The only modules permitted to touch a file. One per milestone that persists a
 #: research record, and each is additionally guarded against writing to a store.
-_ARTIFACT_MODULES = ("artifact.py", "geometry_artifact.py", "validation_artifact.py")
+_ARTIFACT_MODULES = (
+    "artifact.py",
+    "geometry_artifact.py",
+    "validation_artifact.py",
+    "persistence_artifact.py",
+)
 
 
 def _source(name: str) -> str:
@@ -333,6 +344,81 @@ class TestGeometryIsResearchOnly:
         """The other direction: an outcome statistic can never become a rule."""
         imported = _imported_modules("geometry_outcome.py")
         assert "fmis.swing_lab.geometry_variants" not in imported
+
+    @pytest.mark.parametrize(
+        "name", (*_GEOMETRY_POLICY_MODULES, "nonstructural.py")
+    )
+    def test_no_policy_module_imports_the_persistence_layer(self, name: str) -> None:
+        """Milestone BZ's twin of the guard above.
+
+        A post-entry measurement — a give-back, a peak excursion, a thesis state
+        — must never become an admission criterion. `persistence.py` is the
+        post-entry twin of `geometry_outcome.py`, and the isolation is asserted
+        in both directions rather than described in a docstring.
+        """
+        imported = _imported_modules(name)
+        for forbidden in (
+            "fmis.swing_lab.persistence",
+            "fmis.swing_lab.persistence_replay",
+            "fmis.swing_lab.persistence_study",
+            "fmis.swing_lab.exits",
+        ):
+            assert forbidden not in imported, f"{name} imports {forbidden}"
+
+    @pytest.mark.parametrize("name", _GEOMETRY_POLICY_MODULES)
+    def test_no_policy_module_names_a_persistence_measurement(
+        self, name: str
+    ) -> None:
+        text = _source(name)
+        for token in (
+            "peak_r", "giveback", "ThesisState", "PersistenceTrack",
+            "PostEntryCheckpoint", "thesis_state",
+        ):
+            assert token not in text, f"{name} names {token}"
+
+    def test_the_persistence_layer_imports_no_geometry_policy(self) -> None:
+        """The other direction. A path measurement cannot reach a policy."""
+        imported = _imported_modules("persistence.py")
+        assert "fmis.swing_lab.geometry_variants" not in imported
+        assert "fmis.swing_lab.nonstructural" not in imported
+
+    def test_the_bz_preregistration_reads_no_measurement(self) -> None:
+        """A BZ threshold cannot be derived from a result, even by accident."""
+        imported = _imported_modules("persistence_preregistration.py")
+        for forbidden in (
+            "fmis.paper.models",
+            "fmis.swing_lab.trades",
+            "fmis.swing_lab.geometry_replay",
+            "fmis.swing_lab.persistence_study",
+        ):
+            assert forbidden not in imported, (
+                f"the BZ pre-registration imports {forbidden}"
+            )
+
+    def test_the_bz_seal_is_pinned_beside_its_content(self) -> None:
+        """The seal and the content must live in one file, or neither guards."""
+        text = _source("persistence_preregistration.py")
+        assert "BZ_PREREGISTRATION_DIGEST: Final[str] = (" in text
+        assert "def bz_preregistration_digest(" in text
+
+    def test_bys_sealed_exit_policies_are_untouched_by_bz(self) -> None:
+        """BZ added mechanics to a module BY sealed. BY's four must not move."""
+        from fmis.swing_lab.exits import PRE_DECLARED_EXIT_POLICIES
+
+        assert tuple(item.policy_id for item in PRE_DECLARED_EXIT_POLICIES) == (
+            "exit_full_target",
+            "exit_partial_1r",
+            "exit_break_even_1r",
+            "exit_trail_prior_bar",
+        )
+
+    def test_bys_pinned_digest_survives_every_bz_change(self) -> None:
+        from fmis.swing_lab.preregistration import (
+            PREREGISTRATION_DIGEST,
+            preregistration_digest,
+        )
+
+        assert preregistration_digest() == PREREGISTRATION_DIGEST
 
     def test_the_level_ordering_rule_is_productions_own(self) -> None:
         """`ordered_levels` is called, never restated. A research copy of the

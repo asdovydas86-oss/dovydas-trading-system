@@ -1,4 +1,4 @@
-"""Exit management, measured rather than assumed. **Four mechanics, no threshold mining.**
+"""Exit management, measured rather than assumed. **Mechanisms, no threshold mining.**
 
 Milestone BX measured that **68.8 % of trades gave back at least a full R of open
 profit** and then declined to test any fix, because
@@ -10,11 +10,28 @@ candles, so the question is now answerable — and this module answers it with t
 trailing variants would be threshold mining rather than research.
 
 ===========================  ==========================================================
+**Milestone BY — resolved inside a bar, by the ladder**
 `FULL_TARGET`                the control: BW/BX's own rule, one stop and one target
 `PARTIAL_AT_1R`              half off at +1R, the remainder to the structural target
 `BREAK_EVEN_AT_1R`           the stop moves to the entry once +1R has been reached
 `TRAIL_PRIOR_BAR_EXTREME`    once armed at +1R, the stop trails the prior bar's extreme
+---------------------------  ----------------------------------------------------------
+**Milestone BZ — decided at a bar's close, filled at the next bar's open**
+`THESIS_FAILURE`             the setup-timeframe structure opposed the direction
+`STAGNATION`                 no favourable progress within a declared bar count
+`GIVEBACK_FRACTION`          a declared share of a declared peak was surrendered
+`STRUCTURAL_TRAIL`           the stop follows newly CONFIRMED structural levels
+`THESIS_AND_GIVEBACK`        the sealed combination of the first and the third
 ===========================  ==========================================================
+
+**BY's four and BZ's five are resolved in different places, and that is the
+design rather than an inconsistency.** BY's watch a *price* and can therefore be
+ordered inside a bar by descending the ladder. BZ's read a *close* — a structural
+verdict, a bar count, a peak-to-close give-back — and a close is settled only when
+the bar ends, so there is nothing finer to descend to. BZ's mechanics are
+consequently evaluated at execution-bar boundaries and filled at the next bar's
+open, which is the same one-bar convention that separates a signal from its entry
+fill everywhere else in this package. Neither family may be read as the other.
 
 **One convention decides what these numbers mean, and it is stated rather than
 buried: a state change takes effect from the bar AFTER the bar that triggered
@@ -63,6 +80,7 @@ from fmis.paper.models import PriceBar
 from fmis.snapshotting import TradeDirection
 from fmis.swing_lab.intrabar import BarLadder, TouchLevel
 from fmis.swing_lab.models import LabExitReason, LabTrade, SwingLabError
+from fmis.swing_lab.persistence import ThesisObservation, ThesisTimeline, thesis_state
 from fmis.swing_setup.models import Direction
 from fmis.trade_lifecycle import PaperCostPolicy
 
@@ -72,6 +90,8 @@ __all__ = [
     "ExitMechanic",
     "ExitPolicy",
     "PRE_DECLARED_EXIT_POLICIES",
+    "BZ_EXIT_POLICIES",
+    "COMBINATION_COMPONENTS",
     "ExitLeg",
     "ManagedResult",
     "simulate_managed_trade",
@@ -100,28 +120,107 @@ _ARM: Final[str] = "arm"
 
 
 class ExitMechanic(str, Enum):
-    """How an open position is managed between the entry and a terminal exit."""
+    """How an open position is managed between the entry and a terminal exit.
+
+    The first four are Milestone BY's and are **frozen**: their values appear in
+    BY's sealed pre-registration payload, so renaming one would silently
+    invalidate a published digest. The last four are Milestone BZ's, added
+    additively — a new member changes no existing member's value, and BY's seal
+    is asserted byte-identical after this file grew.
+
+    BZ's four differ from BY's in one structural way, and it decides where they
+    are evaluated: **they act on a bar's CLOSE, not on a price touched inside
+    it.** A thesis reading, a stagnation count, a peak-to-close give-back and a
+    newly confirmed structural level are all facts a bar only settles when it
+    ends, so none of them can be resolved by descending a ladder — there is
+    nothing finer to descend to. They are therefore evaluated at execution-bar
+    boundaries and executed at the **next** bar's open, which is the same
+    convention `fmis.swing_lab.trades.simulate_trade` uses to fill an entry from
+    a signal, mirrored.
+    """
 
     FULL_TARGET = "full_target"
     PARTIAL_AT_1R = "partial_at_1r"
     BREAK_EVEN_AT_1R = "break_even_at_1r"
     TRAIL_PRIOR_BAR_EXTREME = "trail_prior_bar_extreme"
+    THESIS_FAILURE = "thesis_failure"
+    STAGNATION = "stagnation"
+    GIVEBACK_FRACTION = "giveback_fraction"
+    STRUCTURAL_TRAIL = "structural_trail"
+    THESIS_AND_GIVEBACK = "thesis_and_giveback"
 
     @property
     def arms(self) -> bool:
-        """Whether this mechanic watches for `ARMING_R` at all."""
-        return self is not ExitMechanic.FULL_TARGET
+        """Whether this mechanic watches for `ARMING_R` as a *watched level*.
+
+        BZ's give-back mechanic has an arming threshold too, but it is measured
+        from the running peak at a bar's close rather than watched as a price
+        inside the bar, so it does not add a third level to the ladder and does
+        not appear here. Conflating the two would put a level in
+        `_State.levels()` that nothing ever resolves against.
+        """
+        return self in _LEVEL_ARMING_MECHANICS
+
+    @property
+    def decides_on_close(self) -> bool:
+        """Whether this mechanic is evaluated at an execution bar's close."""
+        return self in _CLOSE_DECIDED_MECHANICS
+
+
+_LEVEL_ARMING_MECHANICS: Final[frozenset["ExitMechanic"]] = frozenset(
+    {
+        ExitMechanic.PARTIAL_AT_1R,
+        ExitMechanic.BREAK_EVEN_AT_1R,
+        ExitMechanic.TRAIL_PRIOR_BAR_EXTREME,
+    }
+)
+
+_CLOSE_DECIDED_MECHANICS: Final[frozenset["ExitMechanic"]] = frozenset(
+    {
+        ExitMechanic.THESIS_FAILURE,
+        ExitMechanic.STAGNATION,
+        ExitMechanic.GIVEBACK_FRACTION,
+        ExitMechanic.STRUCTURAL_TRAIL,
+        ExitMechanic.THESIS_AND_GIVEBACK,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
 class ExitPolicy:
-    """One pre-declared exit mechanic, with the only parameter any of them takes."""
+    """One pre-declared exit mechanic, with the parameters its own mechanic takes.
+
+    Milestone BZ's four mechanics each need one or two numbers BY's did not, and
+    every one of them defaults to ``None``. That default is load-bearing rather
+    than tidy: `payload` emits a key **only when it is set**, so the four BY
+    policies digest to exactly the bytes they digested before this class grew,
+    and BY's pinned pre-registration seal is unaffected. A test asserts the seal
+    is byte-identical, because "additive" is a claim worth checking rather than
+    a claim worth making.
+
+    Each parameter is validated against the mechanic that uses it, in both
+    directions: a stagnation policy without a bar count is refused, and so is a
+    full-target policy that carries one. A parameter that is silently ignored is
+    a parameter a reader will believe took effect.
+    """
 
     policy_id: str
     title: str
     mechanic: ExitMechanic
     hypothesis: str
     partial_fraction: Decimal = DEFAULT_PARTIAL_FRACTION
+    #: `STAGNATION`: how many execution bars a position may fail to make
+    #: `stagnation_progress_r` of favourable progress before it is closed.
+    stagnation_bars: int | None = None
+    #: `STAGNATION`: the favourable excursion that counts as progress.
+    stagnation_progress_r: Decimal | None = None
+    #: `GIVEBACK_FRACTION`: the peak favourable excursion at which the mechanic
+    #: arms. Below it there is no profit worth protecting and the rule is inert.
+    giveback_arm_r: Decimal | None = None
+    #: `GIVEBACK_FRACTION`: the share of the peak whose surrender closes the
+    #: position. Expressed as a fraction of the peak rather than as an absolute
+    #: R, so the rule does not become stricter the better the trade went.
+    giveback_fraction: Decimal | None = None
 
     def __post_init__(self) -> None:
         for name in ("policy_id", "title", "hypothesis"):
@@ -138,19 +237,112 @@ class ExitPolicy:
                 f"{self.partial_fraction}; 0 and 1 are the two mechanics that "
                 "already have their own names"
             )
+        self._check_parameters()
+
+    def _check_parameters(self) -> None:
+        """Each mechanic carries its own numbers, and only its own."""
+        required: tuple[str, ...] = _REQUIRED_PARAMETERS.get(self.mechanic, ())
+        for name in _ALL_PARAMETERS:
+            value = getattr(self, name)
+            if name in required:
+                if value is None:
+                    raise SwingLabError(
+                        f"{self.policy_id}: mechanic {self.mechanic.value} "
+                        f"requires {name}"
+                    )
+            elif value is not None:
+                raise SwingLabError(
+                    f"{self.policy_id}: mechanic {self.mechanic.value} does not "
+                    f"read {name}, so carrying one would be a parameter a reader "
+                    "believes took effect"
+                )
+        if self.stagnation_bars is not None:
+            if isinstance(self.stagnation_bars, bool) or not isinstance(
+                self.stagnation_bars, int
+            ):
+                raise TypeError("stagnation_bars must be an int")
+            if self.stagnation_bars < 1:
+                raise SwingLabError("stagnation_bars must be at least 1")
+        for name in ("stagnation_progress_r", "giveback_arm_r", "giveback_fraction"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, Decimal):
+                raise TypeError(f"{name} must be a Decimal")
+        if self.stagnation_progress_r is not None and self.stagnation_progress_r <= 0:
+            raise SwingLabError("stagnation_progress_r must be positive")
+        if self.giveback_arm_r is not None and self.giveback_arm_r <= 0:
+            raise SwingLabError("giveback_arm_r must be positive")
+        if self.giveback_fraction is not None and not (
+            Decimal(0) < self.giveback_fraction <= Decimal(1)
+        ):
+            raise SwingLabError(
+                "giveback_fraction must lie in (0, 1]; surrendering none of the "
+                "peak is not a rule and surrendering more than all of it is not "
+                "reachable"
+            )
 
     @property
     def is_baseline(self) -> bool:
         return self.mechanic is ExitMechanic.FULL_TARGET
 
+    @property
+    def needs_timeline(self) -> bool:
+        """Whether this mechanic reads the structural timeline at all."""
+        return self.mechanic in _TIMELINE_MECHANICS
+
     def payload(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "policy_id": self.policy_id,
             "title": self.title,
             "mechanic": self.mechanic.value,
             "hypothesis": self.hypothesis,
             "partial_fraction": str(self.partial_fraction),
         }
+        # Emitted only when set. See the class docstring: this is what keeps
+        # Milestone BY's sealed digest byte-identical after BZ grew this type.
+        if self.stagnation_bars is not None:
+            payload["stagnation_bars"] = self.stagnation_bars
+        if self.stagnation_progress_r is not None:
+            payload["stagnation_progress_r"] = str(self.stagnation_progress_r)
+        if self.giveback_arm_r is not None:
+            payload["giveback_arm_r"] = str(self.giveback_arm_r)
+        if self.giveback_fraction is not None:
+            payload["giveback_fraction"] = str(self.giveback_fraction)
+        return payload
+
+
+_ALL_PARAMETERS: Final[tuple[str, ...]] = (
+    "stagnation_bars",
+    "stagnation_progress_r",
+    "giveback_arm_r",
+    "giveback_fraction",
+)
+
+_REQUIRED_PARAMETERS: Final[dict[ExitMechanic, tuple[str, ...]]] = {
+    ExitMechanic.STAGNATION: ("stagnation_bars", "stagnation_progress_r"),
+    ExitMechanic.GIVEBACK_FRACTION: ("giveback_arm_r", "giveback_fraction"),
+    ExitMechanic.THESIS_AND_GIVEBACK: ("giveback_arm_r", "giveback_fraction"),
+}
+
+#: Which single mechanics a combination is composed of. Declared as data so the
+#: pre-registration can state the components and the promotion rule can require
+#: each of them to have earned its place independently.
+COMBINATION_COMPONENTS: Final[dict[ExitMechanic, tuple[ExitMechanic, ...]]] = {
+    ExitMechanic.THESIS_AND_GIVEBACK: (
+        ExitMechanic.THESIS_FAILURE,
+        ExitMechanic.GIVEBACK_FRACTION,
+    ),
+}
+
+#: The mechanics that consult `fmis.swing_lab.persistence.ThesisTimeline`. Both
+#: read structure the production engines produced at that instant; neither
+#: derives any structure of its own.
+_TIMELINE_MECHANICS: Final[frozenset[ExitMechanic]] = frozenset(
+    {
+        ExitMechanic.THESIS_FAILURE,
+        ExitMechanic.STRUCTURAL_TRAIL,
+        ExitMechanic.THESIS_AND_GIVEBACK,
+    }
+)
 
 
 PRE_DECLARED_EXIT_POLICIES: Final[tuple[ExitPolicy, ...]] = (
@@ -208,12 +400,139 @@ PRE_DECLARED_EXIT_POLICIES: Final[tuple[ExitPolicy, ...]] = (
     ),
 )
 
+#: Milestone BZ's exit families. **Mechanisms, not a parameter grid.**
+#:
+#: Five entries for five *mechanisms*, each with the smallest number of numbers
+#: it can have. There is deliberately no sweep: BX and BY between them measured
+#: nineteen geometry points, and the lesson BY drew was that a twentieth was not
+#: the answer. A family that needs a threshold takes one pre-declared value, and
+#: the robustness question — does the mechanism survive a nearby value — is asked
+#: once, of the neighbourhood, rather than answered by picking the best cell.
+#:
+#: `bz_exit_control` is BY's `exit_full_target` under a BZ id. It is measured so
+#: every BZ figure has a control taken through the identical machinery, and its
+#: numbers must reproduce BY's §11 control exactly.
+BZ_EXIT_POLICIES: Final[tuple[ExitPolicy, ...]] = (
+    ExitPolicy(
+        policy_id="bz_exit_control",
+        title="Full position to the structural target (BZ control)",
+        mechanic=ExitMechanic.FULL_TARGET,
+        hypothesis=(
+            "H0. The rule BW, BX and BY all measured, unchanged: one stop, one "
+            "target, no management. A CONTROL, not a candidate. Every other BZ "
+            "family is a difference FROM this, measured on the same setups over "
+            "the same bars, so a difference between two rows is management and "
+            "not machinery. It must reproduce BY's own control to the digit."
+        ),
+    ),
+    ExitPolicy(
+        policy_id="bz_exit_thesis_failure",
+        title="Exit when the setup-timeframe thesis is invalidated or conflicted",
+        mechanic=ExitMechanic.THESIS_FAILURE,
+        hypothesis=(
+            "H1. If a swing thesis persists at all, the structural engines that "
+            "admitted it should be able to say when it has stopped holding. The "
+            "position is closed at the next bar's open once the setup-timeframe "
+            "structural trend OPPOSES the direction the trade was taken in, or "
+            "once the setup and execution timeframes disagree in sign. "
+            "PREDICTION: if persistence is real, this exits losers earlier than "
+            "the stop does and leaves winners alone, so expectancy improves and "
+            "the average loser shrinks. REFUTED BY: no improvement over H0 on "
+            "development, or an improvement on development that does not survive "
+            "validation or the holdout. Deliberately does NOT fire on WEAKENED — "
+            "a rule that exits on every pass through NEUTRAL is a time stop."
+        ),
+    ),
+    ExitPolicy(
+        policy_id="bz_exit_stagnation_12",
+        title="Exit after 12 bars without +0.5R of favourable progress",
+        mechanic=ExitMechanic.STAGNATION,
+        hypothesis=(
+            "H2. BX measured a median hold of one bar and a p75 of three, so a "
+            "position still going nowhere after twelve 4H bars — two calendar "
+            "days — has not behaved like the setups this strategy admits. "
+            "PREDICTION: if edge decays with time in trade, releasing capital "
+            "from stagnant positions improves expectancy per trade. REFUTED BY: "
+            "no improvement over H0 on development, or an improvement that does "
+            "not survive both unseen samples. The threshold pair (12 bars, "
+            "+0.5R) is declared here and swept nowhere; 8 and 18 are measured "
+            "ONLY as the robustness neighbourhood and neither may be promoted."
+        ),
+        stagnation_bars=12,
+        stagnation_progress_r=Decimal("0.5"),
+    ),
+    ExitPolicy(
+        policy_id="bz_exit_giveback_half",
+        title="Exit after surrendering half of a peak of at least +1R",
+        mechanic=ExitMechanic.GIVEBACK_FRACTION,
+        hypothesis=(
+            "H3. BX measured 68.8% of development trades giving back a full R of "
+            "open profit, against a mean MFE of +5.26R and a mean realised "
+            "-0.276R. This is the direct answer to that finding: once a position "
+            "has run +1R, surrendering half of whatever peak it reached closes "
+            "it. PREDICTION: the give-back distribution is wide enough that "
+            "capping it converts a material share of the surrendered R into "
+            "booked return. REFUTED BY: no improvement over H0 on development, "
+            "or an improvement that does not survive both unseen samples. THE "
+            "RISK THAT MUST BE REPORTED BESIDE ITS EXPECTANCY: it also closes "
+            "every large winner on its first ordinary retracement, so a "
+            "positive-tail strategy can be made materially worse by it."
+        ),
+        giveback_arm_r=Decimal("1"),
+        giveback_fraction=Decimal("0.5"),
+    ),
+    ExitPolicy(
+        policy_id="bz_exit_structural_trail",
+        title="Trail the stop to newly confirmed execution-timeframe levels",
+        mechanic=ExitMechanic.STRUCTURAL_TRAIL,
+        hypothesis=(
+            "H4. The only trailing rule BZ tests, and unlike BY's "
+            "exit_trail_prior_bar it IS structural: the stop moves to the "
+            "nearest execution-timeframe protective level the production "
+            "engines had ALREADY CONFIRMED at that bar, never to a bar's "
+            "extreme and never to a pivot confirmed later in the window. "
+            "PREDICTION: if structure persists after entry, structural levels "
+            "are better stops than either the initial level or a price. "
+            "REFUTED BY: no improvement over H0 on development, or an "
+            "improvement that does not survive both unseen samples. A bar at "
+            "which the engines confirmed nothing moves nothing — the rule never "
+            "falls back to a price when structure is absent."
+        ),
+    ),
+    ExitPolicy(
+        policy_id="bz_exit_thesis_and_giveback",
+        title="Thesis failure OR half a peak of at least +1R surrendered",
+        mechanic=ExitMechanic.THESIS_AND_GIVEBACK,
+        hypothesis=(
+            "H5. The one COMBINATION, and it is sealed here — before any "
+            "component's result exists — precisely so it cannot be assembled "
+            "afterwards from whichever two happened to work. It composes H1 and "
+            "H3 unchanged and at their own declared thresholds; neither is "
+            "loosened to make room for the other, and the exit reason names "
+            "which component fired so a combined result is always attributable. "
+            "PREDICTION: the two act on different failure modes — a thesis that "
+            "reversed and a profit that evaporated — so if BOTH show independent "
+            "evidence their union should beat either alone. REFUTED BY: no "
+            "improvement over the better of its two components on development, "
+            "or an improvement that does not survive both unseen samples. "
+            "ADDITIONALLY BARRED FROM PROMOTION unless each component "
+            "independently cleared the development-expectancy criterion, so a "
+            "combination can never launder a component that failed on its own."
+        ),
+        giveback_arm_r=Decimal("1"),
+        giveback_fraction=Decimal("0.5"),
+    ),
+)
+
 _EXITS_BY_ID: Final[dict[str, ExitPolicy]] = {
-    policy.policy_id: policy for policy in PRE_DECLARED_EXIT_POLICIES
+    policy.policy_id: policy
+    for policy in PRE_DECLARED_EXIT_POLICIES + BZ_EXIT_POLICIES
 }
 
-if len(_EXITS_BY_ID) != len(PRE_DECLARED_EXIT_POLICIES):  # pragma: no cover
-    raise SwingLabError("two pre-declared exit policies share a policy_id")
+if len(_EXITS_BY_ID) != len(PRE_DECLARED_EXIT_POLICIES) + len(BZ_EXIT_POLICIES):
+    raise SwingLabError(  # pragma: no cover
+        "two pre-declared exit policies share a policy_id"
+    )
 
 
 def exit_policy_by_id(policy_id: str) -> ExitPolicy:
@@ -413,6 +732,113 @@ def _weighted_exit(legs: Sequence[ExitLeg]) -> Decimal:
     return sum((leg.fraction * leg.price for leg in legs), start=Decimal(0))
 
 
+def _trail_to(
+    state: _State, observation: "ThesisObservation | None", close: Decimal
+) -> Decimal | None:
+    """The nearest confirmed structural level to trail a stop to, or ``None``.
+
+    **Only levels the structural engines had already confirmed at this bar.** The
+    observation carries the execution-timeframe levels ordered against this
+    instant's own close by `fmis.swing_setup.policy.ordered_levels` — production's
+    ordering, called — so "nearest" here and "nearest" in a stop selection mean
+    the same thing. A pivot confirmed later in the window is simply absent, which
+    is what makes this trail causal rather than a hindsight line drawn through
+    the highs.
+
+    Returns ``None`` rather than a level when there is nothing to move to, when
+    the nearest level would *loosen* the stop, or when the observation is
+    missing. A structural trail with no confirmed structure does nothing; it
+    never falls back to a price.
+    """
+    if observation is None:
+        return None
+    # A LONG is protected by levels BELOW it, a SHORT by levels above.
+    levels = observation.levels_for(state.side is not TradeDirection.LONG)
+    for level in levels:
+        candidate = Decimal(str(level.price))
+        # Strictly tightening, and strictly still a stop: a level on the wrong
+        # side of this bar's close is not an invalidation any more.
+        if (
+            state.side.sign * (candidate - state.stop) > 0
+            and state.side.sign * (close - candidate) > 0
+        ):
+            return candidate
+    return None
+
+
+def _decide_on_close(
+    state: _State,
+    *,
+    position: int,
+    close_r: Decimal,
+    peak_r: Decimal,
+    close: Decimal,
+    observation: "ThesisObservation | None",
+    entry_observation: "ThesisObservation | None",
+    direction: Direction,
+) -> "tuple[LabExitReason | None, Decimal | None]":
+    """Evaluate one bar's close under a close-decided mechanic. **Causal.**
+
+    Returns ``(exit_reason, new_stop)``, both optional. The caller executes an
+    exit at the **next** bar's open and applies a stop change from the next bar
+    onward, which is the same one-bar convention that separates a signal from
+    its fill everywhere else in this package.
+
+    Every input is a fact this bar settled: its close, the running peak through
+    it, and the structural reading the production engines produced from it.
+    Nothing here reads a later bar, and `test_swing_lab_persistence_exits`
+    proves it by mutating every bar after the decision and requiring the
+    decision not to move.
+    """
+    mechanic = state.policy.mechanic
+    if mechanic is ExitMechanic.THESIS_FAILURE:
+        # `is_adverse` is INVALIDATED or CONFLICTED and deliberately NOT
+        # WEAKENED — see `ThesisState.is_adverse` for why a rule that fires on
+        # weakening is a time stop wearing a structure rule's clothes.
+        if thesis_state(entry_observation, observation, direction).is_adverse:
+            return LabExitReason.THESIS_INVALIDATED, None
+        return None, None
+    if mechanic is ExitMechanic.STAGNATION:
+        bars = state.policy.stagnation_bars
+        progress = state.policy.stagnation_progress_r
+        assert bars is not None and progress is not None  # guaranteed by ExitPolicy
+        if position >= bars and peak_r < progress:
+            return LabExitReason.STAGNATION, None
+        return None, None
+    if mechanic is ExitMechanic.GIVEBACK_FRACTION:
+        arm = state.policy.giveback_arm_r
+        fraction = state.policy.giveback_fraction
+        assert arm is not None and fraction is not None  # guaranteed by ExitPolicy
+        if peak_r < arm:
+            return None, None
+        if not state.armed:
+            state.armed = True
+        # Measured from the peak through THIS bar against THIS bar's close, so
+        # the quantity is exactly BX's give-back and not a different one.
+        if peak_r - close_r >= fraction * peak_r:
+            return LabExitReason.GIVEBACK, None
+        return None, None
+    if mechanic is ExitMechanic.STRUCTURAL_TRAIL:
+        return None, _trail_to(state, observation, close)
+    if mechanic is ExitMechanic.THESIS_AND_GIVEBACK:
+        # The two components, evaluated in declaration order on the SAME bar.
+        # Neither is weakened to make room for the other: whichever fires first
+        # closes the position, and the exit reason names which one it was, so a
+        # combination's result can always be attributed back to a component.
+        if thesis_state(entry_observation, observation, direction).is_adverse:
+            return LabExitReason.THESIS_INVALIDATED, None
+        arm = state.policy.giveback_arm_r
+        fraction = state.policy.giveback_fraction
+        assert arm is not None and fraction is not None  # guaranteed by ExitPolicy
+        if peak_r >= arm:
+            if not state.armed:
+                state.armed = True
+            if peak_r - close_r >= fraction * peak_r:
+                return LabExitReason.GIVEBACK, None
+        return None, None
+    return None, None  # pragma: no cover - every close-decided mechanic is above
+
+
 def simulate_managed_trade(
     bars: Sequence[PriceBar],
     *,
@@ -432,6 +858,7 @@ def simulate_managed_trade(
     costs: PaperCostPolicy,
     policy: ExitPolicy,
     ladder: BarLadder | None = None,
+    timeline: ThesisTimeline | None = None,
     segment: str | None = None,
     context_regime_structure: str = "",
     context_structural_trend: str = "",
@@ -444,12 +871,22 @@ def simulate_managed_trade(
     Separating them is what lets an entry rule and an exit mechanic be measured
     independently rather than as one compound change.
 
-    Deterministic and pure: no clock, no randomness, no network. The ladder is
-    already-fetched history.
+    ``timeline`` (Milestone BZ) is the symbol's structural reading at every
+    execution bar, keyed by the **same** bar index this function's ``bars``
+    sequence uses. It is consulted only by the two mechanics that declare they
+    need it (`ExitPolicy.needs_timeline`) and only at bars at or after the
+    entry. Supplying it to a BY mechanic changes nothing, and withholding it
+    from a BZ mechanic that needs it is refused rather than silently treated as
+    "no structure" — a thesis rule that quietly never fires would be reported as
+    a mechanism that did no harm.
+
+    Deterministic and pure: no clock, no randomness, no network. The ladder and
+    the timeline are both already-collected history.
 
     Raises:
-        SwingLabError: the geometry is unusable, or the ladder and the coarse
-            bars disagree about a span.
+        SwingLabError: the geometry is unusable, the ladder and the coarse bars
+            disagree about a span, or a timeline-reading mechanic was given no
+            timeline.
     """
     if isinstance(window_bars, bool) or not isinstance(window_bars, int) or window_bars <= 0:
         raise SwingLabError("window_bars must be a positive int")
@@ -459,6 +896,19 @@ def simulate_managed_trade(
         raise TypeError("policy must be an ExitPolicy")
     if direction not in _DIRECTION_TO_TRADE:
         raise SwingLabError(f"direction must be LONG or SHORT, got {direction!r}")
+    if timeline is not None and not isinstance(timeline, ThesisTimeline):
+        raise TypeError("timeline must be a ThesisTimeline")
+    if policy.needs_timeline and timeline is None:
+        raise SwingLabError(
+            f"{policy.policy_id} reads the structural timeline and none was "
+            "supplied; a thesis rule with no structure to read would never fire "
+            "and would be reported as a mechanism that did no harm"
+        )
+    if timeline is not None and timeline.symbol != symbol:
+        raise SwingLabError(
+            f"the timeline describes {timeline.symbol} but the trade describes "
+            f"{symbol}; one symbol's structure cannot manage another's position"
+        )
     if entry_index < 0 or entry_index >= len(bars):
         raise SwingLabError("entry_index must address a bar in the series")
     side = _DIRECTION_TO_TRADE[direction]
@@ -553,9 +1003,28 @@ def simulate_managed_trade(
     held = 0
     ambiguous_at: datetime | None = None
     step = _Step.CONTINUE
+    peak_r = Decimal(0)
+    # A decision confirmed by bar t's close, executed at bar t+1's open.
+    pending_exit: LabExitReason | None = None
+    pending_stop: Decimal | None = None
+    entry_observation = (
+        None if timeline is None else timeline.at(entry_index - 1)
+    )
 
     for position, bar in enumerate(window, start=1):
         held = position
+        if pending_exit is not None:
+            # The previous bar's close decided this. It fills at THIS bar's open,
+            # which is the same convention `simulate_trade` uses to fill an entry
+            # from a signal — never at the close that was being looked at.
+            state.close(
+                state.remaining, bar.open, bar.open_time, pending_exit, bar.interval
+            )
+            step = _Step.TERMINAL
+            break
+        if pending_stop is not None:
+            state.tighten(pending_stop)
+            pending_stop = None
         if (
             state.armed
             and policy.mechanic is ExitMechanic.TRAIL_PRIOR_BAR_EXTREME
@@ -572,12 +1041,39 @@ def simulate_managed_trade(
             best = favourable
         if side.sign * (adverse - worst) < 0:
             worst = adverse
+        running_peak = side.sign * (best - entry_price) / risk
+        if running_peak > peak_r:
+            peak_r = running_peak
         step = _process(bar, state, ladder, 0)
         if step is _Step.AMBIGUOUS:
             ambiguous_at = bar.open_time
             break
         if step is _Step.TERMINAL:
             break
+        if policy.mechanic.decides_on_close:
+            # Evaluated from THIS bar's close and acted on at the NEXT bar's
+            # open. Everything handed in is a fact this bar settled.
+            was_armed = state.armed
+            pending_exit, pending_stop = _decide_on_close(
+                state,
+                position=position,
+                close_r=side.sign * (bar.close - entry_price) / risk,
+                peak_r=peak_r,
+                close=bar.close,
+                observation=(
+                    None
+                    if timeline is None
+                    else timeline.at(entry_index + position - 1)
+                ),
+                entry_observation=entry_observation,
+                direction=direction,
+            )
+            # `armed_at` records when the mechanic ARMED, not when it exited.
+            # Setting it on the exit instead would make "armed" and "armed_at"
+            # describe different events, and a give-back mechanic that armed and
+            # never fired would report as never having armed at all.
+            if state.armed and not was_armed:
+                state.armed_at = bar.open_time
         previous = bar
     else:
         step = _Step.CONTINUE

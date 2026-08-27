@@ -84,6 +84,16 @@ from fmis.swing_lab.validation_artifact import (
     verify_result_digest,
     write_validation_study,
 )
+from fmis.swing_lab.persistence_artifact import (
+    read_persistence_capture,
+    verify_capture_digest,
+)
+from fmis.swing_lab.persistence_preregistration import BZ_PREREGISTRATION_DIGEST
+from fmis.swing_lab.persistence_render import render_persistence_study
+from fmis.swing_lab.persistence_study import (
+    run_persistence_experiment,
+    study_from_captures,
+)
 from fmis.swing_lab.validation_render import render_validation_study
 from fmis.swing_lab.validation_study import run_validation_experiment
 from fmis.swing_lab.geometry_study import run_geometry_experiment
@@ -3459,7 +3469,7 @@ def _run_dashboard(args: argparse.Namespace) -> int:
 def _configure_research(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "area",
-        choices=("swing", "geometry", "validation"),
+        choices=("swing", "geometry", "validation", "persistence"),
         help=(
             "which research question to run. 'swing' is the Swing Strategy "
             "Laboratory's timeframe-policy comparison (Milestone BW); "
@@ -3469,7 +3479,10 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
             "SEALED pre-registration and takes no universe, no window and no "
             "threshold at all — every one of them is part of what was frozen, "
             "and a study whose symbols could be renamed at a shell prompt would "
-            "not be a pre-registered study"
+            "not be a pre-registered study; 'persistence' runs Milestone BZ's "
+            "SEALED post-entry study — what happens to a thesis AFTER entry, and "
+            "whether a causal exit policy generalises — and takes no universe, "
+            "no window and no threshold either"
         ),
     )
     parser.add_argument(
@@ -3506,6 +3519,25 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
             "studies (Milestone BY §7-§9). Costs a second fetch of ~400k 1H "
             "rows. Omitted, the report says those sections were NOT MEASURED "
             "rather than printing an empty table"
+        ),
+    )
+    parser.add_argument(
+        "--save-capture", default=None, metavar="PATH", dest="save_capture",
+        help=(
+            "persistence only: write the replay's CAPTURE — candidates, bars and "
+            "the structural timeline — to PATH as a deterministic, digested "
+            "artifact. Market data is mutable at source, so a study that "
+            "refetches is not reproducible even with frozen code; this is what "
+            "makes a later re-run a pure function of the file"
+        ),
+    )
+    parser.add_argument(
+        "--from-capture", default=None, metavar="PATH", dest="from_capture",
+        help=(
+            "persistence only: re-measure from a saved capture instead of "
+            "replaying. NO NETWORK IS TOUCHED. Refuses a corrupted digest, a "
+            "foreign schema version, a study artifact, or a capture missing any "
+            "data it references — it never completes a gap from the provider"
         ),
     )
     parser.add_argument(
@@ -3583,6 +3615,18 @@ def _run_research(args: argparse.Namespace) -> int:
     strategy and promotes nothing: a variant that measures well here is a
     candidate for forward testing, which is a later, explicit owner decision.
     """
+    if args.area == "persistence":
+        for name in ("symbols", "development", "holdout", "variant"):
+            value = getattr(args, name, None)
+            if value:
+                print(
+                    f"fmits research persistence: {name} is not accepted. Every "
+                    "symbol, window, checkpoint and threshold is sealed in the "
+                    "pre-registration",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        return _run_persistence_research(args)
     if args.area == "validation":
         # Dispatched BEFORE the window is read, because this study HAS no window
         # argument: its dates are sealed. Parsing --start here would let a
@@ -3732,6 +3776,114 @@ def _run_geometry_research(
             print(f"fmits research geometry: {error}", file=sys.stderr)
             return EXIT_FAILURE
         print(f"\nResearch artifact written to {written}")
+    return EXIT_OK
+
+
+def _run_persistence_research(args: argparse.Namespace) -> int:
+    """Run Milestone BZ's SEALED post-entry study and print what it concluded.
+
+    **Read-only research.** Replays history once per universe, collects the
+    structural timeline from that same walk, observes every position's causal
+    post-entry path, measures the sealed exit families against their own control
+    and prints the verdict. It writes no trading record, changes no production
+    strategy and promotes nothing.
+
+    The holdout is **not fetched** unless `--open-holdout` is given, so a
+    development pass cannot inspect it by accident.
+    """
+    if args.from_capture is not None:
+        if args.save_capture is not None:
+            print(
+                "fmits research persistence: --from-capture and --save-capture "
+                "are mutually exclusive; re-writing a capture from itself would "
+                "claim a fresh replay that never happened",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
+        return _run_persistence_from_capture(args)
+    try:
+        study = run_persistence_experiment(
+            run_at=datetime.now(timezone.utc),
+            open_holdout=args.open_holdout,
+            # The no-lookahead suite is a repository-level fact this command
+            # cannot verify from inside a run, so it is reported as UNPROVEN
+            # here and the criterion blocks. A promotion therefore needs the
+            # milestone's own verification, never a bare CLI invocation.
+            causal_proven=False,
+            limit=None if args.limit is None else args.limit,
+        )
+    except SwingLabError as error:
+        print(f"fmits research persistence: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    if args.save_capture is not None:
+        print(
+            "fmits research persistence: --save-capture needs the capture the "
+            "run produced; use the milestone's own runner, which writes it. The "
+            "command declines rather than writing a partial artifact.",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    print(render_persistence_study(study))
+    if not args.open_holdout:
+        print(
+            "\nNOTE: the holdout was NOT opened. Every holdout criterion is "
+            "unevaluable and no family can reach candidate status. Re-run with "
+            "--open-holdout once, and only once, when development is finished."
+        )
+    return EXIT_OK
+
+
+def _run_persistence_from_capture(args: argparse.Namespace) -> int:
+    """Re-measure Milestone BZ from a persisted capture. **No network, ever.**
+
+    The point of the flag is reproducibility: given the same file and the same
+    code this prints the same study, so a disagreement between two runs is a
+    code change rather than a data change. The capture's own pre-registration
+    digest is compared against this build's seal and a mismatch is **reported
+    rather than resolved** — a capture can be perfectly intact and still describe
+    a different experiment, and the two failures must not be merged.
+    """
+    try:
+        artifact = read_persistence_capture(args.from_capture)
+        if not verify_capture_digest(artifact):
+            print(
+                f"fmits research persistence: capture {args.from_capture} "
+                "fails its own content digest; it has been edited since it was "
+                "written and no number in it can be trusted",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
+        names = artifact.universe_names
+        if "primary" not in names:
+            print(
+                "fmits research persistence: this capture holds no 'primary' "
+                f"universe; it holds {', '.join(names)}",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
+        primary = artifact.universe("primary")
+        holdout = artifact.universe("holdout") if "holdout" in names else None
+        study = study_from_captures(
+            primary=primary.capture,
+            primary_timelines=primary.timelines,
+            holdout=None if holdout is None else holdout.capture,
+            holdout_timelines={} if holdout is None else holdout.timelines,
+            causal_proven=False,
+            evaluation_window_bars=artifact.manifest["evaluation_window_bars"],
+        )
+    except SwingLabError as error:
+        print(f"fmits research persistence: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_persistence_study(study))
+    print(
+        f"\nRE-MEASURED OFFLINE from {args.from_capture}\n"
+        f"  captured at    {artifact.manifest['captured_at']}\n"
+        f"  content digest {artifact.content_digest}\n"
+        f"  seal in file   {artifact.preregistration_digest}\n"
+        f"  seal in build  {BZ_PREREGISTRATION_DIGEST}\n"
+        f"  seals agree    {artifact.preregistration_digest == BZ_PREREGISTRATION_DIGEST}\n"
+        "  NO NETWORK WAS CONTACTED."
+    )
     return EXIT_OK
 
 

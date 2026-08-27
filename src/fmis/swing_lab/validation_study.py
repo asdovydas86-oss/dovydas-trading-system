@@ -1199,6 +1199,7 @@ def capture_for_window(
     transport: Transport | None = None,
     base_url: str | None = None,
     require_availability: bool = True,
+    observer: Callable[[Any], None] | None = None,
 ) -> GeometryCapture:
     """Fetch history and freeze one replay's geometry candidates.
 
@@ -1260,6 +1261,7 @@ def capture_for_window(
         window=window, segments=segments, dataset=dataset, limit=limit,
         identity_priming_bars=identity_priming_bars,
         policy=policy, context_policy=context_policy, detection=detection,
+        observer=observer,
     )
     return GeometryCapture(
         admission_variant_id=capture.admission_variant_id,

@@ -191,6 +191,15 @@ class LabExitReason(str, Enum):
     reported beside every entry rule's expectancy. A rule that improves the
     trades it takes by declining the ones that would have lost is making a
     *selection* claim, and this reason is what makes that claim visible.
+
+    `THESIS_INVALIDATED`, `STAGNATION` and `GIVEBACK` (Milestone BZ) are the
+    three terminal states a *managed* exit can reach that are neither the stop
+    nor the target. Each is a decision confirmed by an execution bar's close and
+    filled at the next bar's open, so each yields a real price and a real R and
+    is measurable. They are separate members rather than one `MANAGED_EXIT`
+    because "the structure reversed", "it never went anywhere" and "it gave the
+    profit back" are three different findings, and a single label would make the
+    exit-reason tally unable to tell a milestone which mechanism did the work.
     """
 
     TARGET = "target"
@@ -200,6 +209,9 @@ class LabExitReason(str, Enum):
     ENTRY_GAPPED_THROUGH_STOP = "entry_gapped_through_stop"
     NO_ENTRY_BAR = "no_entry_bar"
     ENTRY_NOT_TRIGGERED = "entry_not_triggered"
+    THESIS_INVALIDATED = "thesis_invalidated"
+    STAGNATION = "stagnation"
+    GIVEBACK = "giveback"
 
     @property
     def is_measurable(self) -> bool:
@@ -213,6 +225,9 @@ _MEASURABLE_EXITS: Final[frozenset[LabExitReason]] = frozenset(
         LabExitReason.STOP,
         LabExitReason.TIME_STOP,
         LabExitReason.ENTRY_GAPPED_THROUGH_STOP,
+        LabExitReason.THESIS_INVALIDATED,
+        LabExitReason.STAGNATION,
+        LabExitReason.GIVEBACK,
     }
 )
 

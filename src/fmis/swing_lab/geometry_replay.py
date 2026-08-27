@@ -34,7 +34,7 @@ default — called exactly as `fmis.swing_lab.replay` calls it, over the same
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -230,6 +230,7 @@ def capture_geometry_candidates(
     policy: RegimePolicy | None = None,
     context_policy: ContextPolicy | None = None,
     detection: DetectionSettings | None = None,
+    observer: "Callable[[ReplayInstant], None] | None" = None,
 ) -> GeometryCapture:
     """Replay history once and freeze every admitted setup's geometry facts.
 
@@ -245,6 +246,19 @@ def capture_geometry_candidates(
     geometry. Here their absence is a candidate whose policies each return a
     named `SkipReason`, so "the engine found no 4H level" and "the engine found
     one and it was too close" stop looking alike.
+
+    ``observer`` (Milestone BZ) is handed **every analysable instant** — admitted
+    or not, measured or in the outcome tail — with the admission variant's own
+    assessment already bound onto it. It exists so a post-entry study can read
+    the structural state at each bar *from the same single pass that produced the
+    candidates*, rather than replaying history a second time and risking two
+    walks that disagree about the same instant.
+
+    It is deliberately a **sink, not a filter**: it returns nothing, it is called
+    after the assessment is fixed, and nothing it does can change which setups
+    are admitted. When it is ``None`` — which is every pre-BZ caller — not even
+    the `ReplayInstant` is constructed, so this function's behaviour and cost are
+    byte-identical to what Milestones BX and BY measured.
 
     Raises:
         SwingLabError: the dataset lacks a series the walk needs.
@@ -300,6 +314,24 @@ def capture_geometry_candidates(
             )
             if item.measured:
                 measured_instants += 1
+            if observer is not None and item.signal_index is not None:
+                # Every analysable instant, not only the admitted ones: a trade
+                # signalled near the measurement end has its whole post-entry
+                # path in the outcome tail, where `measured` is False. Filtering
+                # on admission here would leave exactly those paths blind.
+                observer(
+                    ReplayInstant(
+                        symbol=item.symbol,
+                        as_of=item.as_of,
+                        measured=item.measured,
+                        segment=item.segment,
+                        sheet=item.sheet,
+                        inputs=item.inputs,
+                        baseline_assessment=assessment,
+                        last_timestamp=item.last_timestamp,
+                        signal_index=item.signal_index,
+                    )
+                )
             setup_id, _is_new, is_first = tracker.observe(
                 symbol, assessment.direction, assessment.state, item.as_of
             )

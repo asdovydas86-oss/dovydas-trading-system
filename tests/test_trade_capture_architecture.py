@@ -394,6 +394,18 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # opening nothing at all. The two assertions below are unaffected and
         # still prove the store is never reached from here.
         "fmis.swing_lab",
+        # Widened for Milestone CB, on the identical footing again.
+        # `fmis.research_design` is the Statistical Power & Research Design layer:
+        # an application-layer package at the same tier as the seven above,
+        # reached only by `fmits research design`. It admits strictly LESS than
+        # `fmis.swing_lab` did. That package opens a file in one module; this one
+        # opens no file anywhere, imports no `pathlib`, `os` or `gzip`, reaches no
+        # network and reads no clock — each asserted by
+        # `test_research_design_architecture`. It also cannot reach the laboratory:
+        # the dependency runs one way, so a design gate can never become reachable
+        # from a trading engine. The two assertions below are unaffected and still
+        # prove the store is never reached from here.
+        "fmis.research_design",
         # Widened for the BG-D1 surface slice, on the identical footing again.
         # `fmis.setup_observation` is an application-layer package at the same
         # tier as the five above: it is the only place a `SetupAssessment`

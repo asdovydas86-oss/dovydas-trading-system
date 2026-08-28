@@ -32,6 +32,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+from fmis.research_design.models import ResearchDesignError
+from fmis.research_design.numeric import largest_share as general_share
 from fmis.swing_lab.metrics import SAMPLE_FLOOR, VariantMetrics, lab_breakdown_by, compute_lab_metrics
 from fmis.swing_lab.models import LabTrade, SwingLabError
 
@@ -124,20 +126,17 @@ def concentration_of_magnitudes(
 
     ``None`` when nothing contributed any magnitude at all, which is a stated
     absence rather than a zero share.
+
+    **The share calculation now lives in `fmis.research_design.numeric`**,
+    extracted by Milestone CB for the same reason Milestone CA extracted it from
+    `concentration_of`: a second copy of a share is a second place for a
+    denominator to stop matching its numerator. This wrapper keeps the
+    laboratory's own error type and message.
     """
-    totals: dict[str, Decimal] = {}
-    grand = Decimal("0")
-    for label, magnitude in contributions:
-        if magnitude < 0:
-            raise SwingLabError(
-                f"cohort {label!r} contributed a negative magnitude {magnitude}; "
-                "a share of a total must be taken over absolute contributions"
-            )
-        totals[label] = totals.get(label, Decimal("0")) + magnitude
-        grand += magnitude
-    if grand == 0:
-        return None
-    return max(totals.values()) / grand
+    try:
+        return general_share(contributions)
+    except ResearchDesignError as error:
+        raise SwingLabError(str(error)) from None
 
 
 def measure_robustness(

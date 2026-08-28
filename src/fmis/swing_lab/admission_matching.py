@@ -38,13 +38,14 @@ arriving through the matching rule rather than through the sample size.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import log
 from random import Random
 from typing import Final
 
+from fmis.research_design.models import ResearchDesignError
+from fmis.research_design.numeric import derive_seed as general_seed
 from fmis.swing_lab.admission import AdmissionStage, DecisionInstant
 from fmis.swing_lab.admission_preregistration import (
     CaControlSource,
@@ -112,14 +113,25 @@ def derive_seed(
     * two studies run months apart on different machines draw the same controls;
     * and a draw cannot be nudged by re-running until it looks better, because
       there is no state to re-run.
+
+    **The derivation itself now lives in `fmis.research_design.numeric`**, which
+    Milestone CB extracted so a research package that must not depend on this
+    laboratory can seed its own draws from the same rule. This function is that
+    one with Milestone CA's identity fields, and the extraction is
+    behaviour-preserving: the joined identity string is byte-for-byte what it was,
+    so every control CA drew is the control it drew before.
     """
     if isinstance(master, bool) or not isinstance(master, int):
         raise SwingLabError("master must be an int")
     if isinstance(replicate, bool) or not isinstance(replicate, int) or replicate < 0:
         raise SwingLabError("replicate must be a non-negative int")
-    identity = f"{master}|{family_id}|{sample}|{symbol}|{bar_index}|{replicate}"
-    digest = hashlib.sha256(identity.encode("utf-8")).digest()
-    return int.from_bytes(digest[:8], "big")
+    try:
+        return general_seed(
+            master=master,
+            parts=(family_id, sample, symbol, bar_index, replicate),
+        )
+    except ResearchDesignError as error:
+        raise SwingLabError(str(error)) from None
 
 
 @dataclass(frozen=True, slots=True)

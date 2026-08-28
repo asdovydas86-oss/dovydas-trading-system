@@ -35,6 +35,7 @@ Exit codes: ``0`` success · ``1`` a data or provider failure the user can act o
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -88,8 +89,24 @@ from fmis.swing_lab.admission_artifact import (
     encode_admission_study,
     write_admission_study,
 )
+from fmis.swing_lab.admission_power import (
+    CA_DESIGN_CURVE_CORRELATIONS,
+    CA_LIMITATIONS as CA_DESIGN_LIMITATIONS,
+    ca_design_assessment,
+    ca_design_curve,
+    ca_post_hoc,
+    ca_reproduction,
+)
 from fmis.swing_lab.admission_render import render_admission_study
 from fmis.swing_lab.admission_study import study_from_capture
+from fmis.research_design import (
+    GrowthPath,
+    ResearchDesignError,
+    encode_design_assessment,
+    render_design_assessment,
+    verify_design_assessment_digest,
+)
+from fmis.research_design.render import rule, wrap_text
 from fmis.swing_lab.persistence_artifact import (
     read_persistence_capture,
     verify_capture_digest,
@@ -3475,7 +3492,7 @@ def _run_dashboard(args: argparse.Namespace) -> int:
 def _configure_research(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "area",
-        choices=("swing", "geometry", "validation", "persistence", "admission"),
+        choices=("swing", "geometry", "validation", "persistence", "admission", "design"),
         help=(
             "which research question to run. 'swing' is the Swing Strategy "
             "Laboratory's timeframe-policy comparison (Milestone BW); "
@@ -3492,7 +3509,11 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
             "SEALED null-model study — whether the admission engine selects "
             "instants and directions better than MATCHED entries it did not "
             "select — which is measured entirely from a saved BZ capture and "
-            "therefore REQUIRES --from-capture and touches no network at all"
+            "therefore REQUIRES --from-capture and touches no network at all; "
+            "'design' runs Milestone CB's research-design assessment of the CA "
+            "study — whether that experiment could ever have resolved the effect "
+            "it declared — which reads no market data of any kind, opens no "
+            "capture and says nothing about whether an edge exists"
         ),
     )
     parser.add_argument(
@@ -3646,6 +3667,27 @@ def _run_research(args: argparse.Namespace) -> int:
     strategy and promotes nothing: a variant that measures well here is a
     candidate for forward testing, which is a later, explicit owner decision.
     """
+    if args.area == "design":
+        for name in ("symbols", "development", "holdout", "variant"):
+            value = getattr(args, name, None)
+            if value:
+                print(
+                    f"fmits research design: {name} is not accepted. This area "
+                    "reads no market data at all — it assesses a study's DESIGN "
+                    "from published sample metadata and uncertainty",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        for name in ("start", "end", "from_capture", "save_capture"):
+            if getattr(args, name, None) is not None:
+                print(
+                    f"fmits research design: --{name.replace('_', '-')} is not "
+                    "accepted. The samples assessed are the sealed ones and no "
+                    "capture is read",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        return _run_design_research(args)
     if args.area == "admission":
         for name in ("symbols", "development", "holdout", "variant"):
             value = getattr(args, name, None)
@@ -3828,6 +3870,102 @@ def _run_geometry_research(
             print(f"fmits research geometry: {error}", file=sys.stderr)
             return EXIT_FAILURE
         print(f"\nResearch artifact written to {written}")
+    return EXIT_OK
+
+
+def _run_design_research(args: argparse.Namespace) -> int:
+    """Print Milestone CB's design assessment of the CA study. **Reads nothing.**
+
+    No network, no capture, no store and no file. Every input is published sample
+    metadata and a published interval, so this command is a pure function of the
+    build — which is what makes it safe to run before a study rather than after.
+
+    It answers one question and refuses every other: *could that experiment have
+    resolved the effect it declared?* It says nothing about whether an admission
+    edge exists, and there is no code path here that could.
+    """
+    try:
+        assessment = ca_design_assessment()
+        reproduction = ca_reproduction()
+    except (SwingLabError, ResearchDesignError) as error:
+        print(f"fmits research design: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+    print(render_design_assessment(assessment))
+
+    print(rule())
+    print("REPRODUCING MILESTONE CA'S PUBLISHED REQUIREMENT")
+    print(rule())
+    print(f"  published claim         ~{reproduction.published_claim:,} admissions per sample")
+    print(f"  published half-width     {reproduction.published_half_width}")
+    print(f"  half-width from bounds   {reproduction.derived_half_width}")
+    print(f"  recomputed (published h) {reproduction.recomputed_from_published_half_width:,}")
+    print(f"  recomputed (bounds h)    {reproduction.recomputed_from_interval_bounds:,}")
+    print(f"  disposition              {reproduction.disposition.upper()}")
+    print()
+    for line in wrap_text(reproduction.reasoning):
+        print(line)
+    print()
+
+    print(rule())
+    print("POST-HOC RESOLUTION, EVERY SAMPLE")
+    print(rule())
+    print("  sample          obs  clusters  half-width  smallest resolvable  resolves")
+    for name in ("development", "validation", "holdout"):
+        reading = ca_post_hoc(name)
+        print(
+            f"  {name:<13} {reading.observations:>4} {reading.clusters:>9} "
+            f"{reading.observed_half_width:>11.4f} "
+            f"{reading.smallest_resolvable_effect:>20.4f} "
+            f"{str(reading.resolves_meaningful_effect):>9}"
+        )
+    print()
+    print(rule())
+    print("DESIGN CURVE — MODELLED, AND EXTRAPOLATED BEYOND 155 ADMISSIONS")
+    print(rule())
+    for path in (
+        GrowthPath.MORE_CLUSTERS_SAME_DENSITY,
+        GrowthPath.MORE_OBSERVATIONS_SAME_CLUSTERS,
+    ):
+        for correlation in CA_DESIGN_CURVE_CORRELATIONS:
+            print(f"  {path.value} @ rho={correlation}")
+            print("      admissions  clusters  half-width  resolves  extrapolated")
+            for point in ca_design_curve(path, correlation):
+                print(
+                    f"      {point.observations:>10,} {point.clusters:>9,} "
+                    f"{point.half_width:>11.4f} {str(point.resolves):>9} "
+                    f"{str(point.extrapolated):>13}"
+                )
+            print()
+    print(rule())
+    print("WHAT THIS ASSESSMENT CANNOT DO")
+    print(rule())
+    for item in CA_DESIGN_LIMITATIONS:
+        for line in wrap_text(f"- {item}"):
+            print(line)
+    print()
+
+    if getattr(args, "save_study", None):
+        target = Path(args.save_study)
+        if target.exists():
+            print(
+                f"fmits research design: {target} already exists; an assessment is "
+                "never overwritten",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
+        payload = encode_design_assessment(assessment, writer="fmits research design")
+        if not verify_design_assessment_digest(payload):  # pragma: no cover - defensive
+            print(
+                "fmits research design: the assessment did not verify against its "
+                "own digest and was not written",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
+        target.write_text(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+            encoding="utf-8",
+        )
+        print(f"\nwrote {target}", file=sys.stderr)
     return EXIT_OK
 
 

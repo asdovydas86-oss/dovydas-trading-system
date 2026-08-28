@@ -29,6 +29,7 @@ _MODULES = (
     "admission.py",
     "admission_artifact.py",
     "admission_matching.py",
+    "admission_power.py",
     "admission_preregistration.py",
     "admission_render.py",
     "admission_study.py",

@@ -31,6 +31,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Final
 
+from fmis.research_design.models import ResearchDesignError
+from fmis.research_design.numeric import nearest_rank_quantile as general_quantile
 from fmis.swing_lab.models import (
     LabExitReason,
     LabTrade,
@@ -68,18 +70,18 @@ def nearest_rank_quantile(values: Sequence, fraction: float):
 
     ``None`` for an empty sequence — a stated absence, never a zero.
 
+    **The rule itself now lives in `fmis.research_design.numeric`**, extracted by
+    Milestone CB so a research package that must not depend on this laboratory can
+    read the same quantile. This wrapper keeps the laboratory's own error type and
+    message, and a regression asserts both are unchanged.
+
     Raises:
         SwingLabError: ``fraction`` is outside [0, 1].
     """
-    if not isinstance(fraction, (int, float)) or isinstance(fraction, bool):
-        raise SwingLabError("fraction must be a real number")
-    if not 0.0 <= fraction <= 1.0:
-        raise SwingLabError(f"fraction must lie in [0, 1], got {fraction}")
-    if not values:
-        return None
-    ordered = sorted(values)
-    index = int(fraction * (len(ordered) - 1) + 0.5)
-    return ordered[min(index, len(ordered) - 1)]
+    try:
+        return general_quantile(values, fraction)
+    except ResearchDesignError as error:
+        raise SwingLabError(str(error)) from None
 
 #: The fewest measurable trades a rate or an average may be computed from.
 #: Deliberately the same number `fmis.statistics.sampling` already uses, imported

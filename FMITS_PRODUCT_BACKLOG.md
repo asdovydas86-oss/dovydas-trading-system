@@ -348,6 +348,75 @@ happens to a trade *after* it opens. Evidence: five new modules in `src/fmis/swi
 > gzip header that made identical captures produce different files, and a `Decimal` decode that
 > would have lost precision on high-precision instruments.
 
+**`CB` — Statistical Power & Research Design Foundation — is DONE (2026-08-28), and was an
+owner-directed research-infrastructure task, not a NOW selection.** It sits on the same footing as
+every owner-scoped milestone before it and **does not satisfy the exactly-one-NOW rule**, which
+remains outstanding. It is the first milestone in the series whose deliverable is an **instrument**
+rather than an answer. Evidence: `src/fmis/research_design/` (8 modules), the CA adapter
+`src/fmis/swing_lab/admission_power.py`, `fmits research design`, 565 new focused tests, full suite
+**12,952 passing** under `-W error`, **99 % statement and branch coverage** of the new scope with 7 of
+9 modules at 100 %, 52 hostile probes with 0 failures, 42 mutation probes with 41 killed and 1 proven
+equivalent, and
+[report 0038](reports/0038_2026-08-28_STATISTICAL_POWER_AND_RESEARCH_DESIGN.md).
+
+> **What the owner can do after `CB` that was impossible before:** ask, **before** committing hours of
+> compute and before opening a validation or holdout sample, whether a proposed experiment can
+> resolve the effect it claims to test — and get back a verdict, the dimension that binds, and what
+> more information would have to look like. `fmits research design` reads no market data at all, so it
+> is safe to run before a study rather than only after one.
+
+> **It reproduced CA's published requirement and then sharpened it.** CA's `~4,800 admissions per
+> sample` is **REPRODUCED** — 4,827 recomputed from the half-width CA quotes, 4,823 from the interval
+> bounds CA tabulates, both within 0.6 %. What CB adds is the assumption CA never states: that figure
+> belongs to the *independent-observations* growth path. Distinguishing the paths changes the answer.
+> **More symbols at the observed density: 467 symbols / 4,823 admissions, identical at every assumed
+> clustering. More years on the same 15 symbols: NOT REACHABLE AT ANY SIZE** for any intracluster
+> correlation above zero, because the half-width approaches a floor of 0.331 (ρ=0.05) to 0.533
+> (ρ=0.50) — three to five times the 0.10 ATR bar.
+
+> **"Collect more data" was never the answer to CA.** More *years* is not more information for this
+> question; more *symbols* is. That distinction is invisible to CA's own arithmetic because that
+> arithmetic has no term for it. And CA's figure is the optimistic reading: it is a coin-flip
+> `INTERVAL_EXCLUDES_ZERO` criterion, and a genuine 80 % power guarantee costs 2.043× — **954 symbols
+> and 9,854 admissions**.
+
+> **Three separations are enforced structurally, not by convention.** A **post-hoc** resolution
+> cannot be relabelled **prospective** power: neither result type has a `mode` field, each is produced
+> only by a function taking inputs the other mode cannot have, and the gate takes no mode argument at
+> all. A **holdout's** realised outcome is *refused* as a design input by name, while a prospective
+> assessment of that same holdout is permitted because it opens nothing. And **rows are not
+> information**: several dimensions are reported, and a single effective sample size is offered only
+> when an intracluster correlation has been declared — CA declared none, so none is offered.
+
+> **The gate says nothing about the hypothesis, and cannot.**
+> `DesignVerdict.says_nothing_about_the_hypothesis` is `True` for every member, asserted over the
+> whole enum, and the assessment payload carries no field naming an edge, a profit, an approval or a
+> forward test. **CA's `NO_EDGE` stands exactly as sealed**; BY's, BZ's and CA's pinned digests are
+> byte-identical after three behaviour-preserving extractions.
+
+> **The reusability claim is guarded, not asserted.** The core names no instrument, no unit and no
+> universe *in code* — checked over the parsed tree, so docstrings stay free to explain that CA's bar
+> was +0.10 ATR while no identifier or emitted string can know what an ATR is. `research_design`
+> cannot import the laboratory, opens no file anywhere, reaches no network and reads no clock.
+
+> **Two defects fixed, and two of my own review findings withdrawn after verification.** A test helper
+> drew cluster offsets and within-cluster noise from one interleaved stream, so cluster means moved
+> whenever the density moved and any across-density comparison was invalid (**CB-D1**, found by a
+> hostile probe). `prospective_design` accepted an estimator/target confidence mismatch that
+> `post_hoc_resolution` refused (**CB-D2**). A claimed curve-confidence defect and a claimed 40 %
+> equal-cluster-size bias were both **refuted by my own verification** — `z` cancels exactly, and the
+> bias was a single-realisation artifact that vanished over 15 realisations — and both are recorded as
+> withdrawn.
+
+> **Limitations, stated rather than glossed.** The CA reproduction is a **summary-statistic**
+> reproduction: CA's 155 paired differences are not persisted in this repository, so the dispersion is
+> *inverted* from the published interval under an assumed correlation, no empirical design curve is
+> available for CA, and a half-width measured once over 15 clusters carries roughly **±30 %**
+> realisation scatter. **4,823 is an order of magnitude, not four significant figures.**
+
+> **No dashboard page**, and the dashboard's 30–45 s refresh was deliberately left untouched, as the
+> brief directed.
+
 **`CA` — Swing Admission Edge vs Random-Entry Null — is DONE (2026-08-27), and was an
 owner-directed research task, not a NOW selection.** It sits on the same footing as every
 owner-scoped milestone before it and **does not satisfy the exactly-one-NOW rule**, which remains

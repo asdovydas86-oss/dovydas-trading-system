@@ -7,15 +7,85 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** CA — Swing Admission Edge vs Random-Entry Null (2026-08-27): the fifth
-milestone whose deliverable is an **answer**, and the first to test the *admission rule itself*
-against a matched null rather than testing what is done around it. `fmits research admission`
-measures whether FMITS-selected instants and directions beat controls matched on symbol, sample,
-volatility band and calendar neighbourhood. **They do not: `NO_EDGE` on all five sealed families,
-with point estimates leaning negative.** The study is also **underpowered for its own sealed bar** —
-no realisation of this data could have produced a candidate — so `NO_EDGE` means *"no edge large
-enough to see at 155 admissions"*, not *"no edge"*. Full record:
-[report 0037](../../reports/0037_2026-08-27_SWING_ADMISSION_NULL_MODEL_RESEARCH.md).
+**Last updated for:** CB — Statistical Power & Research Design Foundation (2026-08-28): the first
+milestone whose deliverable is an **instrument** rather than an answer. `fmis.research_design` asks
+one question — *can this experiment resolve the effect it claims to test?* — and refuses every other.
+It reproduces Milestone CA's published `~4,800 admissions` requirement (4,827) and then shows that
+the figure holds only if the extra admissions arrive as **more symbols**: with the 15-symbol universe
+fixed, the symbol-clustered half-width has a **floor** of 0.33–0.53 ATR and no quantity of additional
+history resolves +0.10 ATR. Verdict on the CA-style design: **`UNDERPOWERED`, binding dimension
+`cluster_count`, ~467 symbols required.** Full record:
+[report 0038](../../reports/0038_2026-08-28_STATISTICAL_POWER_AND_RESEARCH_DESIGN.md).
+
+---
+
+## Milestone CB — Statistical Power & Research Design Foundation
+
+**Status: DONE (2026-08-28), uncommitted.** Research infrastructure only. No production trading
+policy changed, no strategy tested, no threshold tuned, no order placed, no exchange contacted, no
+AI called.
+
+**Why it exists.** BW → CA each built a technically correct experiment, ran it, and only afterwards
+discovered whether the sample could have resolved the effect the experiment was designed to detect.
+CA is the case that forced the issue: 155 matched admissions, a symbol-clustered bootstrap half-width
+of ≈0.558 ATR, and a pre-declared bar of +0.10 ATR — so **no realisation of that data could have
+cleared the bar**, and `NO_EDGE` was a statement about resolution as much as about the market.
+
+**What it delivers.** `fmis.research_design` (8 modules) plus a CA adapter, and one command:
+
+```
+fmits research design
+```
+
+It reads **nothing** — no network, no capture, no store, no market data — because every input is
+published sample metadata and a published interval. That is what makes it safe to run *before* a
+study rather than after.
+
+**The finding.** CA's `~4,800` is **REPRODUCED** (4,827 from the quoted half-width, 4,823 from the
+tabulated bounds) and is correct — under an assumption CA never states. It is the
+*independent-observations* path. Distinguishing the growth paths changes the answer:
+
+| how the extra admissions arrive | required for +0.10 ATR | reachable? |
+|---|---|---|
+| more symbols at the same density | **467 symbols / 4,823 admissions** | yes — identical at every assumed clustering |
+| more years on the same 15 symbols | — | **NO, at any intracluster correlation above zero** |
+
+With 15 clusters fixed the half-width approaches a floor of **0.331** (ρ=0.05), **0.408** (ρ=0.10),
+**0.474** (ρ=0.20), **0.533** (ρ=0.50) — three to five times the bar. **"More years" is not more
+information for this question; "more symbols" is.** And CA's figure is itself the optimistic reading:
+it is a coin-flip `INTERVAL_EXCLUDES_ZERO` criterion, and a genuine 80 % power guarantee costs
+2.043× — **954 symbols, 9,854 admissions**.
+
+**Three separations do the work.**
+
+- **Prospective from post-hoc**, structurally. `AssessmentMode` is not a label a caller chooses:
+  `PostHocResolution` is produced only from a realised width, `ProspectiveDesign` only from an
+  assumed dispersion, neither has a `mode` field, and `assess_research_design` takes no mode
+  argument. A post-hoc calculation cannot be dressed as prospective power.
+- **Rows from information.** `InformationProfile` reports observations, clusters, observations per
+  cluster, time blocks, units and concentration as separate dimensions, and offers a single
+  effective-N **only** when an intracluster correlation has been declared, with its derivation
+  attached. CA declared none, so none is offered.
+- **Framework from research question.** The core owns no threshold, no unit and no universe — guarded
+  by AST inspection, so no identifier or emitted string in `research_design` can name an ATR.
+
+**Holdout discipline is structural.** A realised width measured on a holdout is **refused** as a
+design input by name. A *prospective* assessment of a holdout is permitted, because it consumes an
+assumed dispersion and never opens it.
+
+**What it does not say.** `DesignVerdict.says_nothing_about_the_hypothesis` is `True` for every
+member, asserted over the whole enum. The gate answers whether an experiment can answer its question.
+It has no member that could endorse a strategy, and **CA's `NO_EDGE` stands exactly as sealed**.
+
+**Verification.** 565 focused tests; 52 hostile probes, 0 failures; 42 mutation probes, 41 killed and
+1 proven equivalent; 99 % statement and branch coverage over CB's scope (7 of 9 modules at 100 %);
+BY's, BZ's and CA's pinned seals byte-identical after three behaviour-preserving extractions.
+
+**Limitations, stated.** The CA reproduction is a **summary-statistic** reproduction — CA's 155
+paired differences are not persisted in this repository — so the dispersion is *inverted* from the
+published interval under an assumed correlation, the design curve is modelled rather than measured,
+and a half-width measured once over 15 clusters carries roughly ±30 % realisation scatter. **4,823 is
+an order of magnitude, not four significant figures.**
 
 ---
 

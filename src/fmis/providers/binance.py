@@ -53,14 +53,20 @@ from fmis.ingest import decode_candle_series
 
 __all__ = [
     "fetch_klines",
+    "fetch_exchange_info",
     "map_kline",
+    "map_symbol_record",
     "build_klines_url",
+    "build_exchange_info_url",
     "urlopen_transport",
     "HttpResponse",
     "Transport",
+    "SymbolRecord",
+    "ExchangeInfo",
     "BINANCE_API_BASE",
     "KLINE_INTERVALS",
     "MAX_LIMIT",
+    "SPOT_PERMISSION",
     "BinanceError",
     "BinanceRequestError",
     "BinanceTransportError",
@@ -70,6 +76,12 @@ __all__ = [
 
 BINANCE_API_BASE: Final[str] = "https://api.binance.com"
 _KLINES_PATH: Final[str] = "/api/v3/klines"
+_EXCHANGE_INFO_PATH: Final[str] = "/api/v3/exchangeInfo"
+
+#: The only permission this adapter ever asks `exchangeInfo` for. Spot is the
+#: market every candle in this repository comes from; a margin or futures listing
+#: would be a different instrument with a different price series.
+SPOT_PERMISSION: Final[str] = "SPOT"
 
 #: Intervals the endpoint documents. Validated before any network call so a typo
 #: fails locally instead of as an opaque provider error.
@@ -268,6 +280,33 @@ def build_klines_url(
     return f"{base_url.rstrip('/')}{_KLINES_PATH}?{urllib.parse.urlencode(params)}"
 
 
+def build_exchange_info_url(
+    *,
+    permissions: str = SPOT_PERMISSION,
+    base_url: str = BINANCE_API_BASE,
+) -> str:
+    """Build the `exchangeInfo` request URL. **Read-only, unauthenticated.**
+
+    `GET /api/v3/exchangeInfo` is the endpoint that answers *which instruments
+    exist*, and it is the only way to discover a universe without maintaining a
+    hand-written list that would silently rot. It needs no API key, signs nothing
+    and reads no account.
+
+    ``permissions`` is sent verbatim and validated against upper-case alphanumeric
+    first, so a typo fails locally rather than as an opaque provider error.
+    """
+    if not isinstance(permissions, str):
+        raise BinanceRequestError(
+            f"permissions must be a str, got {type(permissions).__name__}"
+        )
+    if not permissions or not permissions.isalnum() or not permissions.isupper():
+        raise BinanceRequestError(
+            f"permissions {permissions!r} must be upper-case alphanumeric, e.g. 'SPOT'"
+        )
+    params = [("permissions", permissions)]
+    return f"{base_url.rstrip('/')}{_EXCHANGE_INFO_PATH}?{urllib.parse.urlencode(params)}"
+
+
 # ------------------------------------------------------------------ mapping ---
 
 
@@ -458,3 +497,146 @@ def fetch_klines(
     # The canonical boundary owns validation; symbol/timeframe are passed
     # explicitly so an empty payload still yields a correctly identified series.
     return decode_candle_series(records, symbol=symbol, timeframe=interval)
+
+
+# --------------------------------------------------------------- discovery ----
+
+
+class SymbolRecord(NamedTuple):
+    """One instrument as `exchangeInfo` describes it. **Five fields, no opinion.**
+
+    The provider returns twenty-odd fields per symbol; only the five that identify
+    an instrument and say whether it is currently tradable are carried, because
+    the rest are order-placement constraints and this repository places no orders.
+
+    ``status`` is the provider's own word — ``"TRADING"``, ``"BREAK"``,
+    ``"HALT"`` — and it is **not** translated here. What a halted listing means for
+    a research universe is a research decision, and an adapter that mapped
+    ``"BREAK"`` to ``delisted`` would have made it. The one fact worth recording is
+    that Binance retains halted spot pairs in this payload together with their
+    klines history, which is the whole reason a survivorship question can be asked
+    of this provider at all.
+    """
+
+    symbol: str
+    base_asset: str
+    quote_asset: str
+    status: str
+    spot_trading_allowed: bool
+
+
+class ExchangeInfo(NamedTuple):
+    """The discovery response: when the provider answered, and with what.
+
+    ``server_time`` is the provider's own clock rather than the caller's, so a
+    persisted discovery can be dated by the source that produced it.
+    """
+
+    server_time: datetime
+    symbols: tuple[SymbolRecord, ...]
+
+
+def _require_field(payload: Mapping[str, Any], field: str, *, index: int) -> Any:
+    if field not in payload:
+        raise BinanceResponseError(f"symbol {index}: missing field {field!r}")
+    return payload[field]
+
+
+def _require_symbol_text(value: object, *, field: str, index: int) -> str:
+    if not isinstance(value, str) or not value:
+        raise BinanceResponseError(
+            f"symbol {index}: {field} must be a non-empty string, "
+            f"got {type(value).__name__}"
+        )
+    return value
+
+
+def map_symbol_record(raw: object, *, index: int = 0) -> SymbolRecord:
+    """Map one `exchangeInfo` symbol object into a `SymbolRecord`.
+
+    Raises `BinanceResponseError` for any entry that is not an object, is missing
+    one of the five fields, or carries one of the wrong type. A malformed listing
+    is never skipped: a discovery that silently dropped instruments would report a
+    smaller universe than exists and no reader could tell.
+    """
+    if not isinstance(raw, Mapping):
+        raise BinanceResponseError(
+            f"symbol {index}: expected an object, got {type(raw).__name__}"
+        )
+    allowed = _require_field(raw, "isSpotTradingAllowed", index=index)
+    if not isinstance(allowed, bool):
+        raise BinanceResponseError(
+            f"symbol {index}: isSpotTradingAllowed must be a bool, "
+            f"got {type(allowed).__name__}"
+        )
+    return SymbolRecord(
+        symbol=_require_symbol_text(
+            _require_field(raw, "symbol", index=index), field="symbol", index=index
+        ),
+        base_asset=_require_symbol_text(
+            _require_field(raw, "baseAsset", index=index), field="baseAsset", index=index
+        ),
+        quote_asset=_require_symbol_text(
+            _require_field(raw, "quoteAsset", index=index),
+            field="quoteAsset",
+            index=index,
+        ),
+        status=_require_symbol_text(
+            _require_field(raw, "status", index=index), field="status", index=index
+        ),
+        spot_trading_allowed=allowed,
+    )
+
+
+def fetch_exchange_info(
+    *,
+    permissions: str = SPOT_PERMISSION,
+    transport: Transport | None = None,
+    base_url: str = BINANCE_API_BASE,
+) -> ExchangeInfo:
+    """Discover the instruments the provider currently lists. **No key, no order.**
+
+    One request, one response, no pagination — `exchangeInfo` returns the whole
+    listing. The symbols are returned in the provider's own order; a caller that
+    needs a stable order must impose one, because the provider does not promise
+    this one and a universe whose membership depended on it would not be
+    reproducible.
+
+    Raises the same five error types `fetch_klines` does, for the same reasons.
+    """
+    url = build_exchange_info_url(permissions=permissions, base_url=base_url)
+
+    send = urlopen_transport if transport is None else transport
+    response = send(url)
+    if not isinstance(response, HttpResponse):
+        raise BinanceResponseError(
+            f"transport must return an HttpResponse, got {type(response).__name__}"
+        )
+
+    payload = _decode_body(response.body, status=response.status)
+    _raise_for_error_payload(payload, status=response.status)
+
+    if not isinstance(payload, Mapping):
+        raise BinanceResponseError(
+            f"expected a JSON object from exchangeInfo, got {type(payload).__name__}"
+        )
+    raw_symbols = payload.get("symbols")
+    if not isinstance(raw_symbols, list):
+        raise BinanceResponseError(
+            "exchangeInfo response carries no 'symbols' array; an empty universe "
+            "and a malformed response must not read the same"
+        )
+    raw_time = payload.get("serverTime")
+    if isinstance(raw_time, bool) or not isinstance(raw_time, int):
+        raise BinanceResponseError(
+            "exchangeInfo response carries no integer 'serverTime'; a discovery "
+            "that cannot say when the provider answered has no provenance"
+        )
+
+    return ExchangeInfo(
+        server_time=_EPOCH + timedelta(milliseconds=raw_time),
+        symbols=tuple(
+            map_symbol_record(item, index=index)
+            for index, item in enumerate(raw_symbols)
+        ),
+    )

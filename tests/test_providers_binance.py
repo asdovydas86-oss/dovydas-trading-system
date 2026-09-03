@@ -702,7 +702,15 @@ def test_no_private_or_authenticated_endpoints() -> None:
         assert not any(forbidden in item for item in code), forbidden
 
 
-def test_only_the_public_klines_endpoint_is_referenced() -> None:
+def test_only_public_unauthenticated_endpoints_are_referenced() -> None:
+    """Exactly two, and the assertion stays an EXACT set so a third one fails.
+
+    `exchangeInfo` was added for Milestone CC, which needs to discover *which
+    instruments exist* and cannot do so from `klines`. It is public, needs no API
+    key, signs nothing and reads no account — the same class as `klines` — and
+    `test_no_private_or_authenticated_endpoints` above is unchanged and still
+    covers the property that actually matters.
+    """
     code = _code_strings_and_names(Path(binance.__file__))
     paths = {item for item in code if item.startswith("/api/")}
-    assert paths == {"/api/v3/klines"}
+    assert paths == {"/api/v3/klines", "/api/v3/exchangeinfo"}

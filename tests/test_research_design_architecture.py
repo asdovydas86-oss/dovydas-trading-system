@@ -394,12 +394,19 @@ class TestTheProductionBoundary:
                     continue
                 if any(item.startswith("fmis.research_design") for item in names):
                     offenders.add(str(path.relative_to(_SOURCE_ROOT)).replace("\\", "/"))
+        # Milestone CC adds `universe/growth.py`, on exactly the footing this
+        # package was built for: it is the second ADAPTER, expressing a second
+        # milestone's design question in the general vocabulary. The dependency
+        # still runs one way — nothing here imports `fmis.universe` — so the reuse
+        # claim is strengthened rather than weakened, and the property this guard
+        # protects is unchanged: no ENGINE reaches the design layer.
         assert offenders <= {
             "pipeline/cli.py",
             "swing_lab/admission_matching.py",
             "swing_lab/admission_power.py",
             "swing_lab/metrics.py",
             "swing_lab/robustness.py",
+            "universe/growth.py",
         }, sorted(offenders)
 
     def test_the_dashboard_depends_on_nothing_here(self) -> None:

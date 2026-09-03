@@ -988,9 +988,22 @@ def test_no_engine_imports_the_multi_timeframe_root() -> None:
     historical instant. The direction is still unchanged: no engine reaches
     upward, and the laboratory's own guard asserts that nothing below it
     imports the laboratory either.
+
+    Widened again for Milestone CC: `fmis.universe` is a sixth application-layer
+    root, at the same tier as the laboratory. It reads `DEFAULT_TIMEFRAMES` for one
+    purpose — to ask `derive_warmup` how much history the production analysis path
+    requires per instrument — and it fetches no sheet of its own. Reading the
+    production role assignment rather than restating it is the whole point: a
+    research module that hard-coded 1,750 days would make its central finding an
+    artefact of a retyped number. The direction is still unchanged, no engine
+    reaches upward, and `test_universe_architecture` asserts that nothing below
+    `fmis.universe` imports it either.
     """
     root = Path(mtf_module.__file__).parent.parent
-    above = {"pipeline", "workspace", "daily", "swing_setup", "today", "swing_lab"}
+    above = {
+        "pipeline", "workspace", "daily", "swing_setup", "today", "swing_lab",
+        "universe",
+    }
     for path in root.rglob("*.py"):
         if above & set(path.parts) or "__pycache__" in path.parts:
             continue

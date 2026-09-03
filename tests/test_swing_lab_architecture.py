@@ -250,7 +250,20 @@ class TestTheLaboratoryIsUnreachableFromProduction:
                     continue
                 if any(item.startswith("fmis.swing_lab") for item in names):
                     offenders.append(name)
-        assert set(offenders) <= {"pipeline/cli.py"}, (
+        # Milestone CC adds three `universe/` modules. `fmis.universe` is not an
+        # engine — it is a second RESEARCH package at the same tier as this one,
+        # and it imports the laboratory for exactly the reason a research package
+        # should: to reuse CA's sealed constants, BY's sample windows, CA's
+        # published figures and the production admission replay, rather than
+        # retyping any of them. Its own guard asserts that nothing outside
+        # `pipeline/cli.py` imports IT, so the property this test protects — that
+        # no engine reaches research — still holds transitively.
+        assert set(offenders) <= {
+            "pipeline/cli.py",
+            "universe/density.py",
+            "universe/growth.py",
+            "universe/preregistration.py",
+        }, (
             f"{sorted(set(offenders))} import the laboratory; a research policy "
             "reachable from an engine is a second trading policy in waiting"
         )

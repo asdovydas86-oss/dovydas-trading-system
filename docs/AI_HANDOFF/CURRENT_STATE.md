@@ -7,15 +7,99 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** CB — Statistical Power & Research Design Foundation (2026-08-28): the first
-milestone whose deliverable is an **instrument** rather than an answer. `fmis.research_design` asks
-one question — *can this experiment resolve the effect it claims to test?* — and refuses every other.
-It reproduces Milestone CA's published `~4,800 admissions` requirement (4,827) and then shows that
-the figure holds only if the extra admissions arrive as **more symbols**: with the 15-symbol universe
-fixed, the symbol-clustered half-width has a **floor** of 0.33–0.53 ATR and no quantity of additional
-history resolves +0.10 ATR. Verdict on the CA-style design: **`UNDERPOWERED`, binding dimension
-`cluster_count`, ~467 symbols required.** Full record:
-[report 0038](../../reports/0038_2026-08-28_STATISTICAL_POWER_AND_RESEARCH_DESIGN.md).
+**Last updated for:** CC — Universe Feasibility & Information Expansion (2026-08-28): the milestone
+that asked whether FMITS can build a universe large enough to test its own question, and found that
+it cannot — for a reason nobody expected. `fmis.universe` discovers every listed Binance spot
+instrument, collapses 3,649 tickers onto **660 economic assets**, and returns **38 eligible**
+against the **467 clusters** Milestone CB requires. Crypto co-moves heavily (mean pairwise
+correlation 0.604, one market factor explaining 62.5 % of variance) — but CA's estimand is a *paired
+within-symbol* difference that removes that factor, and the residual is indistinguishable from
+independence. **Dependence was not the wall.** What removes instruments is FMITS's own production
+warm-up: the weekly context role at 250 candles costs **1,750 days of history per instrument**, and
+**598 of 622 depth exclusions are that requirement**. Zero instruments were lost to data quality or
+liquidity. A post-hoc bound over the provider's entire history reaches only 106 clusters and ~1,089
+admissions against 467 and 4,823. Verdict: **`INFEASIBLE`, binding constraint `cluster_count`**. The
+question FMITS can honestly ask today is ~0.3–0.5 ATR, not +0.10. Full record:
+[report 0039](../../reports/0039_2026-08-28_UNIVERSE_FEASIBILITY_AND_INFORMATION_EXPANSION.md).
+
+---
+
+## Milestone CC — Universe Feasibility & Information Expansion
+
+**Status: DONE (2026-08-28), uncommitted.** Research only. No production trading policy changed:
+`CONFIRMATION_LOOKBACK_BARS` is still `10`, `MINIMUM_AGREEING_FAMILIES` still `2`,
+`DEFAULT_TIMEFRAMES` still `1w/1d/4h`, `DEFAULT_BACKTEST_LIMIT` still `250` — each asserted by
+import. No strategy tested, no threshold tuned, no order placed, no credential read, no AI called.
+Two public unauthenticated endpoints used: `exchangeInfo` and `klines`.
+
+**Why it exists.** CB established that CA's experiment is `UNDERPOWERED` on `cluster_count` and
+needs roughly 4,823 admissions across roughly 467 clusters. That number assumes such a universe can
+be built. CC tests the assumption before any further swing hypothesis is written.
+
+**What it delivers.** `fmis.universe` — a staged, sealed feasibility funnel behind
+`fmits research universe`. Sealed pre-registration `ef6f3950…`, fixed before the funnel ran, with 23
+mutation tests asserting the digest moves for every material field and determinism proven across
+four `PYTHONHASHSEED` values. The Binance adapter gained one read-only public endpoint
+(`exchangeInfo`); no second provider, no second candle model, no second power calculator — the
+design arithmetic is CB's, called rather than copied.
+
+**The distinction it enforces.** 3,649 tickers ≠ 660 economic assets ≠ 38 measurable ≠ 38
+independent clusters. `EconomicAsset` collapses `BTCUSDT`/`BTCFDUSD`/`WBTCUSDT` onto one exposure by
+sealed sets matched exactly — *not* by pattern, because a `UP`/`DOWN`/`BULL`/`BEAR` suffix rule
+deletes `JUP` and `SYRUP`, and a test pins that counterexample.
+
+**What it found.**
+
+- **38 eligible economic assets** against 467 required. Binding constraint `cluster_count`.
+- **3,649 instruments → 660 economic assets → 38 eligible** on the regenerated 2026-09-03 discovery.
+- **598 of 622 depth exclusions are the 1,750-day weekly warm-up.** Zero instruments lost to missing
+  bars, gaps, duplicates or liquidity. The constraint is internal, not the market's.
+- **Raw mean pairwise correlation 0.604**, market factor 62.5 % of variance; **residual after
+  removing it: +0.0023 over the −1/(K−1) demeaning artefact** — indistinguishable from independence.
+- **Admission density is stable**: CA's three disjoint samples give 5.145/5.163/5.202 per
+  symbol-year, agreeing to 1.1 % across two periods and two symbol sets.
+- **Post-hoc ceiling** (explicitly not pre-registered, and able only to favour feasibility): every
+  year the provider has ever produced yields 106 clusters and ~1,089 admissions. Still 4.4× short.
+- Universe classified **`PARTIALLY_SURVIVORSHIP_AWARE`** — Binance retains delisted pairs as `BREAK`
+  with their klines, and three halted assets are in the eligible 38; but `HSRUSDT` is gone from both
+  endpoints, so retention is demonstrably incomplete and the gap is recorded as unmeasurable.
+- **A real provider defect found**: `KLAYUSDT` returns a kline whose close time precedes its open
+  time. The canonical `fmis.ingest` boundary refused it; CC records it as a named exclusion.
+
+**What it does NOT do.** No verdict approves trading, paper trading, shadow trading or a strategy —
+`FeasibilityVerdict.is_approved_for_trading` is `False` for every member, asserted over the enum.
+CA's `NO_EDGE` is untouched. No dashboard work (decision recorded in report §24).
+
+**Independent review — performed, and it changed the science.** Three reviewers attacked the
+milestone in parallel; sixteen findings were dispositioned, **two rejected with evidence** (one of
+them a finding that agreed with the report and was wrong to). The most important result is that the
+**sealed residual dependence scenario cannot measure residual dependence at all**: cross-sectional
+demeaning removes any exchangeable common component exactly, pinning the residual correlation at
+`−1/(K−1)` whatever the true value is (simulated at 0.0/0.2/0.5/0.8, all returning an excess of
+0.00000). The three scenarios therefore do not bracket the answer — the usable bracket is
+`[0, 0.604]` with no informative middle — and since the effective cluster count saturates at `1/r`,
+a between-asset correlation of only **0.0023** would make +0.10 ATR unreachable at any universe
+size. That **strengthens** the negative result. Recorded as post-review limitations CC-7/CC-8/CC-9,
+carried separately from the sealed set rather than retro-fitted into it.
+
+Also found and fixed: a latent path to inverting a design parameter from the **protected holdout**
+(`ca_observation_dispersion` accepted any sample); an ordering control that **could not detect an
+expectancy sort**; a holdout control the module docstring claimed but which **did not exist**; an
+eigenvalue routine that could silently return a subdominant value; and an "offline reproduction"
+claim that did not say discovery is unfrozen. Twenty-six regressions added. **No measured figure
+moved and the verdict is unchanged.**
+
+**Artifacts.** Layered: `reports/artifacts/0039_cc_series_capture.json.gz` (raw, 1,974 self-digested
+series) and `reports/artifacts/0039_cc_universe_feasibility.json.gz` (derived, digest
+`60a6a11…`), the second carrying the SHA-256 of every series behind it and an explicit statement of
+what it can and cannot reproduce alone. The derived layer was regenerated on a 2026-09-03 discovery
+after the review; the provider had listed four more instruments and **delisted ICX**, one of the 38
+— provider mutability observed live, with every downstream figure bit-identical.
+
+**Recommended next:** CD — Warm-Up Requirement Sensitivity Study. CC located the binding constraint
+inside FMITS. Whether the 1,750-day warm-up is load-bearing is the next question, and it must be
+pre-registered, because "shorten the window until the universe is big enough" is the obvious way to
+fake a way out of `INFEASIBLE`.
 
 ---
 

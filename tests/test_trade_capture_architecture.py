@@ -483,6 +483,23 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # every execution verb across the whole package. What the CLI does with
         # it is bind a socket and hand it a snapshot holder.
         "fmis.operator_dashboard",
+        # Widened for Milestone CC, on the same footing as BW, CB and BT — and
+        # this one crosses LESS than any of them. `fmis.universe` is the Universe
+        # Feasibility layer: an application-layer, market-half research package
+        # reached only by `fmits research universe`. It reads no store, imports no
+        # domain root and holds no owner state, so the rule this guard actually
+        # protects — that `fmis.pipeline` never reaches `fmis.persistence` — is not
+        # merely unaffected but unreachable from here.
+        #
+        # What it DOES do is fetch public market data and write two research
+        # artifacts, both of which `fmis.swing_lab` already does and neither of
+        # which is a trading record. Its own guards assert the rest: no credential,
+        # no order verb, no `fmis.records`/`fmis.ledger`/`fmis.paper`/`fmis.positions`,
+        # no AI call, and — the one that matters most here — that no module outside
+        # `pipeline/cli.py` imports it anywhere in `src/`, so a feasibility verdict
+        # can never become reachable from a trading engine. The two assertions below
+        # are unaffected and still prove the store is never reached from here.
+        "fmis.universe",
     )
     reached = {
         name

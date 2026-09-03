@@ -89,6 +89,15 @@ from fmis.swing_lab.admission_artifact import (
     encode_admission_study,
     write_admission_study,
 )
+from fmis.universe import (
+    CC_PREREGISTRATION_DIGEST,
+    SeriesCache,
+    UniverseError,
+    encode_universe_study,
+    render_universe_study,
+    run_universe_study,
+    write_universe_artifact,
+)
 from fmis.swing_lab.admission_power import (
     CA_DESIGN_CURVE_CORRELATIONS,
     CA_LIMITATIONS as CA_DESIGN_LIMITATIONS,
@@ -3492,7 +3501,10 @@ def _run_dashboard(args: argparse.Namespace) -> int:
 def _configure_research(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "area",
-        choices=("swing", "geometry", "validation", "persistence", "admission", "design"),
+        choices=(
+            "swing", "geometry", "validation", "persistence", "admission",
+            "design", "universe",
+        ),
         help=(
             "which research question to run. 'swing' is the Swing Strategy "
             "Laboratory's timeframe-policy comparison (Milestone BW); "
@@ -3513,7 +3525,14 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
             "'design' runs Milestone CB's research-design assessment of the CA "
             "study — whether that experiment could ever have resolved the effect "
             "it declared — which reads no market data of any kind, opens no "
-            "capture and says nothing about whether an edge exists"
+            "capture and says nothing about whether an edge exists; "
+            "'universe' runs Milestone CC's SEALED universe-feasibility study — "
+            "whether a research universe large and INDEPENDENT enough to resolve "
+            "CA's +0.10 ATR effect can be built at all from this repository's "
+            "provider. It discovers instruments from the public read-only "
+            "exchangeInfo endpoint, stages a funnel down to eligible economic "
+            "assets, measures co-movement between them and reports a feasibility "
+            "verdict that approves NOTHING"
         ),
     )
     parser.add_argument(
@@ -3580,6 +3599,18 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
             "measured under and the capture digest it was measured over, so a "
             "later disagreement can be attributed to the code, the rules or the "
             "data rather than argued about. Refuses to overwrite"
+        ),
+    )
+    parser.add_argument(
+        "--save-universe", default=None, metavar="PATH", dest="save_universe",
+        help=(
+            "universe only: write the derived feasibility study as a "
+            "deterministic, digested artifact. It carries the funnel, every "
+            "eligibility decision with its reason, the dependence and density "
+            "summaries, the growth curve and the verdict, plus the SHA-256 of "
+            "every series it was computed from — but not the bars themselves. "
+            "Pair it with --save-capture for reproduction from raw inputs. "
+            "Refuses to overwrite"
         ),
     )
     parser.add_argument(
@@ -3688,6 +3719,27 @@ def _run_research(args: argparse.Namespace) -> int:
                 )
                 return EXIT_FAILURE
         return _run_design_research(args)
+    if args.area == "universe":
+        for name in ("symbols", "development", "holdout", "variant"):
+            if getattr(args, name, None):
+                print(
+                    f"fmits research universe: {name} is not accepted. The "
+                    "universe is DISCOVERED from the provider, never supplied — a "
+                    "hand-written list is exactly what this study exists to "
+                    "replace",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        for name in ("start", "end", "save_study"):
+            if getattr(args, name, None) is not None:
+                print(
+                    f"fmits research universe: --{name.replace('_', '-')} is not "
+                    "accepted. The measurement window and every threshold are "
+                    "part of what the CC pre-registration sealed",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        return _run_universe_research(args)
     if args.area == "admission":
         for name in ("symbols", "development", "holdout", "variant"):
             value = getattr(args, name, None)
@@ -3870,6 +3922,94 @@ def _run_geometry_research(
             print(f"fmits research geometry: {error}", file=sys.stderr)
             return EXIT_FAILURE
         print(f"\nResearch artifact written to {written}")
+    return EXIT_OK
+
+
+def _run_universe_research(args: argparse.Namespace) -> int:
+    """Run Milestone CC's SEALED universe-feasibility study. **Approves nothing.**
+
+    Two read-only, unauthenticated public endpoints are used — `exchangeInfo` to
+    discover what exists and `klines` to measure how much history it has. Nothing
+    signs a request, reads a credential or touches an order path, and there is no
+    production execution path reachable from this command.
+
+    ``--from-capture`` re-measures from a persisted series capture with fetching
+    disabled, so a re-run is a pure function of the file. ``--save-capture``
+    writes the series this run read, and ``--save-study`` writes the derived
+    feasibility artifact carrying the digest of every series behind it.
+
+    The verdict answers whether the +0.10 ATR question can be ASKED. It says
+    nothing about whether an admission edge exists — Milestone CA's NO_EDGE
+    stands — and it is not permission to trade, to paper trade or to promote.
+    """
+    cache = SeriesCache()
+    allow_fetch = True
+    if args.from_capture is not None:
+        try:
+            cache = SeriesCache.read(args.from_capture)
+        except (UniverseError, OSError, ValueError) as error:
+            print(f"fmits research universe: {error}", file=sys.stderr)
+            return EXIT_FAILURE
+        allow_fetch = False
+    try:
+        study = run_universe_study(cache=cache, allow_fetch=allow_fetch)
+    except (UniverseError, SwingLabError, ResearchDesignError) as error:
+        print(f"fmits research universe: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    print(render_universe_study(study))
+
+    if study.horizon is not None:
+        print()
+        print(rule())
+        print("POST-HOC ROBUSTNESS — THE PROVIDER'S CEILING (NOT PRE-REGISTERED)")
+        print(rule())
+        ceiling = study.horizon
+        print(f"  economic assets ever qualifying   {ceiling.qualifying_assets:>10,}")
+        print(f"  total usable asset-years          {ceiling.total_asset_years:>10,.1f}")
+        print(f"  projected admissions              {ceiling.projected_admissions:>10,}")
+        print(f"  required admissions               {ceiling.required_admissions:>10,}")
+        print(f"  required clusters                 {ceiling.required_clusters:>10,}")
+        print(f"  reaches the requirement           {str(ceiling.reaches_requirement):>10}")
+        print()
+        for line in wrap_text(ceiling.note):
+            print(line)
+
+    if args.save_capture is not None:
+        try:
+            written = cache.write(args.save_capture)
+        except OSError as error:
+            print(f"fmits research universe: {error}", file=sys.stderr)
+            return EXIT_FAILURE
+        print(f"\nCAPTURE WRITTEN to {written} ({len(cache)} series)")
+
+    if getattr(args, "save_universe", None) is not None:
+        payload = encode_universe_study(
+            study,
+            manifest={
+                "written_at": datetime.now(timezone.utc).isoformat(),
+                "preregistration_digest": study.preregistration_digest,
+                "capture_series": len(cache),
+            },
+        )
+        try:
+            written = write_universe_artifact(payload, args.save_universe)
+        except (UniverseError, OSError) as error:
+            print(f"fmits research universe: {error}", file=sys.stderr)
+            return EXIT_FAILURE
+        print(f"\nSTUDY WRITTEN to {written}")
+        print(f"  content digest {payload['manifest']['content_digest']}")
+
+    if args.from_capture is not None:
+        print(
+            f"\nRE-MEASURED OFFLINE from {args.from_capture}\n"
+            f"  series in capture {len(cache)}\n"
+            f"  seal in build     {CC_PREREGISTRATION_DIGEST}\n"
+            f"  seal recomputed   {study.preregistration_digest}\n"
+            f"  seals agree       "
+            f"{study.preregistration_digest == CC_PREREGISTRATION_DIGEST}\n"
+            "  NO CANDLE WAS REFETCHED."
+        )
     return EXIT_OK
 
 

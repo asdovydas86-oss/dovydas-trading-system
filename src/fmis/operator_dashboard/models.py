@@ -62,8 +62,12 @@ __all__ = [
     "FactorRow",
     "EvidenceItemRow",
     "SymbolDecisionRow",
+    "TimeframeRow",
+    "DevelopingEvidenceRow",
+    "BlockerRow",
     "NoTradeRow",
     "UnreadableRow",
+    "SwingSnapshot",
     "SwingView",
     "PositionRow",
     "LimitRow",
@@ -475,6 +479,61 @@ class EvidenceItemRow:
 
 
 @dataclass(frozen=True, slots=True)
+class TimeframeRow:
+    """One timeframe role: when it was read, how old that is, how many bars.
+
+    **No freshness verdict, and no field to hold one.** See
+    `fmis.swing_workspace.TimeframeLine`, whose omission this inherits: no
+    validated staleness bound exists for any role in this repository, and a cell
+    painted green would be an invented policy wearing a fact's clothes.
+    """
+
+    role: str
+    interval: str
+    as_of: datetime
+    closed_count: int
+    age: timedelta | None = None
+    #: This role's structural trend, as the engine reported it.
+    structural_trend: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DevelopingEvidenceRow:
+    """Which way the readable families point. **Never what the policy decided.**
+
+    ``state`` is `DevelopingEvidenceState`'s own value and ``lean`` is
+    `Direction`'s, both read at runtime — this package names neither side, on
+    the ADR-0028 boundary every other module here observes.
+
+    `SymbolDecisionRow` holds this **beside** the policy's own ``state``, and a
+    guard asserts no renderer shows one without the other. *"Evidence leaning"*
+    with the word `WAIT` removed is a signal the policy refused to give.
+    """
+
+    state: str
+    lean: str | None = None
+    agreeing: tuple[str, ...] = ()
+    opposing: tuple[str, ...] = ()
+    non_voting: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class BlockerRow:
+    """The named condition holding this reading, and what the gate demands.
+
+    ``requirement`` restates a condition the policy already states. It is never
+    a price, a date or a prediction — see
+    `fmis.swing_setup.decision_summary.Blocker`, which builds it.
+    """
+
+    kind: str
+    statement: str
+    requirement: str
+    observed: str
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
 class SymbolDecisionRow:
     """One scanned symbol's decision, whatever state it reached.
 
@@ -515,6 +574,13 @@ class SymbolDecisionRow:
     decision_ready: bool = False
     decision_ready_reason: str = ""
     evidence_reason: str | None = None
+    #: The operator decision layer. `None` on a row assembled without it — a
+    #: page missing the summary, never a page that invents one.
+    developing: DevelopingEvidenceRow | None = None
+    blocker: BlockerRow | None = None
+    #: One row per timeframe role that was read, in role order: context, then
+    #: setup, then execution. Empty when the result carried no readings.
+    timeframes: tuple[TimeframeRow, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -535,6 +601,36 @@ class UnreadableRow:
 
 
 @dataclass(frozen=True, slots=True)
+class SwingSnapshot:
+    """**A tally of the scan, and nothing else.** Descriptive, never predictive.
+
+    Every number is a count of symbols that reached a *named deterministic
+    condition* the engine itself produced — the three `SetupState` members and
+    the blocker kinds `fmis.swing_setup.decision_summary` names. No category was
+    invented for this page, and there is none that could not be derived from the
+    decisions the workspace already carries.
+
+    **Deliberately absent: any market verdict.** No bullish count, no bearish
+    count, no breadth figure, no risk-on reading, no *"conditions are
+    improving"*. This repository measures no breadth and has validated no
+    directional edge, so a summary that leaned would be leaning on nothing.
+    ``blockers`` is a distribution over already-stated conditions, ordered by
+    the fixed order the engine's own enum declares — **not** by size, so the
+    first row is never the most important one.
+    """
+
+    scanned: int = 0
+    confirmed: int = 0
+    candidates: int = 0
+    waiting: int = 0
+    unreadable: int = 0
+    #: `(blocker kind, count)`, in the enum's own declaration order.
+    blockers: tuple[tuple[str, int], ...] = ()
+    #: `(developing-evidence state, count)`, likewise in enum order.
+    developing: tuple[tuple[str, int], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class SwingView:
     """The swing workspace, split into the groups a screen shows separately."""
 
@@ -550,6 +646,9 @@ class SwingView:
     #: One row per scanned symbol that produced an assessment, in scan order.
     #: Spans the three decision sections rather than partitioning them.
     decisions: tuple[SymbolDecisionRow, ...] = ()
+    #: The scan's own tallies. Defaulted so a view built without it renders the
+    #: page without the snapshot rather than failing to render at all.
+    snapshot: SwingSnapshot = field(default_factory=lambda: SwingSnapshot())
 
     def row_for(self, symbol: str) -> SetupRow | None:
         """The actionable or waiting row for one symbol, if there is one.

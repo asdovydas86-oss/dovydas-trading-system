@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import MappingProxyType
 from typing import Any
 
@@ -51,6 +51,7 @@ __all__ = [
     "EvidenceDigest",
     "EvidenceLine",
     "FactorLine",
+    "TimeframeLine",
     "SymbolDecision",
     "RankedSetup",
     "NoTradeGroup",
@@ -308,6 +309,52 @@ class EvidenceLine:
 
 
 @dataclass(frozen=True, slots=True)
+class TimeframeLine:
+    """One timeframe role's reading instant and how old it is on this page.
+
+    **The age is not computed here.** ``age`` is a `timedelta` this package was
+    *handed*, produced by `TimeframeReading.age_at` beside the instant it
+    measures — the same arrangement `fmis.market_pulse` uses for the same
+    reason, and the reason a guard forbids this package from subtracting
+    anything at all.
+
+    **There is no freshness verdict, and no field to hold one.** No `fresh`, no
+    `stale`, no threshold, no colour. This repository has no validated staleness
+    bound for any of the three roles, and one invented so a cell could be
+    painted green would be an unvalidated policy presented as a fact. The reader
+    gets the instant, the age and the bar count, and decides.
+
+    ``age`` is `None` exactly when no reference instant was available to measure
+    against — a stated absence, never a zero.
+    """
+
+    role: str
+    interval: str
+    as_of: datetime
+    closed_count: int
+    age: timedelta | None = None
+    #: This role's structural trend, as the engine reported it — a **value**,
+    #: read off `SetupReadings.structural_trend_for`, never recovered by
+    #: matching an interval out of a provenance string. `None` is a stated gap.
+    structural_trend: str | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("role", "interval"):
+            _text(getattr(self, name), name)
+        if self.structural_trend is not None:
+            _text(self.structural_trend, "structural_trend")
+        if not isinstance(self.as_of, datetime):
+            raise TypeError(
+                f"as_of must be a datetime, got {type(self.as_of).__name__}"
+            )
+        _count(self.closed_count, "closed_count")
+        if self.age is not None and not isinstance(self.age, timedelta):
+            raise TypeError(
+                f"age must be a timedelta or None, got {type(self.age).__name__}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class SymbolDecision:
     """**One scanned symbol's own decision record.** One per symbol, every state.
 
@@ -367,6 +414,20 @@ class SymbolDecision:
     decision_ready: bool = False
     decision_ready_reason: str = ""
     evidence_reason: str | None = None
+    #: The operator decision layer, projected by `fmis.swing_setup`. Carried by
+    #: reference rather than flattened into strings here: `DevelopingEvidence`
+    #: names a **side**, and ADR-0028 makes `fmis.swing_setup` the one package
+    #: permitted to spell one. Reproducing its vocabulary in this package would
+    #: put the word in a second place; carrying the object keeps it in one.
+    #:
+    #: `None` on a decision assembled without it — a page missing the operator
+    #: summary, never a page that invents it.
+    developing: Any | None = None
+    blocker: Any | None = None
+    #: One entry per timeframe role that was read, in the sheet's own order:
+    #: context, then setup, then execution. Empty when the result carried no
+    #: readings, which the surfaces state rather than paper over.
+    timeframes: tuple[TimeframeLine, ...] = ()
 
     def __post_init__(self) -> None:
         for name in ("symbol", "state", "classification", "reason", "sufficiency"):
@@ -390,6 +451,14 @@ class SymbolDecision:
         ):
             _strings(getattr(self, name), name)
         _tuple_of(self.factors, FactorLine, "factors")
+        _tuple_of(self.timeframes, TimeframeLine, "timeframes")
+        roles = [line.role for line in self.timeframes]
+        if len(set(roles)) != len(roles):
+            raise SwingWorkspaceError(
+                f"each timeframe role may appear once; got {roles}. Two "
+                "readings for one role is two answers to when that timeframe "
+                "was last seen"
+            )
         for name in ("supporting", "conflicting", "missing", "unavailable"):
             _tuple_of(getattr(self, name), EvidenceLine, name)
         for name in ("independence_established", "decision_ready"):

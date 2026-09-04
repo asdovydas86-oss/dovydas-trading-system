@@ -25,9 +25,12 @@ four engines below it deliberately refused to make.
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
+
+from fmis.swing_setup import BlockerKind, DevelopingEvidenceState
 
 from fmis.market_pulse import (
     FreshnessState,
@@ -67,10 +70,14 @@ from fmis.operator_dashboard.models import (
     SetupRow,
     SourceHealth,
     SourceState,
+    BlockerRow,
+    DevelopingEvidenceRow,
     EvidenceItemRow,
     FactorRow,
+    SwingSnapshot,
     SwingView,
     SymbolDecisionRow,
+    TimeframeRow,
     UnreadableRow,
     WarningRow,
     ValidationCriterionRow,
@@ -91,6 +98,7 @@ __all__ = [
     "macro_view",
     "swing_view",
     "symbol_decision_rows",
+    "swing_snapshot",
     "portfolio_view",
     "paper_view",
     "performance_views",
@@ -519,6 +527,36 @@ def _evidence_items(items: Any) -> tuple[EvidenceItemRow, ...]:
     )
 
 
+def _developing_row(value: Any) -> DevelopingEvidenceRow | None:
+    """The developing-evidence summary, translated field for field.
+
+    ``state`` and ``lean`` are the enums' own values, read at runtime — this
+    package never names a side, on ADR-0028's boundary.
+    """
+    if value is None:
+        return None
+    return DevelopingEvidenceRow(
+        state=value.state.value,
+        lean=None if value.lean is None else value.lean.value,
+        agreeing=tuple(value.agreeing),
+        opposing=tuple(value.opposing),
+        non_voting=tuple(value.non_voting),
+    )
+
+
+def _blocker_row(value: Any) -> BlockerRow | None:
+    """The named blocking condition, translated field for field."""
+    if value is None:
+        return None
+    return BlockerRow(
+        kind=value.kind.value,
+        statement=value.statement,
+        requirement=value.requirement,
+        observed=value.observed,
+        source=value.source,
+    )
+
+
 def symbol_decision_rows(decisions: Any) -> tuple[SymbolDecisionRow, ...]:
     """The workspace's per-symbol decisions, translated field for field.
 
@@ -561,13 +599,90 @@ def symbol_decision_rows(decisions: Any) -> tuple[SymbolDecisionRow, ...]:
             decision_ready=decision.decision_ready,
             decision_ready_reason=decision.decision_ready_reason,
             evidence_reason=decision.evidence_reason,
+            developing=_developing_row(decision.developing),
+            blocker=_blocker_row(decision.blocker),
+            timeframes=tuple(
+                TimeframeRow(
+                    role=line.role,
+                    interval=line.interval,
+                    as_of=line.as_of,
+                    closed_count=line.closed_count,
+                    age=line.age,
+                    structural_trend=line.structural_trend,
+                )
+                for line in decision.timeframes
+            ),
         )
         for decision in decisions
     )
 
 
+#: `SetupState`'s three values. Compared as strings rather than imported as enum
+#: members, exactly as `fmis.swing_workspace.sections` compares the same three
+#: for the same reason: a presentation layer that imports a domain vocabulary
+#: becomes a second place that vocabulary lives.
+_CONFIRMED = "confirmed"
+_CANDIDATE = "candidate"
+_WAITING = "wait"
+
+#: The order the snapshot lists blocker kinds and developing states in: each
+#: enum's own declaration order. **Not** frequency order — a distribution sorted
+#: by size reads as a ranking of importance, and these are neither ranked nor
+#: comparable. Read at import time from the enums themselves, so a member added
+#: below appears here without an edit and cannot be silently omitted.
+_BLOCKER_ORDER: tuple[str, ...] = tuple(kind.value for kind in BlockerKind)
+_DEVELOPING_ORDER: tuple[str, ...] = tuple(
+    state.value for state in DevelopingEvidenceState
+)
+
+
+def swing_snapshot(view_decisions: Any, *, unreadable: int) -> SwingSnapshot:
+    """Tally the scan over the engine's own named conditions. **A count, never a verdict.**
+
+    Counting is the one arithmetic this layer performs, and it performs it with
+    `Counter` rather than `sum` — the aggregation guard forbids the builtins
+    that turn a presentation layer into an engine, and a tally of named states
+    is not an aggregation over financial values.
+
+    Categories are the enums' own members, in the enums' own order. Nothing here
+    invents a category, merges two, or orders by size.
+    """
+    states: Counter[str] = Counter(row.state for row in view_decisions)
+    blockers: Counter[str] = Counter(
+        row.blocker.kind for row in view_decisions if row.blocker is not None
+    )
+    developing: Counter[str] = Counter(
+        row.developing.state for row in view_decisions if row.developing is not None
+    )
+    return SwingSnapshot(
+        scanned=len(view_decisions),
+        confirmed=states[_CONFIRMED],
+        candidates=states[_CANDIDATE],
+        waiting=states[_WAITING],
+        unreadable=unreadable,
+        blockers=tuple(
+            (kind, blockers[kind]) for kind in _BLOCKER_ORDER if blockers[kind]
+        ),
+        developing=tuple(
+            (state, developing[state])
+            for state in _DEVELOPING_ORDER
+            if developing[state]
+        ),
+    )
+
+
 def swing_view(workspace: Any) -> SwingView:
-    """The workspace's four groups, each mapped in the order it arrived."""
+    """The workspace's groups, each mapped in the order it arrived, plus the tally.
+
+    The snapshot is built from the rows this function just built, rather than
+    from the workspace a second time: one traversal, and the tiles at the top of
+    the page cannot disagree with the table under them.
+    """
+    decisions = symbol_decision_rows(workspace.decisions)
+    unreadable = tuple(
+        UnreadableRow(symbol=entry.symbol, detail=entry.detail)
+        for entry in workspace.unanalysed
+    )
     return SwingView(
         reference_time=workspace.reference_time,
         opportunities=tuple(_setup_row(row) for row in workspace.opportunities),
@@ -580,14 +695,12 @@ def swing_view(workspace: Any) -> SwingView:
             )
             for group in workspace.no_trade
         ),
-        unreadable=tuple(
-            UnreadableRow(symbol=entry.symbol, detail=entry.detail)
-            for entry in workspace.unanalysed
-        ),
+        unreadable=unreadable,
         ranking_rule=workspace.ranking_rule,
         scanned=workspace.summary.scanned,
         regime_note=workspace.summary.regime_note,
-        decisions=symbol_decision_rows(workspace.decisions),
+        decisions=decisions,
+        snapshot=swing_snapshot(decisions, unreadable=len(unreadable)),
         breadth=tuple(workspace.summary.breadth),
     )
 

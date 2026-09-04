@@ -63,7 +63,13 @@ from fmis.pipeline.multi_timeframe import (
 from fmis.pipeline.regime import REGIME_LIMITATIONS, regime_features, regime_for_sheet
 from fmis.pipeline.structural_facts import DetectionSettings, Limitation, StructuralFactSheet
 from fmis.providers.binance import BinanceError, Transport
-from fmis.swing_setup.models import ExecutionBreakEvent, SetupAssessment, SetupInputs
+from fmis.swing_setup.models import (
+    ExecutionBreakEvent,
+    SetupAssessment,
+    SetupInputs,
+    SetupReadings,
+    TimeframeReading,
+)
 from fmis.swing_setup.policy import ContextRoleTreatment, evaluate_setup
 
 __all__ = [
@@ -72,6 +78,8 @@ __all__ = [
     "snapshot_from_sheet",
     "context_input_from_sheet",
     "build_setup_inputs",
+    "setup_readings_for",
+    "setup_reading_and_assessment_for_symbol",
     "setup_assessment_for_sheet",
     "setup_inputs_and_assessment_for_sheet",
     "setup_for_symbol",
@@ -292,6 +300,47 @@ def build_setup_inputs(
     )
 
 
+def setup_readings_for(
+    sheet: MultiTimeframeFactSheet, inputs: SetupInputs
+) -> SetupReadings:
+    """The structured facts the policy read, gathered from what it read them from.
+
+    **Pure, and it recomputes nothing.** Every per-role instant is
+    ``view.sheet.as_of`` — the value the fact sheet already carries per view and
+    which `build_setup_inputs` collapses to one ``newest_as_of``; every regime
+    dimension is the state `regime_for_sheet` already produced and
+    `build_setup_inputs` already copied onto ``inputs``. No candle is read, no
+    clock is consulted and no regime is evaluated a second time.
+
+    Roles are emitted in the sheet's own order, which `MultiTimeframeFactSheet`
+    validates as context, setup, execution — so a reader sees the gating role
+    first, which is the order the policy applies them in.
+    """
+    if not isinstance(sheet, MultiTimeframeFactSheet):
+        raise TypeError(
+            f"sheet must be a MultiTimeframeFactSheet, got {type(sheet).__name__}"
+        )
+    if not isinstance(inputs, SetupInputs):
+        raise TypeError(f"inputs must be a SetupInputs, got {type(inputs).__name__}")
+    return SetupReadings(
+        timeframes=tuple(
+            TimeframeReading(
+                role=view.role.value,
+                interval=view.interval,
+                as_of=view.sheet.as_of,
+                closed_count=view.sheet.window.closed_count,
+            )
+            for view in sheet.views
+        ),
+        context_regime_structure=inputs.context_regime_structure,
+        context_regime_volatility=inputs.context_regime_volatility,
+        context_regime_participation=inputs.context_regime_participation,
+        context_structural_trend=inputs.context_structural_trend,
+        setup_structural_trend=inputs.setup_structural_trend,
+        execution_structural_trend=inputs.execution_structural_trend,
+    )
+
+
 def setup_inputs_and_assessment_for_sheet(
     sheet: MultiTimeframeFactSheet,
     *,
@@ -373,6 +422,50 @@ def setup_for_symbol(
     composition root in this repository: a result a reader cannot check against
     the facts beneath it is the opaque output this system exists to replace.
     """
+    sheet, _readings, assessment = setup_reading_and_assessment_for_symbol(
+        symbol,
+        timeframes=timeframes,
+        limit=limit,
+        policy=policy,
+        context_policy=context_policy,
+        detection=detection,
+        transport=transport,
+        clock=clock,
+        base_url=base_url,
+    )
+    return sheet, assessment
+
+
+def setup_reading_and_assessment_for_symbol(
+    symbol: str,
+    *,
+    timeframes: Mapping[TimeframeRole, str] | None = None,
+    limit: int | None = None,
+    policy: RegimePolicy | None = None,
+    context_policy: ContextPolicy | None = None,
+    detection: DetectionSettings | None = None,
+    transport: Transport | None = None,
+    clock: Any = None,
+    base_url: str | None = None,
+) -> tuple[MultiTimeframeFactSheet, SetupReadings, SetupAssessment]:
+    """Fetch every timeframe once and keep **all three** artifacts it produced.
+
+    `setup_for_symbol` returns the sheet and the assessment and drops the
+    `SetupInputs` between them; `run_setup_for_symbols` then drops the sheet too,
+    with ``_, assessment = …``. Between those two discards, the per-role reading
+    instants and the structured context-regime dimensions — both already
+    computed, both needed to say *which* gate stopped a symbol and *how old* the
+    data behind that gate is — stopped being reachable above this module.
+
+    This is the same sequence with nothing discarded. **One fetch, one regime
+    evaluation, one evidence report, one assessment**: it calls
+    `setup_inputs_and_assessment_for_sheet`, which `setup_assessment_for_sheet`
+    is itself a thin wrapper over, so this composition and that one cannot
+    diverge and neither costs the other a second provider read.
+
+    `setup_for_symbol` keeps its exact signature and its exact result by
+    delegating here and dropping the middle element — no existing caller changes.
+    """
     sheet = multi_timeframe_facts_for_symbol(
         symbol,
         timeframes=timeframes or DEFAULT_TIMEFRAMES,
@@ -383,9 +476,10 @@ def setup_for_symbol(
         clock=clock,
         base_url=base_url,
     )
-    return sheet, setup_assessment_for_sheet(
+    inputs, assessment = setup_inputs_and_assessment_for_sheet(
         sheet, policy=policy, context_policy=context_policy
     )
+    return sheet, setup_readings_for(sheet, inputs), assessment
 
 
 @dataclass(frozen=True, slots=True)
@@ -400,6 +494,14 @@ class SetupRunResult:
     requested_symbol: str
     assessment: SetupAssessment | None = None
     failure: str | None = None
+    #: The structured facts the policy read for this symbol, when it read any.
+    #:
+    #: `None` for a failed result, and defaulted so that every existing
+    #: construction of this type — including the hand-built ones in the test
+    #: suite and the research harness — stays valid unchanged. A result without
+    #: readings is a result whose surfaces state the per-role instants as
+    #: unavailable; it is never one that invents them.
+    readings: SetupReadings | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.requested_symbol, str) or not self.requested_symbol.strip():
@@ -413,6 +515,14 @@ class SetupRunResult:
             raise TypeError("assessment must be a SetupAssessment or None")
         if self.failure is not None and not isinstance(self.failure, str):
             raise TypeError("failure must be a str or None")
+        if self.readings is not None and not isinstance(self.readings, SetupReadings):
+            raise TypeError("readings must be a SetupReadings or None")
+        if self.readings is not None and self.assessment is None:
+            raise ValueError(
+                "readings without an assessment is not representable: they are "
+                "the facts an assessment was reasoned from, and a failed symbol "
+                "reasoned from nothing"
+            )
 
 
 def run_setup_for_symbols(
@@ -449,7 +559,7 @@ def run_setup_for_symbols(
         if not isinstance(symbol, str) or not symbol.strip():
             raise ValueError(f"every symbol must be a non-empty str, got {symbol!r}")
         try:
-            _, assessment = setup_for_symbol(
+            _sheet, readings, assessment = setup_reading_and_assessment_for_symbol(
                 symbol,
                 timeframes=timeframes,
                 limit=limit,
@@ -468,5 +578,9 @@ def run_setup_for_symbols(
                 )
             )
             continue
-        results.append(SetupRunResult(requested_symbol=symbol, assessment=assessment))
+        results.append(
+            SetupRunResult(
+                requested_symbol=symbol, assessment=assessment, readings=readings
+            )
+        )
     return tuple(results)

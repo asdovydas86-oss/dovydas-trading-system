@@ -195,9 +195,9 @@ def test_the_detail_page_for_a_waiting_symbol_grew_from_a_refusal_to_a_page() ->
     assert "produced no assessment on this refresh" not in html
     for panel in (
         "AAAUSDT — decision",
-        "AAAUSDT — timeframe and regime context",
+        "AAAUSDT — timeframe context and data times",
         "AAAUSDT — directional families",
-        "AAAUSDT — evidence",
+        "AAAUSDT — evidence and independence audit",
     ):
         assert panel in html, panel
 

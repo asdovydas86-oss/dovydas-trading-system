@@ -61,6 +61,7 @@ from fmis.swing_workspace.models import (
     SwingWorkspace,
     SwingWorkspaceError,
     SymbolDecision,
+    TimeframeLine,
     UnanalysedSymbol,
 )
 from fmis.swing_workspace.ranking import (
@@ -111,6 +112,7 @@ __all__ = [
     "SymbolDecision",
     "EvidenceLine",
     "FactorLine",
+    "TimeframeLine",
     "NoTradeGroup",
     "UnanalysedSymbol",
     "PaperPosition",

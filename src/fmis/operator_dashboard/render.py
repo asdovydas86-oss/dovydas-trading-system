@@ -45,11 +45,15 @@ from fmis.operator_dashboard.models import (
     PulseView,
     DashboardSection,
     DashboardSectionStatus,
+    BlockerRow,
+    DevelopingEvidenceRow,
     EvidenceItemRow,
     SetupRow,
     SourceState,
+    SwingSnapshot,
     SwingView,
     SymbolDecisionRow,
+    TimeframeRow,
     WarningRow,
 )
 from fmis.operator_dashboard.theme import (
@@ -645,6 +649,190 @@ def _setup_rows(rows: Sequence[SetupRow]) -> str:
     )
 
 
+#: Presentation labels for the vocabularies an operator reads most often.
+#:
+#: **Presentation only.** Each map is keyed on the engine's own value and the
+#: raw key is printed beside or beneath every label it replaces, so nothing is
+#: hidden and provenance survives. A missing key falls back to the engine's own
+#: text — a new enum member renders as itself rather than as a blank.
+_FAMILY_LABELS: dict[str, str] = {
+    "context_structural_trend": "HTF structural trend",
+    "setup_structural_trend": "Setup structural trend",
+    "setup_evidence_alignment": "Setup evidence alignment",
+}
+
+_BLOCKER_LABELS: dict[str, str] = {
+    "decision_context_insufficient": "decision context insufficient",
+    "context_regime_not_eligible": "HTF regime not eligible",
+    "directional_families_disagree": "timeframes disagree",
+    "awaiting_confirmation": "awaiting confirmation",
+    "none": "nothing blocking",
+    "undetermined": "not determinable from this result",
+}
+
+_ROLE_LABELS: dict[str, str] = {
+    "context": "HTF context",
+    "setup": "setup",
+    "execution": "execution",
+}
+
+
+def _label(value: str, table: dict[str, str]) -> str:
+    """A readable label, or the engine's own text when none is defined."""
+    return table.get(value, value.replace("_", " "))
+
+
+def _item_label(key: str) -> str:
+    """An evidence item's label. Its keys are namespaced — `factor:<family>`.
+
+    Only the family half has a readable name, so the namespace is split off
+    before the lookup and the **full key is still printed beneath the label** by
+    the caller. A key with no namespace, or a family with no label, renders as
+    itself.
+    """
+    _, _, tail = key.partition(":")
+    return _FAMILY_LABELS.get(tail or key, key)
+
+
+def _developing_text(row: DevelopingEvidenceRow | None) -> str:
+    """Which way the readable families point — **never a decision.**
+
+    The wording is deliberate and the words *signal*, *candidate*, *entry* and
+    *ready* appear in none of it. A `LEANING` row says evidence is **leaning and
+    not confirmed**, because the policy did not name a direction and this page
+    must not appear to.
+    """
+    if row is None:
+        return _absent("no developing-evidence summary was produced")
+    if row.state == "direction_stated":
+        return (
+            f'<span class="chip state-{_e(row.lean or "")}">{_e(row.lean or "")}</span>'
+            ' <span class="sub">stated by the policy</span>'
+        )
+    if row.state == "leaning":
+        return (
+            f'<span class="chip state-{_e(row.lean or "")}">{_e(row.lean or "")}</span>'
+            ' <span class="sub">leaning · not confirmed, and no direction '
+            "was stated</span>"
+        )
+    if row.state == "divided":
+        return '<span class="sub">divided — the readable families disagree</span>'
+    return '<span class="sub">none readable — no family cast a vote</span>'
+
+
+def _role_reading(rows: Sequence[TimeframeRow], role: str) -> TimeframeRow | None:
+    for row in rows:
+        if row.role == role:
+            return row
+    return None
+
+
+def _state_cell(rows: Sequence[TimeframeRow], role: str) -> str:
+    """One role's structural trend, **read as a value.**
+
+    `TimeframeRow.structural_trend` is the trend engine's own enum value for
+    this role, carried through `SetupReadings`. An earlier draft recovered it by
+    finding the directional factor whose `source` string contained the role's
+    interval — renderer inference over provenance prose, when a structured field
+    for it exists one layer down. It reads that field.
+
+    **No engine module is named here.** The producing engine is already on the
+    page, supplied by the engine itself, on every row of the directional
+    families table; spelling it as a literal in this file would make the
+    renderer a second place that name lives, and a repository guard forbids
+    exactly that.
+
+    Falls back to a stated absence — never to a blank, which reads as a neutral
+    market.
+    """
+    reading = _role_reading(rows, role)
+    if reading is None:
+        return _absent("this role was not read on this refresh")
+    if reading.structural_trend is None:
+        return (
+            f"{_e(reading.interval)}"
+            '<br><span class="sub">no structural trend was carried for this '
+            "role</span>"
+        )
+    return (
+        f"{_e(reading.interval)} {_e(reading.structural_trend)}"
+        '<br><span class="sub">structural trend</span>'
+    )
+
+
+def _freshness_cell(rows: Sequence[TimeframeRow]) -> str:
+    """Every role's age, side by side. **An age, never a verdict.**
+
+    The three roles are listed separately because they are read separately: a
+    weekly candle closes once a week and a four-hour candle six times a day, so
+    one number describing all three would be a claim the pipeline cannot make.
+    No threshold is applied and no cell is coloured — see the note the page
+    prints beneath the table.
+    """
+    if not rows:
+        return _absent("no per-role reading instant was carried for this symbol")
+    return " · ".join(
+        f'<span title="{_e(row.as_of.isoformat())}">{_e(row.interval)} '
+        + (
+            _e(_duration(row.age))
+            if row.age is not None
+            else '<span class="sub">no age</span>'
+        )
+        + "</span>"
+        for row in rows
+    )
+
+
+def _swing_snapshot(snapshot: SwingSnapshot) -> str:
+    """The scan in tiles and two distributions. **Descriptive, never predictive.**
+
+    No bullish figure, no bearish figure, no breadth reading, no *"conditions
+    are improving"*. The distributions are ordered by the engines' own enum
+    order, not by size, so the first row is never presented as the important
+    one.
+    """
+    tiles = "".join(
+        [
+            _tile("Scanned", _e(snapshot.scanned)),
+            _tile("Confirmed", _e(snapshot.confirmed)),
+            _tile("Candidates", _e(snapshot.candidates)),
+            _tile("Waiting", _e(snapshot.waiting)),
+            _tile("Could not be read", _e(snapshot.unreadable)),
+        ]
+    )
+    blockers = _table(
+        [("What is holding it", ""), ("Symbols", "num")],
+        [
+            "<tr>"
+            f"<td>{_e(_label(kind, _BLOCKER_LABELS))}"
+            f'<br><span class="sub">{_e(kind)}</span></td>'
+            f'<td class="num">{_e(count)}</td>'
+            "</tr>"
+            for kind, count in snapshot.blockers
+        ],
+    )
+    developing = _table(
+        [("Developing evidence", ""), ("Symbols", "num")],
+        [
+            "<tr>"
+            f'<td>{_e(state.replace("_", " "))}</td>'
+            f'<td class="num">{_e(count)}</td>'
+            "</tr>"
+            for state, count in snapshot.developing
+        ],
+    )
+    return (
+        f'<div class="tiles">{tiles}</div>'
+        + blockers
+        + developing
+        + '<p class="note">Counts of symbols that reached each named condition '
+        "the engine itself produced. They are ordered by the engine's own "
+        "vocabulary, not by size, and none of them is a market verdict: this "
+        "page measures no breadth, calibrates no probability and states no "
+        "view on direction.</p>"
+    )
+
+
 def _decision_rows(rows: Sequence[SymbolDecisionRow]) -> str:
     """Every scanned symbol, one per line. **Scan order, and no other.**
 
@@ -657,21 +845,41 @@ def _decision_rows(rows: Sequence[SymbolDecisionRow]) -> str:
         "<tr>"
         f'<td class="sym">{_setup_link(row.symbol)}</td>'
         f"<td>{_setup_chip(row.state)}</td>"
-        f"<td>{_text(row.direction, 'no direction is stated')}</td>"
-        f"<td>{_e(row.classification)}</td>"
-        f"<td>{_e(row.reason)}</td>"
+        f"<td>{_developing_text(row.developing)}</td>"
+        f"<td>{_state_cell(row.timeframes, 'context')}</td>"
+        f"<td>{_state_cell(row.timeframes, 'setup')}</td>"
+        f"<td>{_blocker_cell(row.blocker, row.reason)}</td>"
+        f"<td>{_freshness_cell(row.timeframes)}</td>"
         "</tr>"
         for row in rows
     ]
     return _table(
         [
             ("Symbol", "sym"),
-            ("Status", ""),
-            ("Direction", ""),
-            ("Classification", ""),
-            ("Current condition — the engine's own words", ""),
+            ("Decision", ""),
+            ("Developing evidence", ""),
+            ("HTF context", ""),
+            ("Setup state", ""),
+            ("What is holding it", ""),
+            ("Data age", ""),
         ],
         body,
+    )
+
+
+def _blocker_cell(row: BlockerRow | None, reason: str) -> str:
+    """The named condition, with the engine's own sentence behind it.
+
+    The label is short enough to scan a column of twenty; the full sentence the
+    policy wrote is the `title`, so the compact form never becomes the only
+    version of the truth.
+    """
+    if row is None:
+        return f'<span title="{_e(reason)}">{_e(reason)}</span>'
+    return (
+        f'<span title="{_e(row.statement)}">{_e(_label(row.kind, _BLOCKER_LABELS))}'
+        "</span>"
+        f'<br><span class="sub">{_e(row.observed)}</span>'
     )
 
 
@@ -681,12 +889,53 @@ _DECISION_ORDER_NOTE = (
     "One row per scanned symbol, in the order the symbols were scanned. That "
     "order carries no meaning: the first row is not closer to a trade than the "
     "last, and nothing here measures how close any symbol is to anything. "
-    "Open a symbol for the evidence behind its conclusion."
+    "Developing evidence is what the readable families point at, never a "
+    "direction the policy stated — a leaning row is still whatever its decision "
+    "says it is. Data age is stated per timeframe role and carries no verdict: "
+    "no validated staleness bound exists for any role, so nothing here says "
+    "fresh or stale. Open a symbol for the evidence behind its conclusion."
 )
 
 
+class _IndependenceNotes:
+    """Distinct independence explanations for one symbol, numbered and printed once.
+
+    The projection attaches a full explanation to **every** non-independent
+    item, and several items legitimately share the same one — two structural
+    trend readings and the regime gate all cite the same shared-input sentence.
+    Rendered inline on each row, the operator read one long paragraph three
+    times and the evidence table stopped being scannable.
+
+    **Nothing is hidden and nothing is merged.** Each row still carries its own
+    marker, so *"which explanation applies to this item"* is still answerable
+    per row; each distinct explanation appears in full, once, beneath the table;
+    and the full text is on the row's `title` for a reader who hovers. The
+    semantics are untouched — only the number of times one sentence is printed.
+    """
+
+    def __init__(self) -> None:
+        self._notes: dict[str, int] = {}
+
+    def mark(self, note: str | None) -> str:
+        if not note:
+            return ""
+        number = self._notes.setdefault(note, len(self._notes) + 1)
+        return f"<sup>{number}</sup>"
+
+    def render(self) -> str:
+        if not self._notes:
+            return ""
+        items = "".join(
+            f"<li><sup>{number}</sup> {_e(note)}</li>"
+            for note, number in self._notes.items()
+        )
+        return f'<ul class="footnotes">{items}</ul>'
+
+
 def _evidence_item_rows(
-    items: Sequence[EvidenceItemRow], correlated: frozenset[str]
+    items: Sequence[EvidenceItemRow],
+    correlated: frozenset[str],
+    notes: _IndependenceNotes,
 ) -> str:
     """One evidence group as a table, with non-independence marked on the row.
 
@@ -700,12 +949,15 @@ def _evidence_item_rows(
     for item in items:
         dependent = bool(item.correlated_with) or item.key in correlated
         if dependent:
-            why = (
-                f'<span class="why">{_e(item.independence_note)}</span>'
+            marker = notes.mark(item.independence_note)
+            title = (
+                f' title="{_e(item.independence_note)}"'
                 if item.independence_note
                 else ""
             )
-            note = f'<span class="absent">not independent{why}</span>'
+            note = (
+                f'<span class="absent"{title}>not independent{marker}</span>'
+            )
         else:
             note = '<span class="sub">no correlation stated</span>'
         shared = (
@@ -716,7 +968,13 @@ def _evidence_item_rows(
         )
         body.append(
             "<tr>"
-            f"<td>{_e(item.key)}</td>"
+            f"<td>{_e(_item_label(item.key))}"
+            + (
+                f'<br><span class="sub">{_e(item.key)}</span>'
+                if _item_label(item.key) != item.key
+                else ""
+            )
+            + "</td>"
             f"<td>{_e(item.statement)}</td>"
             f"<td>{_e(item.observed)}</td>"
             f"<td>{_text(', '.join(item.families), 'no family in the taxonomy')}</td>"
@@ -738,43 +996,203 @@ def _evidence_item_rows(
     )
 
 
+def _blocker_summary(row: BlockerRow | None, reason: str) -> str:
+    """What is holding this reading, and what the existing gate already demands.
+
+    Two lines and no third: the condition, and the requirement the policy
+    **already** states. There is no estimate of when it might clear, no price
+    that would clear it and no field one could be written into — the gates this
+    names are regime and agreement conditions, and no engine below supplies a
+    level for any of them.
+    """
+    if row is None:
+        return _text(reason, "no blocking condition was projected")
+    return (
+        f"{_e(_label(row.kind, _BLOCKER_LABELS))}"
+        f'<br><span class="sub">{_e(row.statement)}</span>'
+        f'<br><span class="sub">observed: {_e(row.observed)}</span>'
+        f'<br><span class="sub">to progress: {_e(row.requirement)}</span>'
+        f'<br><span class="sub">{_e(row.source)}</span>'
+    )
+
+
+def _evidence_quality(row: SymbolDecisionRow) -> str:
+    """Whether agreement, where there is any, is independent agreement.
+
+    The one evidence fact that belongs in a ten-second summary: three readings
+    of one underlying input look exactly like three-fold corroboration, and this
+    is where the page says they are not.
+    """
+    if row.evidence_reason is not None:
+        return _absent(row.evidence_reason)
+    counts = (
+        f"{_e(len(row.supporting))} supporting · "
+        f"{_e(len(row.conflicting))} conflicting · "
+        f"{_e(len(row.missing))} awaited"
+    )
+    if row.independence_established:
+        return f'{counts}<br><span class="sub">independence established</span>'
+    return (
+        f"{counts}<br>"
+        '<span class="absent">independent corroboration not established'
+        '<span class="why">Agreement among the readable families draws on '
+        "shared upstream inputs. Read it as one subject area seen more than "
+        "once, not as separate sources agreeing.</span></span>"
+    )
+
+
+def _no_invalidation() -> str:
+    """Stated rather than blank. **No level is derived to fill the gap.**
+
+    A `WAIT` reading has no structural invalidation because the engine produced
+    none — there is no directional thesis for one to invalidate. Printing an
+    empty section would read as *"nothing invalidates this"*; deriving a price
+    here would be this renderer inventing a level, which it must never do.
+    """
+    return _empty(
+        "The engine produced no structural invalidation for this reading. "
+        "None is derived here: a level this page computed would not be one the "
+        "engine could be held to."
+    )
+
+
+def _timeframe_table(rows: Sequence[TimeframeRow]) -> str:
+    """Every role's reading instant, age and bar count. **No verdict column.**
+
+    The roles are listed separately and never averaged: they are fetched
+    separately, close at different rates, and the context role is the one that
+    gates whether any direction may exist at all — so an age describing "the
+    data" would hide the age that matters most.
+    """
+    if not rows:
+        return _empty(
+            "No per-role reading instant was carried for this symbol. The "
+            "assessment states one instant of its own; the three timeframes "
+            "behind it were read separately and their times are not on this "
+            "result."
+        )
+    body = [
+        "<tr>"
+        f"<td>{_e(_label(row.role, _ROLE_LABELS))}"
+        f'<br><span class="sub">{_e(row.role)}</span></td>'
+        f"<td>{_e(row.interval)}</td>"
+        f"<td>{_stamp(row.as_of)}</td>"
+        f'<td class="num">'
+        + (
+            _e(_duration(row.age))
+            if row.age is not None
+            else _absent("no reference instant was available")
+        )
+        + "</td>"
+        f'<td class="num">{_e(row.closed_count)}</td>'
+        "</tr>"
+        for row in rows
+    ]
+    return _table(
+        [
+            ("Role", ""),
+            ("Interval", ""),
+            ("Last closed candle", ""),
+            ("Age", "num"),
+            ("Closed bars", "num"),
+        ],
+        body,
+    ) + (
+        '<p class="note">The three roles are read separately and close at '
+        "different rates, so they are stated separately and never averaged. "
+        "<strong>No age here is called fresh or stale.</strong> This repository "
+        "has validated no staleness bound for any role, and a threshold invented "
+        "so a cell could be coloured would be an unvalidated policy presented as "
+        "a fact. The age and the bar count are stated; the judgement is "
+        "yours.</p>"
+    )
+
+
 def _decision_detail(row: SymbolDecisionRow) -> str:
     """One symbol's decision, in full. Every value is an engine's own.
 
-    Four panels, in the order the question is actually asked: *what did it
-    conclude*, *what environment did it read*, *how did the families line up*,
-    and *what evidence stands behind it*. Nothing here is computed, ranked or
-    scored; the page is a renderer.
+    **Four panels, in the order the question is actually asked**, and the order
+    is the design decision:
+
+        1. the decision — what was concluded, which way the readable evidence
+           points, what is holding it, the two timeframe states, whether the
+           agreement is independent, and how old the data is. Everything an
+           operator needs before deciding whether to read further;
+        2. timeframe context and data times — the environment, and when each
+           role was last read;
+        3. directional families — how the tally lined up;
+        4. evidence and independence audit — every item, behind a disclosure.
+
+    Slice 1 built panels 3 and 4 and put them first, and the operator's own
+    report was that the page answered an audit question before it answered a
+    trading one. **Nothing from Slice 1 was removed to make room**: the full
+    decision fields, thesis, confirmation and invalidation are one disclosure
+    inside panel 1, and every evidence item is still rendered in full in panel
+    4. What changed is the order and how many times one sentence is printed.
+
+    Nothing here is computed, ranked or scored; the page is a renderer.
     """
     parts: list[str] = [
         _panel(
             f"{row.symbol} — decision",
             _kv(
                 [
-                    ("status", _setup_chip(row.state)),
-                    ("direction", _text(row.direction, "no direction is stated")),
-                    ("classification", _e(row.classification)),
-                    ("decision-context sufficiency", _e(row.sufficiency)),
-                    ("current condition", _e(row.reason)),
+                    ("decision", _setup_chip(row.state)),
+                    ("developing evidence", _developing_text(row.developing)),
                     (
-                        "assessment as of",
-                        _e(row.as_of.isoformat())
-                        + '<br><span class="sub">the instant the assessment '
-                        "carries. This page states it and makes no claim about "
-                        "whether it is recent enough to act on.</span>",
+                        "what is holding it",
+                        _blocker_summary(row.blocker, row.reason),
                     ),
+                    (
+                        "HTF context",
+                        _state_cell(row.timeframes, "context"),
+                    ),
+                    ("setup state", _state_cell(row.timeframes, "setup")),
+                    ("evidence quality", _evidence_quality(row)),
+                    ("data age", _freshness_cell(row.timeframes)),
                 ]
             )
-            + _details("full thesis", _list(row.thesis), open_=True)
-            + _details("confirmation", _list(row.confirmation))
-            + _details("invalidation", _list(row.invalidation)),
+            + '<p class="note">The decision is the policy\'s. Developing '
+            "evidence is what the readable families point at and is never a "
+            "direction the policy stated — a leaning symbol is still whatever "
+            "its decision says it is. Nothing here is a probability, a "
+            "confidence or an expected return, and no number on this page "
+            "ranks this symbol against another.</p>"
+            + _details(
+                "the decision in full",
+                _kv(
+                    [
+                        ("classification", _e(row.classification)),
+                        ("decision-context sufficiency", _e(row.sufficiency)),
+                        (
+                            "policy direction",
+                            _text(row.direction, "no direction is stated"),
+                        ),
+                        ("current condition", _e(row.reason)),
+                        (
+                            "assessment as of",
+                            _e(row.as_of.isoformat())
+                            + '<br><span class="sub">the instant the assessment '
+                            "carries. Per-role reading times are below.</span>",
+                        ),
+                    ]
+                )
+                + _details("full thesis", _list(row.thesis), open_=True)
+                + _details("confirmation", _list(row.confirmation))
+                + _details(
+                    "invalidation", _list(row.invalidation) or _no_invalidation()
+                ),
+            ),
         ),
         _panel(
-            f"{row.symbol} — timeframe and regime context",
-            _list(row.regime_context)
-            or _empty(
-                "The engine stated no regime context line for this symbol."
-            ),
+            f"{row.symbol} — timeframe context and data times",
+            (
+                _list(row.regime_context)
+                or _empty(
+                    "The engine stated no regime context line for this symbol."
+                )
+            )
+            + _timeframe_table(row.timeframes),
         ),
     ]
 
@@ -782,7 +1200,8 @@ def _decision_detail(row: SymbolDecisionRow) -> str:
         [("Family", ""), ("Lean", ""), ("Observed", ""), ("Source / timeframe", "")],
         [
             "<tr>"
-            f"<td>{_e(factor.family)}</td>"
+            f"<td>{_e(_label(factor.family, _FAMILY_LABELS))}"
+            f'<br><span class="sub">{_e(factor.family)}</span></td>'
             f"<td>{_setup_chip(factor.lean)}</td>"
             f"<td>{_e(factor.observed)}</td>"
             f"<td>{_e(factor.source)}</td>"
@@ -837,10 +1256,11 @@ def _decision_detail(row: SymbolDecisionRow) -> str:
         for item in items
         for key in item.correlated_with
     )
+    notes = _IndependenceNotes()
     evidence = "".join(
         _details(
             f"{name} ({len(items)})",
-            _evidence_item_rows(items, correlated) or _empty(blank),
+            _evidence_item_rows(items, correlated, notes) or _empty(blank),
             open_=name in ("supporting", "conflicting"),
         )
         for name, items, blank in groups
@@ -850,18 +1270,33 @@ def _decision_detail(row: SymbolDecisionRow) -> str:
         if row.independence_established
         else '<span class="absent">not established</span>'
     )
+    # The audit sits *below* the summary and *behind* a disclosure, deliberately.
+    # Everything Slice 1 built is here in full — this changes where it sits on
+    # the page, never what it says.
     parts.append(
         _panel(
-            f"{row.symbol} — evidence",
+            f"{row.symbol} — evidence and independence audit",
             _kv(
                 [
                     (
                         "agreeing families",
-                        _text(", ".join(row.agreeing_families), "none"),
+                        _text(
+                            ", ".join(
+                                _label(family, _FAMILY_LABELS)
+                                for family in row.agreeing_families
+                            ),
+                            "none",
+                        ),
                     ),
                     (
                         "conflicting families",
-                        _text(", ".join(row.conflicting_families), "none"),
+                        _text(
+                            ", ".join(
+                                _label(family, _FAMILY_LABELS)
+                                for family in row.conflicting_families
+                            ),
+                            "none",
+                        ),
                     ),
                     ("independence", independence),
                     (
@@ -871,15 +1306,21 @@ def _decision_detail(row: SymbolDecisionRow) -> str:
                     ),
                 ]
             )
-            + evidence
-            + _details("independence caveats", _list(row.independence_caveats), open_=True)
+            + _details(
+                "every evidence item, with its source and independence",
+                evidence + notes.render(),
+            )
+            + _details(
+                "independence caveats", _list(row.independence_caveats)
+            )
             + _details("warnings", _list(row.evidence_warnings))
             + _details("open questions", _list(row.open_questions))
             + '<p class="note">Counts of evidence items are counts, not a score. '
             "Items that share an upstream input are marked <em>not "
-            "independent</em> and must not be read as separate confirmation. "
-            "No probability, confidence or expected return is computed anywhere "
-            "on this page.</p>",
+            "independent</em>, with the explanation printed once beneath the "
+            "table and referenced from each row, and must not be read as "
+            "separate confirmation. No probability, confidence or expected "
+            "return is computed anywhere on this page.</p>",
         )
     )
     return "".join(parts)
@@ -887,6 +1328,8 @@ def _decision_detail(row: SymbolDecisionRow) -> str:
 
 def _swing_body(view: SwingView) -> str:
     parts: list[str] = []
+    parts.append("<h3>This scan</h3>")
+    parts.append(_swing_snapshot(view.snapshot))
     parts.append("<h3>Every scanned symbol</h3>")
     parts.append(
         _decision_rows(view.decisions)

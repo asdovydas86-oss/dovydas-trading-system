@@ -326,9 +326,9 @@ def test_a_waiting_symbol_now_has_a_detail_page() -> None:
     html = render_page(snapshot, "/swing", symbol="AAAUSDT")
     for heading in (
         "AAAUSDT — decision",
-        "AAAUSDT — timeframe and regime context",
+        "AAAUSDT — timeframe context and data times",
         "AAAUSDT — directional families",
-        "AAAUSDT — evidence",
+        "AAAUSDT — evidence and independence audit",
     ):
         assert heading in html, heading
 

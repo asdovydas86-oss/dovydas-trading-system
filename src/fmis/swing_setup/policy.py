@@ -52,6 +52,7 @@ from fmis.swing_setup.models import (
 __all__ = [
     "SETUP_POLICY_ID",
     "MINIMUM_AGREEING_FAMILIES",
+    "CONTEXT_ROLE_STRUCTURE_REQUIREMENT",
     "CONFIRMATION_LOOKBACK_BARS",
     "RESEARCH_POLICY_ID_PREFIX",
     "ContextRoleTreatment",
@@ -73,6 +74,16 @@ SETUP_POLICY_ID = "swing-setup-v1"
 #: while offering it as a per-call knob would let a caller threshold-shop past
 #: the single-indicator rule this constant exists to enforce.
 MINIMUM_AGREEING_FAMILIES = 2
+
+#: The context-role regime structure a directional swing thesis requires.
+#:
+#: Named rather than left inline at its one comparison below, because it is now
+#: read in **two** places: the gate that enforces it, and
+#: `fmis.swing_setup.decision_summary`, which tells an operator what the gate
+#: demands. Two spellings of one requirement is how a page starts explaining a
+#: rule the policy no longer applies. The value is unchanged and the comparison
+#: below is the identical `is` test it always was.
+CONTEXT_ROLE_STRUCTURE_REQUIREMENT = StructureState.TRENDING
 
 #: How many of the most recent execution-timeframe bars a confirming break may
 #: fall within and still count as confirmation. Stated policy, not a
@@ -537,7 +548,7 @@ def evaluate_setup(
 
     if (
         context_role is ContextRoleTreatment.GATE_AND_VOTE
-        and inputs.context_regime_structure is not StructureState.TRENDING
+        and inputs.context_regime_structure is not CONTEXT_ROLE_STRUCTURE_REQUIREMENT
     ):
         thesis = (
             f"Context-role ({inputs.context_interval}) regime structure is "

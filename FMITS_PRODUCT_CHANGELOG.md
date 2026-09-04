@@ -258,6 +258,90 @@ the automation ladder remains unstarted.
 > the gap. They are fully recorded in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md),
 > the [backlog](FMITS_PRODUCT_BACKLOG.md) §8 and reports 0034–0039.
 
+### 2026-09-04 · `DT` — the Swing workspace answers before you open a symbol
+
+**Status:** Released — pending commit. **Adds a user-visible capability, and
+removes a blocker to practical use.**
+
+**What the owner can do that was impossible before: read the whole scan in ten
+seconds, and find out how old the data behind it actually is.**
+
+Slice 1 put every symbol's evidence on the page. Using it revealed the next
+problem, and it was not a shortage of information: the page answered an **audit**
+question before a **trading** one. Learning what was happening with BTCUSDT meant
+reading a long technical record and assembling four facts by hand.
+
+**`/swing` now opens with the scan itself** — how many were scanned, how many are
+actionable, and how many reached each named condition — followed by one row per
+symbol with six columns: decision, developing evidence, HTF context, setup state,
+what is holding it, and the data age per timeframe.
+
+**`/swing/SYMBOL` now leads with the decision.** One panel answers what was
+decided, which way the readable evidence points, what is holding it, what the two
+timeframes say, whether the agreement is independent, and how old each
+timeframe's data is. The full evidence audit is still there in full — it moved to
+the bottom, behind a disclosure.
+
+**Two things the product can now say that it could not before.**
+
+*Which way the evidence is developing, without claiming a signal.* A `WAIT`
+result means the policy formed no directional candidate, and that stays final.
+But the three families it tallies can still all lean one way — because the gate
+*before* the tally rejected the symbol. That was computed on every refresh and
+discarded. It now reads **"long leaning · not confirmed, and no direction was
+stated"**, always beside the decision.
+
+*How old each timeframe actually is.* The three roles are fetched separately and
+close at different rates, and the page had been showing one instant for all
+three — the newest of them. On the day this shipped, BTCUSDT's page said the
+assessment carried one instant; behind it, the four-hour reading was hours old,
+the daily a day and a half, and **the weekly reading — the one that decides
+whether any direction may exist at all — was eleven and a half days old.**
+
+**Limitations.**
+
+- **Nothing is called fresh or stale, deliberately.** This repository has
+  validated no staleness bound for any timeframe role, and the roles are not
+  comparable — a weekly candle closes once a week and a four-hour candle six
+  times a day. The age and the closed-bar count are stated; the judgement is the
+  owner's. A dormant freshness record exists in `fmis.snapshotting` and was
+  deliberately **not** switched on: it has no producer and measures bar ages at
+  snapshot-freeze, not wall-clock age.
+- **Developing evidence is never a signal, a candidate or a recommendation.** It
+  is a tally of the leans the policy already assigned, shown beside the policy's
+  own decision. Five separate checks — two of them on the types themselves —
+  stop it being rendered as anything else.
+- **No ranking, still.** Rows are in scan order; that order means nothing. No
+  opportunity, closeness or confidence score exists anywhere, and the scan
+  snapshot lists its categories in the engines' own enum order rather than by
+  size, so the first row is never presented as the important one.
+- **No validated edge is claimed, and none exists.** CA (NO_EDGE), CB
+  (UNDERPOWERED), CC (INFEASIBLE) and CD are unchanged by this milestone.
+- **No invalidation level is invented.** Where the engine produced none, the page
+  says so rather than deriving one.
+- **The terminal `fmits workspace`, `fmits scan` and `fmits setup` do not show
+  the summary or the per-role times.** The model carries both; only the dashboard
+  renders them.
+
+**Safety / risk notes.** No trading policy changed — proven, not asserted: 81
+fixtures through the full composition root produce **byte-identical** assessments
+and evidence reports, `sha256 096a575a…`, the same digest as Slice 1. A test
+additionally asserts the named blocker agrees with the sentence the policy itself
+wrote, on every WAIT exit in the matrix, so a future policy change this
+projection missed would fail a test rather than mislead a reader. The surface
+remains read-only: GET and HEAD only, no button, no form, no write path. **No new
+indicator, threshold, setup rule, entry, stop, target, size or risk figure.**
+
+**Related.** [report 0043](reports/0043_2026-09-04_SWING_OPERATOR_DECISION_LAYER_SLICE_2.md) ·
+backlog `DT` §8 · ADR-0025 (market regime engine) · ADR-0028 (directional
+interpretation boundary).
+
+**Breaking changes.** None. `SetupRunResult.readings`, `SymbolDecision.developing`
+/ `.blocker` / `.timeframes` and `SwingView.snapshot` are new fields with
+defaults; `setup_for_symbol` keeps its exact signature. Two dashboard panels were
+renamed as their contents merged: *timeframe and regime context* → *timeframe
+context and data times*, and *evidence* → *evidence and independence audit*.
+
 ### 2026-09-04 · `DS` — every scanned symbol has a page, and it says why
 
 **Status:** Released — pending commit. **Adds a user-visible capability.**

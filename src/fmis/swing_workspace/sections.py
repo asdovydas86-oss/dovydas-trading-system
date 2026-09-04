@@ -44,6 +44,7 @@ from fmis.setup_evidence import (
     project_setup_evidence,
 )
 from fmis.setup_observation import observe_setup_series
+from fmis.swing_setup import summarise_decision
 from fmis.swing_workspace.models import (
     BookExposure,
     EvidenceDigest,
@@ -55,6 +56,7 @@ from fmis.swing_workspace.models import (
     RankedSetup,
     SwingWorkspaceError,
     SymbolDecision,
+    TimeframeLine,
     UnanalysedSymbol,
 )
 from fmis.swing_workspace.ranking import rank_setups
@@ -454,7 +456,49 @@ def _evidence_lines(items: Sequence[Any]) -> tuple[EvidenceLine, ...]:
     )
 
 
-def symbol_decisions(results: Sequence[Any]) -> tuple[SymbolDecision, ...]:
+def _trend_value(trend: Any) -> str | None:
+    """A structural trend's own enum value, or `None`. Read at runtime.
+
+    This package names no trend member and no producing module: the vocabulary
+    belongs to the engine that computed it, and spelling either here would give
+    it a second home — which a repository guard forbids by scanning for the
+    module's name as text.
+    """
+    return None if trend is None else trend.value
+
+
+def _timeframe_lines(readings: Any, reference: Any) -> tuple[TimeframeLine, ...]:
+    """The per-role reading instants, with the age each one has on this page.
+
+    **The age is asked for, never computed.** `TimeframeReading.age_at` owns the
+    subtraction, beside the instant it measures; this package holds no
+    arithmetic operator at all and a guard asserts it. ``reference`` is the
+    page's own instant, so every age on one page is measured against one clock.
+
+    A `None` reference yields instants with no age rather than no instants: the
+    time a market was last read is a fact whether or not anything has been
+    measured against it.
+    """
+    if readings is None:
+        return ()
+    return tuple(
+        TimeframeLine(
+            role=reading.role,
+            interval=reading.interval,
+            as_of=reading.as_of,
+            closed_count=reading.closed_count,
+            age=None if reference is None else reading.age_at(reference),
+            structural_trend=_trend_value(
+                readings.structural_trend_for(reading.role)
+            ),
+        )
+        for reading in readings.timeframes
+    )
+
+
+def symbol_decisions(
+    results: Sequence[Any], *, reference_time: Any = None
+) -> tuple[SymbolDecision, ...]:
     """**One decision record per scanned symbol, in scan order.**
 
     The seam this milestone exists to close. `ranked_setups` attaches an evidence
@@ -479,6 +523,11 @@ def symbol_decisions(results: Sequence[Any]) -> tuple[SymbolDecision, ...]:
     not be read has no decision, and the `unanalysed` section is where it is
     stated. A projection that refuses is isolated to its own row, exactly as it
     is in `evidence_digest_for` and for the same reason.
+
+    ``reference_time`` is the page's own instant, used only to ask each
+    `TimeframeReading` how old it is. It is never compared to a threshold: this
+    milestone carries per-role instants and ages and deliberately publishes no
+    freshness verdict, because no validated staleness bound exists for any role.
 
     **No `setup_identity` is derived here, deliberately.** `ranked_setups` passes
     one because its rows *print* it; the projection only stores the reference on
@@ -512,8 +561,13 @@ def symbol_decisions(results: Sequence[Any]) -> tuple[SymbolDecision, ...]:
         if assessment is None or assessment.symbol in seen:
             continue
         seen.add(assessment.symbol)
+        readings = getattr(result, "readings", None)
+        summary = summarise_decision(assessment, readings)
         common: dict[str, Any] = dict(
             symbol=assessment.symbol,
+            developing=summary.developing,
+            blocker=summary.blocker,
+            timeframes=_timeframe_lines(readings, reference_time),
             state=assessment.state.value,
             classification=_classification_of(assessment),
             reason=_reason_of(assessment),

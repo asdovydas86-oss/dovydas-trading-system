@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from types import MappingProxyType
 from typing import Any
@@ -47,6 +47,8 @@ __all__ = [
     "NOT_CALIBRATED",
     "SetupAssessment",
     "SetupInputs",
+    "TimeframeReading",
+    "SetupReadings",
     "ExecutionBreakEvent",
     "CONFIRMATION_SIDE",
     "STOP_SIDE",
@@ -290,6 +292,179 @@ _TARGET_SIDE = TARGET_SIDE
 CONFIRMATION_SIDE: Mapping[Direction, LevelSide] = MappingProxyType(
     {Direction.LONG: LevelSide.UPPER, Direction.SHORT: LevelSide.LOWER}
 )
+
+
+@dataclass(frozen=True, slots=True)
+class TimeframeReading:
+    """**When one timeframe role was last read, and how much of it there was.**
+
+    The three roles are fetched separately and are **not synchronised**: a weekly
+    candle closes once a week and a four-hour candle six times a day, so one
+    `as_of` describing all three would be a claim the pipeline cannot support.
+    `MultiTimeframeFactSheet` says exactly this about its own `newest_as_of`, and
+    then the swing composition kept only that one value — so the age of the
+    weekly reading, which is the role that *gates whether any direction may
+    exist at all*, stopped being knowable above the fact sheet.
+
+    This is that value, per role, carried rather than collapsed.
+
+    **It carries no verdict.** There is no `fresh`, no `stale`, no threshold and
+    no field one could be stored in. This repository has no validated staleness
+    bound for any of the three roles, and painting an age green because a number
+    had to be chosen would be exactly the unvalidated policy the research record
+    forbids. A reader is given the instant and the age and decides.
+
+    ``closed_count`` is the number of **closed** candles the view was built from
+    — the engine's own `window.closed_count`, carried because an age is only half
+    the question: a recent reading over too few bars is a different problem from
+    an old reading over enough.
+    """
+
+    role: str
+    interval: str
+    as_of: datetime
+    closed_count: int
+
+    def __post_init__(self) -> None:
+        for name in ("role", "interval"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value.strip():
+                raise SwingSetupError(f"{name} must be a non-empty str")
+        if not isinstance(self.as_of, datetime):
+            raise TypeError(
+                f"as_of must be a datetime, got {type(self.as_of).__name__}"
+            )
+        if self.as_of.tzinfo is None:
+            raise SwingSetupError(
+                "as_of must be timezone-aware; a naive instant is the ambiguity "
+                "ADR-0001 exists to prevent"
+            )
+        if isinstance(self.closed_count, bool) or not isinstance(
+            self.closed_count, int
+        ):
+            raise TypeError("closed_count must be an int")
+        if self.closed_count < 0:
+            raise SwingSetupError(
+                f"closed_count cannot be negative, got {self.closed_count}"
+            )
+
+    def age_at(self, reference: datetime) -> timedelta:
+        """How old this reading is at ``reference``. **A span, never a verdict.**
+
+        Owned here, beside the instant it measures, for the reason
+        `fmis.market_pulse`'s own `age_at` is owned beside its reading: a
+        surface that subtracts two timestamps itself is a surface that has
+        started computing, and the layers above this one are guarded against
+        exactly that.
+
+        A negative result is returned unchanged rather than clamped. A reading
+        stamped after the reference instant is a real condition — a clock skew,
+        or a reference time deliberately set in the past for replay — and
+        reporting it as zero would hide it.
+        """
+        if not isinstance(reference, datetime):
+            raise TypeError(
+                f"reference must be a datetime, got {type(reference).__name__}"
+            )
+        if reference.tzinfo is None:
+            raise SwingSetupError("reference must be timezone-aware")
+        return reference - self.as_of
+
+
+@dataclass(frozen=True, slots=True)
+class SetupReadings:
+    """**The structured facts the policy read, carried beside what it decided.**
+
+    `SetupAssessment` states the conclusion and the sentences that explain it.
+    Two facts the policy reasoned *from* survive on it only as prose: the
+    context-role regime dimensions appear inside one `regime_context` line, and
+    the per-role reading instants do not appear at all. A surface that wants to
+    say *"the weekly regime is the gate that stopped this, and the weekly data
+    is nine hours old"* would have to parse an English sentence to do it.
+
+    This type is those facts, structured, carried by reference from the
+    `SetupInputs` and `MultiTimeframeFactSheet` the composition already built.
+
+    **It is not a policy input and the policy never reads it.** `evaluate_setup`
+    takes `SetupInputs` and nothing else; this is assembled *after* the
+    assessment, from values that were already computed, and adding it changed no
+    conclusion — the eighty-one-fixture non-regression matrix proves that
+    directly. Nothing here is recomputed, and no new market quantity exists in
+    this type.
+    """
+
+    timeframes: tuple[TimeframeReading, ...]
+    context_regime_structure: StructureState
+    context_regime_volatility: VolatilityState
+    context_regime_participation: ParticipationState
+    #: Each role's structural trend, as `fmis.structural_trend` reported it.
+    #:
+    #: `SetupInputs` holds all three as enum members and the assessment carries
+    #: none of them structurally — the two that vote appear inside a
+    #: `DirectionalFactor.observed` string, and the execution role's appears
+    #: nowhere at all. Carried here so a surface answering *"what is the weekly
+    #: doing?"* reads a value rather than matching an interval out of a
+    #: provenance string.
+    context_structural_trend: StructuralTrendType | None = None
+    setup_structural_trend: StructuralTrendType | None = None
+    execution_structural_trend: StructuralTrendType | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.timeframes, tuple):
+            raise TypeError("timeframes must be a tuple of TimeframeReading")
+        for position, item in enumerate(self.timeframes):
+            if not isinstance(item, TimeframeReading):
+                raise TypeError(
+                    f"timeframes[{position}] must be a TimeframeReading, got "
+                    f"{type(item).__name__}"
+                )
+        roles = [reading.role for reading in self.timeframes]
+        if len(set(roles)) != len(roles):
+            raise SwingSetupError(
+                f"each role may be read once; got {roles}. Two readings for one "
+                "role is two answers to when that timeframe was last seen"
+            )
+        for name, kind in (
+            ("context_regime_structure", StructureState),
+            ("context_regime_volatility", VolatilityState),
+            ("context_regime_participation", ParticipationState),
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, kind):
+                raise TypeError(
+                    f"{name} must be a {kind.__name__}, got {type(value).__name__}"
+                )
+        for name in (
+            "context_structural_trend",
+            "setup_structural_trend",
+            "execution_structural_trend",
+        ):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, StructuralTrendType):
+                raise TypeError(
+                    f"{name} must be a StructuralTrendType or None, got "
+                    f"{type(value).__name__}"
+                )
+
+    def reading_for(self, role: str) -> TimeframeReading | None:
+        """One role's reading, or `None` if that role was not read."""
+        for reading in self.timeframes:
+            if reading.role == role:
+                return reading
+        return None
+
+    def structural_trend_for(self, role: str) -> StructuralTrendType | None:
+        """One role's structural trend, by role name. **A lookup, never a match.**
+
+        Exists so a surface never has to recover a role from a provenance string
+        such as ``"fmis.structural_trend (1w)"``. `None` means this role's trend
+        was not carried, which is a stated gap rather than a neutral trend.
+        """
+        return {
+            "context": self.context_structural_trend,
+            "setup": self.setup_structural_trend,
+            "execution": self.execution_structural_trend,
+        }.get(role)
 
 
 @dataclass(frozen=True, slots=True)

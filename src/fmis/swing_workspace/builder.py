@@ -184,7 +184,7 @@ def build_swing_workspace(run: TodayRun) -> SwingWorkspace:
 
     no_trade = no_trade_groups(run.results)
     unanalysed = unanalysed_from(opportunities.failed)
-    decisions = symbol_decisions(run.results)
+    decisions = symbol_decisions(run.results, reference_time=today.reference_time)
     return SwingWorkspace(
         reference_time=today.reference_time,
         objective=OBJECTIVE,

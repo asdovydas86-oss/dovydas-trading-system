@@ -23,7 +23,11 @@ would be asserting what the market did rather than what the code carries.
 from __future__ import annotations
 
 from fmis.operator_dashboard import build_snapshot
-from fmis.swing_setup.compose import SetupRunResult, setup_assessment_for_sheet
+from fmis.swing_setup.compose import (
+    SetupRunResult,
+    setup_inputs_and_assessment_for_sheet,
+    setup_readings_for,
+)
 from fmis.swing_workspace import build_swing_workspace
 
 from tests.archive_helpers import multi
@@ -32,6 +36,7 @@ from tests.swing_workspace_helpers import run_of
 
 __all__ = [
     "GATE_REJECTED",
+    "GATE_LEANING",
     "FAMILIES_SPLIT",
     "CANDIDATE",
     "live",
@@ -44,12 +49,29 @@ GATE_REJECTED = (1, 5, 9)
 FAMILIES_SPLIT = (3, 5, 9)
 CANDIDATE = (2, 4, 7)
 
+#: The **BTC-shaped** case Slice 2 exists for: every readable family leans the
+#: same way, and the reading was stopped by the higher-timeframe regime gate
+#: before the tally ever ran. `WAIT`, with directional evidence developing —
+#: the exact combination that must never be rendered as a signal.
+GATE_LEANING = (1, 4, 9)
 
-def live(seeds: tuple[int, int, int], symbol: str) -> SetupRunResult:
-    """One result from the real composition root, over synthetic candles."""
+
+def live(
+    seeds: tuple[int, int, int], symbol: str, *, readings: bool = True
+) -> SetupRunResult:
+    """One result from the real composition root, over synthetic candles.
+
+    ``readings=False`` builds the pre-Slice-2 shape — an assessment with none of
+    the structured facts it was reasoned from — which is what a hand-built
+    result and every caller before this milestone produced. Used to assert that
+    the surfaces state the gap rather than inventing a per-role instant.
+    """
+    sheet = multi(seeds=seeds, symbol=symbol)
+    inputs, assessment = setup_inputs_and_assessment_for_sheet(sheet)
     return SetupRunResult(
         requested_symbol=symbol,
-        assessment=setup_assessment_for_sheet(multi(seeds=seeds, symbol=symbol)),
+        assessment=assessment,
+        readings=setup_readings_for(sheet, inputs) if readings else None,
     )
 
 

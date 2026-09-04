@@ -40,3 +40,29 @@ Architecture, decisions and milestone records live in [docs/](docs/README.md); d
 ## Quick start
 
 See [docs/SETUP.md](docs/SETUP.md).
+
+## Opening the dashboard
+
+The FMITS Operator Dashboard is the system's only visual surface: a local, read-only page over the
+market pulse, macro context, the swing decision workspace, the recorded portfolio, paper trades,
+performance statistics and the state of every data source a refresh touched.
+
+```
+source .venv/bin/activate     # `fmits` lives in the virtualenv, not on $PATH
+fmits dashboard               # or, without activating: uv run fmits dashboard
+```
+
+It prints the address, then performs its first refresh — **four live engine reads, 30-45 s** — and
+prints the URL only once a request to it can be answered:
+
+```
+FMITS Operator Dashboard — read only
+  address  http://127.0.0.1:8787/
+  reading  the first refresh performs four live engine reads and takes 30-45 s. …
+  open     http://127.0.0.1:8787/
+  stop     Ctrl-C
+```
+
+**Open the `open` line, not the `address` line.** Binds loopback only; binding anywhere else needs
+`--allow-public`, because the page states your positions, open risk and account figures. Answers
+`GET` and `HEAD` only, and writes nothing. `--port 0` picks a free port if 8787 is taken.

@@ -403,3 +403,129 @@ def test_browsing_every_route_changes_no_stored_value(tmp_path, live) -> None:
         for path in store.rglob("*")
     }
     assert before == after
+
+
+# ---------------------------------------------------------------------------
+# Warming: the refresh is paid before the URL is offered, not inside a request
+# ---------------------------------------------------------------------------
+
+
+def _serve_once(**kwargs) -> None:
+    """Run `serve` on a thread, stopping it as soon as it announces."""
+    from fmis.operator_dashboard import serve
+
+    def stop(server) -> None:
+        # `shutdown` must be called from another thread, and only once the loop
+        # it stops is actually running.
+        threading.Event().wait(0.05)
+        server.shutdown()
+
+    caller_announce = kwargs.pop("announce", None)
+
+    def announce(url, server) -> None:
+        if caller_announce is not None:
+            caller_announce(url, server)
+        threading.Thread(target=stop, args=(server,), daemon=True).start()
+
+    thread = threading.Thread(
+        target=serve, kwargs={"port": 0, "quiet": True, "announce": announce, **kwargs}
+    )
+    thread.start()
+    thread.join(timeout=15)
+    assert not thread.is_alive(), "serve did not shut down"
+
+
+def test_warming_refreshes_before_the_url_is_announced() -> None:
+    """**The repair.** The dashboard once printed a URL 30-45 s before anything
+    could answer it: the browser's connection was accepted and then received no
+    status line, no header and no byte for the whole of the first refresh, which
+    a browser reports as a server that stopped responding. The command started
+    and the dashboard never opened. Warming moves that cost in front of the
+    announcement."""
+    counter = _Counter()
+    holder = SnapshotHolder(refresher=counter, clock=lambda: AT)
+    seen: list[tuple[str, int]] = []
+
+    _serve_once(
+        holder=holder,
+        warm=True,
+        preparing=lambda url: seen.append(("preparing", counter.calls)),
+        announce=lambda url, server: seen.append(("announce", counter.calls)),
+    )
+
+    assert seen == [("preparing", 0), ("announce", 1)], (
+        "the URL must be announced after the refresh behind it, not before"
+    )
+
+
+def test_a_warmed_server_answers_its_first_request_from_the_held_snapshot() -> None:
+    """Warming is only worth its cost if the request that follows is free.
+
+    The request is made from this thread rather than from inside `announce`,
+    because `announce` runs before the loop does: a connection opened there sits
+    in the listen backlog unanswered, which is precisely the shape of the outage
+    and not a way to measure it.
+    """
+    counter = _Counter()
+    holder = SnapshotHolder(refresher=counter, clock=lambda: AT)
+    from fmis.operator_dashboard import serve
+
+    announced = threading.Event()
+    running: list = []
+
+    def announce(url, server) -> None:
+        running.append(server)
+        announced.set()
+
+    thread = threading.Thread(
+        target=serve,
+        kwargs={
+            "port": 0,
+            "quiet": True,
+            "holder": holder,
+            "warm": True,
+            "announce": announce,
+        },
+    )
+    thread.start()
+    try:
+        assert announced.wait(15), "the server never announced"
+        assert counter.calls == 1, "the warm refresh did not happen"
+        host, port = running[0].server_address[:2]
+        status, _, body = _request(host, port, "/")
+        assert status == 200
+        assert b"FMITS" in body
+        assert counter.calls == 1, (
+            "the first request re-read the engines; the warm snapshot was unused"
+        )
+    finally:
+        if running:
+            running[0].shutdown()
+        thread.join(timeout=15)
+    assert not thread.is_alive()
+
+
+def test_serve_does_not_warm_unless_asked_to() -> None:
+    """`serve` is the mechanism; the decision belongs to the command. A library
+    caller that has not asked to warm keeps the lazy behaviour it had."""
+    counter = _Counter()
+    holder = SnapshotHolder(refresher=counter, clock=lambda: AT)
+
+    _serve_once(holder=holder)
+
+    assert counter.calls == 0, "serve refreshed without being asked to warm"
+
+
+def test_a_warming_refresh_that_raises_is_not_swallowed() -> None:
+    """`compose.refresh` absorbs every *source did not answer* family into a
+    section that says so, so anything still escaping it is a defect — and a
+    defect is worth reporting at startup rather than burying in a handler
+    thread, where it would surface to the owner as a page that never loads."""
+    from fmis.operator_dashboard import serve
+
+    def explode(**_kwargs):
+        raise Boom("the composition root is broken")
+
+    holder = SnapshotHolder(refresher=explode, clock=lambda: AT)
+    with pytest.raises(Boom, match="composition root"):
+        serve(port=0, quiet=True, holder=holder, warm=True)

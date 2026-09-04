@@ -33,9 +33,18 @@ tree measured in hundreds of packages to serve seven static routes.
 **The refresh model is explicit and stated on every page.** One snapshot is held
 and shared by all seven routes, so navigating between them shows one consistent
 instant rather than seven pages that each re-fetched and disagree. A refresh
-happens only when asked for — ``?refresh=1`` — or on the first request. The
-header always carries the refresh instant and the data instant, so an old page
-never passes for a live one.
+happens when the server is warmed at startup, when one is asked for —
+``?refresh=1`` — or, unwarmed, on the first request. The header always carries
+the refresh instant and the data instant, so an old page never passes for a live
+one.
+
+**The first refresh happens before the URL is announced, not on the first
+request.** Four live engine reads cost 30-45 s, and performed inside the first
+request they are spent with the browser's connection accepted and not one byte
+written to it — which a browser reports, correctly, as a server that stopped
+responding. The dashboard started and never opened. `serve(warm=True)` pays that
+cost while the operator is still looking at the terminal, and prints the URL
+only when a request to it can be answered.
 
 **Concurrent refreshes collapse into one.** A lock guards the snapshot, so two
 browser tabs reloading together perform one set of engine reads rather than
@@ -308,26 +317,68 @@ def serve(
     holder: SnapshotHolder | None = None,
     allow_public: bool = False,
     quiet: bool = False,
+    warm: bool = False,
+    preparing: Callable[[str], None] | None = None,
     announce: Callable[[str, DashboardServer], None] | None = None,
 ) -> None:
-    """Bind, announce, and serve until interrupted. **The only serving loop.**
+    """Bind, warm, announce, and serve until interrupted. **The only serving loop.**
 
-    The CLI calls this rather than repeating the bind-print-serve-clean
+    The CLI calls this rather than repeating the bind-warm-print-serve-clean
     sequence, so there is one place that knows how the dashboard is started and
     one place that knows how it is stopped.
 
-    ``announce`` is called after the socket is bound and before the loop begins,
-    with the URL and the server. Binding failures propagate — `build_server`
-    raises `ValueError` for a refused interface and `OSError` for a port already
-    in use, and the caller maps those to an exit code rather than this layer
-    deciding what a failure to start is worth.
+    **Why ``warm`` exists.** A refresh performs four live engine reads and costs
+    30-45 s. Performed lazily on the first request, the server accepts the
+    browser's connection and then writes nothing at all for the whole of it: no
+    status line, no header, no byte. A browser does not distinguish that from a
+    server that has stopped responding, and at the default resource timeout it
+    gives up and reports the page as unreachable — the dashboard *starts* and
+    still never *opens*. Warming moves that cost in front of the announcement,
+    so the URL is printed only once a request to it can be answered.
+
+    ``preparing`` is called with the URL after the socket is bound and before
+    the warming refresh, so the operator is told which address is coming and
+    that the wait is work rather than a hang. ``announce`` is called with the
+    URL and the server once the dashboard can answer.
+
+    Binding failures propagate — `build_server` raises `ValueError` for a
+    refused interface and `OSError` for a port already in use, and the caller
+    maps those to an exit code rather than this layer deciding what a failure to
+    start is worth. A warming refresh that raises propagates for the same
+    reason: `compose.refresh` already absorbs every *source did not answer*
+    family into a section that says so, so anything still escaping it is a
+    defect, and a defect is worth reporting at startup rather than burying in a
+    handler thread.
+
+    ``warm`` defaults to `False` so that this mechanism stays a mechanism: the
+    decision that an operator's dashboard is not ready until it can answer
+    belongs to the command the operator runs, and `_run_dashboard` passes
+    ``warm=True``.
     """
-    server, _ = build_server(
+    server, held = build_server(
         host=host, port=port, holder=holder, allow_public=allow_public, quiet=quiet
     )
     bound_host, bound_port = server.server_address[:2]
-    if announce is not None:
-        announce(f"http://{bound_host}:{bound_port}/", server)
+    url = f"http://{bound_host}:{bound_port}/"
+
+    # The socket is bound before anything below can fail, and the loop's own
+    # cleanup below cannot run until the loop starts — `shutdown` waits on an
+    # event that only `serve_forever` sets, so calling it on a server that never
+    # served would block forever rather than tidy up. So a failure to warm
+    # closes the listener here, and nothing is left holding the port.
+    serving = False
+    try:
+        if warm:
+            if preparing is not None:
+                preparing(url)
+            held.current()
+        if announce is not None:
+            announce(url, server)
+        serving = True
+    finally:
+        if not serving:
+            server.server_close()
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:

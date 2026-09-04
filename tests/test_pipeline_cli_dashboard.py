@@ -95,3 +95,58 @@ def test_the_holder_the_command_builds_forwards_its_arguments() -> None:
 def test_the_command_appears_in_the_top_level_help() -> None:
     help_text = build_parser().format_help()
     assert "dashboard" in help_text
+
+
+def test_the_command_warms_the_dashboard_before_announcing_its_url(monkeypatch) -> None:
+    """**The repair, at the wiring level.** `serve` can warm; whether an
+    operator's dashboard is not ready until it can answer is a decision this
+    command makes, so it is this command that must pass ``warm=True``.
+
+    The startup smoke test proves the behaviour end to end. This proves the one
+    argument that produces it, in milliseconds, so a refactor that drops it is
+    caught by the fast suite as well as the slow one.
+    """
+    from fmis.pipeline import cli
+
+    captured: dict[str, object] = {}
+
+    def fake_serve(**kwargs) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(cli, "serve_dashboard", fake_serve)
+    args = build_parser().parse_args(["dashboard", "--port", "0"])
+    assert _command().run(args) == 0
+
+    assert captured["warm"] is True, "the dashboard is served without warming"
+    assert callable(captured["preparing"]), (
+        "no notice is printed before the warming refresh, so the operator waits "
+        "on a silent terminal"
+    )
+
+
+def test_the_banner_offers_the_address_before_the_refresh_and_the_url_after(
+    capsys, monkeypatch
+) -> None:
+    """The two notices carry different words on purpose: the operator is told
+    the address is *coming*, then told it is *open*. Printing `open` first is
+    the outage this pair replaced."""
+    from fmis.pipeline import cli
+
+    order: list[str] = []
+
+    def fake_serve(*, preparing, announce, **_kwargs) -> None:
+        preparing("http://127.0.0.1:8787/")
+        order.append("prepared")
+        announce("http://127.0.0.1:8787/", object())
+        order.append("announced")
+
+    monkeypatch.setattr(cli, "serve_dashboard", fake_serve)
+    args = build_parser().parse_args(["dashboard", "--port", "0"])
+    assert _command().run(args) == 0
+
+    assert order == ["prepared", "announced"]
+    out = capsys.readouterr().out
+    assert out.index("address") < out.index("open"), (
+        "the URL is offered as open before the refresh behind it is announced"
+    )
+    assert "30-45 s" in out, "the wait is not explained to the operator"

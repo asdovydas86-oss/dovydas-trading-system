@@ -258,6 +258,56 @@ the automation ladder remains unstarted.
 > the gap. They are fully recorded in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md),
 > the [backlog](FMITS_PRODUCT_BACKLOG.md) §8 and reports 0034–0039.
 
+### 2026-09-04 · `DR` — `fmits dashboard` opens again
+
+**Status:** Released — pending commit. **Removes a blocker to practical use, and materially improves
+the reliability of a user-visible capability.**
+
+**What the owner can do that was impossible before: open the dashboard.**
+
+The dashboard was never dead. `fmits dashboard` bound its socket, printed a URL, and served a
+correct, complete page — **37.9 s** later. The first request performed all four live engine reads
+before writing a single byte of HTTP, so the browser sat on an accepted connection that sent nothing
+at all for the whole of it. That is what a browser reports as a server that has stopped responding,
+and at its timeout it gives up. The command started; the page never opened. It was intermittent
+because whether the wait crossed the browser's limit depended on how slow the market providers were
+that day.
+
+The refresh is now paid **before the URL is offered**, and the terminal says what it is doing while
+it happens:
+
+```
+FMITS Operator Dashboard — read only
+  address  http://127.0.0.1:8787/
+  reading  the first refresh performs four live engine reads and takes 30-45 s.
+           The address answers when this finishes.
+  open     http://127.0.0.1:8787/          ← printed only when it can answer
+  stop     Ctrl-C
+```
+
+**The first page load went from 37.9 s to 1.7 ms.** The wait did not disappear — four live engine
+reads still cost what they cost — but it moved from a silent socket, where it looked like a
+breakage, to a terminal, where it is visible and explained. All eleven routes answer in under two
+milliseconds once the address is offered.
+
+**Nothing about the dashboard itself changed.** No page was redesigned, no figure moved, no feature
+was added, no route was altered. The same seven surfaces show the same engine output with the same
+instants, sources and stated reasons.
+
+**What is still slow: refreshing from the browser.** `?refresh=1` blocks for 30–45 s with no
+progress indication, no per-source outcome, and no way to tell a slow refresh from a partially
+failed one. That is `EP-21`, it is untouched here, and it is the next dashboard task.
+
+**A defect this class can no longer reach the owner unnoticed.** A startup smoke test now runs the
+real command in a real process, waits for it to say it is ready, requests the main route, checks the
+page is recognisably the FMITS dashboard rather than an empty `200`, and stops it with a real
+Ctrl-C. It runs offline in under five seconds, and it was verified to fail when the repair is
+removed.
+
+Report: [0041](reports/0041_2026-09-04_DASHBOARD_STARTUP_REGRESSION_REPAIR.md)
+
+---
+
 ### 2026-09-04 · `CD` — `fmits research dependence` — the owner can ask whether the evidence is independent
 
 **Status:** Released — **a new user-visible capability**, and one that approves nothing.

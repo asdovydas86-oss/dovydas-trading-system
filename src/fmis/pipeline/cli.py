@@ -3434,9 +3434,15 @@ def _run_dashboard(args: argparse.Namespace) -> int:
     whether any market could be read. A provider outage is a section on the page
     saying so, exactly as it is for every other surface.
 
-    **The first refresh happens on the first request, not here.** Starting the
-    server does not fetch, so the command comes up immediately and the owner
-    sees the page assemble rather than watching a silent terminal.
+    **The first refresh happens before the URL is printed, not on the first
+    request.** It was the other way round, and that is what stopped the
+    dashboard opening: the socket came up instantly, the owner clicked the URL,
+    and the browser then sat on an accepted connection that received no status
+    line, no header and no byte for the 30-45 s the four engine reads take —
+    which every browser reports as a server that stopped responding. The command
+    started; the dashboard never opened. So the refresh is paid here, with the
+    terminal saying what is happening, and the URL is printed only once a
+    request to it can be answered.
     """
     lab = None
     if args.lab_artifact is not None:
@@ -3473,13 +3479,24 @@ def _run_dashboard(args: argparse.Namespace) -> int:
             print(f"fmits dashboard: {error}", file=sys.stderr)
             return EXIT_FAILURE
 
+    def preparing(url: str) -> None:
+        # Printed after the socket is bound and before the first refresh, so the
+        # wait is visibly work rather than a hang, and so a port that could not
+        # be bound is still reported before anything claims to be starting.
+        print("FMITS Operator Dashboard — read only", flush=True)
+        print(f"  address  {url}", flush=True)
+        print(
+            "  reading  the first refresh performs four live engine reads and "
+            "takes 30-45 s. The address answers when this finishes.",
+            flush=True,
+        )
+
     def announce(url: str, _server: object) -> None:
         # Flushed explicitly: piped or redirected, this banner is block-buffered
         # and the owner would stare at an empty terminal while the socket sat
         # listening. The URL is the whole point of the command's output.
-        print("FMITS Operator Dashboard — read only", flush=True)
-        print(f"  open   {url}", flush=True)
-        print("  stop   Ctrl-C", flush=True)
+        print(f"  open     {url}", flush=True)
+        print("  stop     Ctrl-C", flush=True)
         print(
             "  This surface reads. It places no order, records no trade and "
             "changes no stored value.",
@@ -3500,6 +3517,8 @@ def _run_dashboard(args: argparse.Namespace) -> int:
             ),
             allow_public=args.allow_public,
             quiet=True,
+            warm=True,
+            preparing=preparing,
             announce=announce,
         )
     except (ValueError, OSError) as error:

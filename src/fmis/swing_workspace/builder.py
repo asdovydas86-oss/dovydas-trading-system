@@ -48,6 +48,7 @@ from fmis.swing_workspace.sections import (
     paper_positions,
     ranked_setups,
     require_actionable_split,
+    symbol_decisions,
     unanalysed_from,
 )
 from fmis.today import TodayRun, assemble_today
@@ -132,6 +133,13 @@ SWING_WORKSPACE_LIMITATIONS: tuple[tuple[str, str], ...] = (
         "writes nothing at all. Every record it shows was written by something "
         "else.",
     ),
+    (
+        "WS-11",
+        "The per-symbol decision rows are in the order the symbols were "
+        "scanned, which is the order they were requested in. That order carries "
+        "no meaning: the first row is not closer to a trade than the last, and "
+        "nothing on this page measures how close any symbol is to anything.",
+    ),
 )
 
 
@@ -176,6 +184,7 @@ def build_swing_workspace(run: TodayRun) -> SwingWorkspace:
 
     no_trade = no_trade_groups(run.results)
     unanalysed = unanalysed_from(opportunities.failed)
+    decisions = symbol_decisions(run.results)
     return SwingWorkspace(
         reference_time=today.reference_time,
         objective=OBJECTIVE,
@@ -195,6 +204,7 @@ def build_swing_workspace(run: TodayRun) -> SwingWorkspace:
         wait_list=_rows(opportunities.candidates),
         no_trade=no_trade,
         unanalysed=unanalysed,
+        decisions=decisions,
         paper=paper,
         paper_note=paper_note,
         portfolio=today.portfolio,

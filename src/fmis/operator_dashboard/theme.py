@@ -320,6 +320,15 @@ ul.footnotes li { margin: 2px 0; max-width: 100ch; }
 .chip.state-wait { border-color: var(--border); color: var(--muted); }
 .chip.state-no-trade { border-color: var(--border); color: var(--muted); }
 
+/* One directional family's lean. Deliberately the SAME weight on both sides:
+   a long painted green beside a short painted red reads as a recommendation,
+   and a family lean is a reading, not advice. The two non-voting members are
+   the ones that get the visual distinction, because "this family did not
+   vote" is the fact a reader most easily misses. */
+.chip.state-long { border-color: var(--neutral); color: var(--text); }
+.chip.state-short { border-color: var(--neutral); color: var(--text); }
+.chip.state-conflicting { border-color: var(--attention); color: var(--attention); }
+
 /* Availability, not desirability. */
 .chip.state-available { border-color: var(--positive); color: var(--positive); }
 .chip.state-behind_schedule { border-color: var(--attention); color: var(--attention); }

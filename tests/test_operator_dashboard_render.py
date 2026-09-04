@@ -333,9 +333,16 @@ def test_a_symbol_detail_page_shows_the_engines_own_sections() -> None:
 
 def test_an_unknown_symbol_says_so_rather_than_rendering_an_empty_setup() -> None:
     """An empty detail page reads as a setup with no evidence, which is a very
-    different claim from *this symbol is not on this page*."""
+    different claim from *this symbol is not on this page*.
+
+    The wording narrowed with Slice 1 and the assertion narrowed with it. The
+    page used to refuse every symbol that was not *actionable or waiting*,
+    which included every `WAIT` symbol the engine had fully assessed; it now
+    refuses only a symbol that produced **no assessment at all**, which is the
+    honest statement and the smaller set.
+    """
     html = render_page(_full(), "/swing", symbol="NOSUCHUSDT")
-    assert "not an actionable or waiting setup" in html
+    assert "produced no assessment on this refresh" in html
 
 
 def test_a_symbol_detail_page_offers_no_trading_action() -> None:

@@ -258,6 +258,76 @@ the automation ladder remains unstarted.
 > the gap. They are fully recorded in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md),
 > the [backlog](FMITS_PRODUCT_BACKLOG.md) §8 and reports 0034–0039.
 
+### 2026-09-04 · `DS` — every scanned symbol has a page, and it says why
+
+**Status:** Released — pending commit. **Adds a user-visible capability.**
+
+**What the owner can do that was impossible before: find out *why* a symbol is waiting.**
+
+The Swing dashboard used to answer one question about a waiting symbol — *is it waiting?* — and
+refuse the next one. Every `WAIT` symbol was folded into a grouped NO TRADE row: its name in a
+comma-joined cell, under one sentence shared with every other symbol that reached the same
+conclusion. Clicking through to `/swing/BTCUSDT` produced *"BTCUSDT is not an actionable or waiting
+setup on this refresh"* — for a symbol the engine had in fact fully assessed, with three directional
+families, a regime reading and a complete evidence report behind it. All of that was computed on
+every refresh and thrown away one layer before the screen.
+
+**`/swing` now opens with one row per scanned symbol** — symbol, status, direction, classification,
+and the engine's own sentence for the current condition — each linked to its own page.
+
+**`/swing/SYMBOL` now resolves for every assessed symbol**, not only actionable ones, and shows:
+
+- **decision** — status, classification, decision-context sufficiency, the verbatim condition, the
+  full thesis, and the instant the assessment carries;
+- **timeframe and regime context** — the regime reading behind the gate;
+- **directional families** — each family, its lean, the value it observed and the timeframe it read;
+- **evidence** — the four groups *item by item*, each with its statement, observed value, family,
+  scope and source, and an explicit independence column.
+
+**A worked example from live data on the day it shipped.** BTCUSDT and BNBUSDT were both `WAIT`,
+both *read and declined* — and for entirely different reasons. BTCUSDT had two of three families
+leaning long and was stopped by the weekly regime gate before the tally ever ran
+(`structure=transitioning`). BNBUSDT *cleared* that gate (`structure=trending`) and then hit weekly
+`sustained_lower` against daily `sustained_higher` — a real higher-versus-lower-timeframe structural
+conflict. Before this milestone both were the same line of text.
+
+**Limitations.**
+
+- **No ranking, and this is deliberate.** Rows are in scan order, which is the order the symbols
+  were requested in, and that order means nothing — the first row is not closer to a trade than the
+  last. No opportunity score, closeness score or confidence score exists anywhere on the page, and
+  field-name guards on both models exist so one cannot be added by accident. Limitation `WS-11`
+  states this on the page itself.
+- **No validated edge is claimed, and none exists.** Research milestones CA (NO_EDGE), CB
+  (UNDERPOWERED), CC (INFEASIBLE) and CD (dependence exists; the independent-cluster assumption is
+  rejected) are unchanged by this milestone. The page explains deterministic conclusions; it
+  computes no probability, no confidence and no expected return, and says so.
+- **Agreement is not corroboration, and the page marks it.** Items that share an upstream input are
+  labelled *not independent* with the projection's own note. Per report 0027, the context regime
+  gate and the context structural-trend factor are the **same reading** used twice.
+- **Freshness is not engineered here.** The assessment's own `as_of` is shown and labelled as
+  exactly that; nothing on the page claims it is recent enough to act on. Per-view timestamps and
+  full freshness policy are Slice 2.
+- **Setup-role and execution-role regime dimensions are still dropped** in `build_setup_inputs`.
+  Only the context role's three dimensions reach the assessment. Slice 2.
+- **The terminal `fmits workspace` renderer does not show the new section.** The model carries it;
+  only the dashboard renders it.
+
+**Safety / risk notes.** No trading policy changed — proven, not asserted: 81 fixtures through the
+full composition root produce **byte-identical** assessments and evidence reports before and after
+(`sha256 096a575a…`), and the per-fixture digests are committed so a future change names the
+fixture that moved. The surface remains read-only: GET and HEAD only, no button, no form, no write
+path. **No new indicator, threshold, setup rule, entry, stop, target, size or risk figure.**
+
+**Related.** [report 0042](reports/0042_2026-09-04_SWING_SYMBOL_DECISION_SURFACE_SLICE_1.md) ·
+backlog `DS` §8 · ADR-0008 (decision-support evidence boundary) · ADR-0011 (evidence taxonomy) ·
+ADR-0028 (directional interpretation boundary).
+
+**Breaking changes.** None. `SwingWorkspace.decisions` and `SwingView.decisions` are new fields with
+empty defaults; every existing model, section function and route is unchanged. One dashboard message
+narrowed: `/swing/SYMBOL` refuses only a symbol that produced **no assessment at all**, where it
+previously refused every symbol that was not actionable or waiting.
+
 ### 2026-09-04 · `DR` — `fmits dashboard` opens again
 
 **Status:** Released — pending commit. **Removes a blocker to practical use, and materially improves

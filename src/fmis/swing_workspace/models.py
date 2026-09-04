@@ -49,6 +49,9 @@ __all__ = [
     "RankComponent",
     "RankKey",
     "EvidenceDigest",
+    "EvidenceLine",
+    "FactorLine",
+    "SymbolDecision",
     "RankedSetup",
     "NoTradeGroup",
     "UnanalysedSymbol",
@@ -223,6 +226,223 @@ class EvidenceDigest:
                 "reported at the same time; the caveats are the reasons it was "
                 "not, and a report holding both says two different things"
             )
+
+
+@dataclass(frozen=True, slots=True)
+class FactorLine:
+    """One `DirectionalFactor`, carried verbatim. Four strings, no fifth.
+
+    The policy tallies *families*, and a page that shows only the conclusion
+    ("no directional candidate") hides the shape of the disagreement that
+    produced it. Two symbols can both be `WAIT` because one never reached the
+    tally and the other reached it and split — and the split is visible here and
+    nowhere else on the page.
+
+    ``lean`` is `Lean`'s own value, including its two non-voting members. A
+    family that conflicts with itself and one that could not be read are
+    different facts, and both are different from a vote.
+
+    **No weight and no field to hold one.** The policy counts agreeing families
+    and requires none opposing; it does not add them up, and neither does this.
+    """
+
+    family: str
+    lean: str
+    observed: str
+    source: str
+
+    def __post_init__(self) -> None:
+        for name in ("family", "lean", "observed", "source"):
+            _text(getattr(self, name), name)
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceLine:
+    """One `EvidenceItem`, carried verbatim rather than counted.
+
+    `EvidenceDigest` reduces a whole report to four integers, which answers *how
+    many* and never *which*. This carries the item itself, so the owner reads the
+    statement the engine wrote, the value it observed, the engine that produced
+    it and the timeframe it read — the facts that make one `WAIT` different from
+    another.
+
+    ``correlated_with`` and ``independence_note`` are the two fields that must
+    never be dropped. They name the items this one is **not** independent of, and
+    a surface that prints three correlated observations without them is showing
+    one fact three times and calling it corroboration. `SymbolDecision` validates
+    that they survive.
+
+    ``as_of`` is `fmis.setup_evidence`'s own value for the item and is carried
+    because it is already on the object — **not** a freshness verdict. Nothing in
+    this package compares it to a clock, and no field here says fresh or stale.
+
+    **No strength, no weight, no score, no rank** — the omission
+    `fmis.setup_evidence.models` makes for the reason its own docstring gives,
+    inherited here rather than quietly re-opened one layer up.
+    """
+
+    key: str
+    status: str
+    statement: str
+    observed: str
+    source: str
+    families: tuple[str, ...] = ()
+    scope: str | None = None
+    as_of: datetime | None = None
+    correlated_with: tuple[str, ...] = ()
+    independence_note: str | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("key", "status", "statement", "observed", "source"):
+            _text(getattr(self, name), name)
+        _strings(self.families, "families")
+        _strings(self.correlated_with, "correlated_with")
+        for name in ("scope", "independence_note"):
+            value = getattr(self, name)
+            if value is not None:
+                _text(value, name)
+        if self.as_of is not None and not isinstance(self.as_of, datetime):
+            raise TypeError(
+                f"as_of must be a datetime or None, got {type(self.as_of).__name__}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolDecision:
+    """**One scanned symbol's own decision record.** One per symbol, every state.
+
+    The section that exists because the other four do not cover the population.
+    `opportunities` and `wait_list` carry a row per *actionable* symbol;
+    `no_trade` carries a row per *reason*, with the symbols that reached it
+    listed inside — so a `WAIT` symbol has no row of its own anywhere, and
+    everything the engine concluded about it beyond one shared sentence is
+    dropped at this seam. This is that row.
+
+    **Nothing here is computed and nothing is new.** ``state``, ``direction``,
+    ``sufficiency``, ``thesis``, ``regime_context``, ``confirmation`` and
+    ``invalidation`` are `SetupAssessment`'s own fields; ``factors`` are its own
+    `DirectionalFactor` list; the four evidence groups, the family lists, the
+    independence flag and its caveats are `fmis.setup_evidence`'s own report,
+    carried item by item rather than reduced to counts. ``classification`` is the
+    identical `read and declined` / `could not be classified` split
+    `no_trade_groups` already applies, and ``reason`` is the identical verbatim
+    first thesis line that function already groups on — so the per-symbol row and
+    the grouped one cannot disagree about why a symbol is where it is.
+
+    **This object carries no ordering and cannot acquire one.** There is no
+    score, no closeness, no confidence, no rank and no position field. The
+    sequence of `SwingWorkspace.decisions` is scan order — the order the owner
+    asked for the symbols in — and a guard test asserts that no field name here
+    matches a ranking vocabulary, so a later change cannot turn this projection
+    into the unvalidated opportunity ranking the research record forbids.
+
+    ``evidence_reason`` is set exactly when the evidence projection declined, and
+    the four groups are then empty. Empty groups with no reason mean *the
+    projection ran and found nothing in that group*; empty groups with a reason
+    mean *the projection refused*, and those are different facts.
+    """
+
+    symbol: str
+    state: str
+    classification: str
+    reason: str
+    sufficiency: str
+    as_of: datetime
+    direction: str | None = None
+    thesis: tuple[str, ...] = ()
+    regime_context: tuple[str, ...] = ()
+    confirmation: tuple[str, ...] = ()
+    invalidation: tuple[str, ...] = ()
+    factors: tuple[FactorLine, ...] = ()
+    supporting: tuple[EvidenceLine, ...] = ()
+    conflicting: tuple[EvidenceLine, ...] = ()
+    missing: tuple[EvidenceLine, ...] = ()
+    unavailable: tuple[EvidenceLine, ...] = ()
+    agreeing_families: tuple[str, ...] = ()
+    conflicting_families: tuple[str, ...] = ()
+    independence_established: bool = False
+    independence_caveats: tuple[str, ...] = ()
+    evidence_warnings: tuple[str, ...] = ()
+    open_questions: tuple[str, ...] = ()
+    decision_ready: bool = False
+    decision_ready_reason: str = ""
+    evidence_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("symbol", "state", "classification", "reason", "sufficiency"):
+            _text(getattr(self, name), name)
+        if not isinstance(self.as_of, datetime):
+            raise TypeError(
+                f"as_of must be a datetime, got {type(self.as_of).__name__}"
+            )
+        if self.direction is not None:
+            _text(self.direction, "direction")
+        for name in (
+            "thesis",
+            "regime_context",
+            "confirmation",
+            "invalidation",
+            "agreeing_families",
+            "conflicting_families",
+            "independence_caveats",
+            "evidence_warnings",
+            "open_questions",
+        ):
+            _strings(getattr(self, name), name)
+        _tuple_of(self.factors, FactorLine, "factors")
+        for name in ("supporting", "conflicting", "missing", "unavailable"):
+            _tuple_of(getattr(self, name), EvidenceLine, name)
+        for name in ("independence_established", "decision_ready"):
+            if not isinstance(getattr(self, name), bool):
+                raise TypeError(f"{name} must be a bool")
+        if self.evidence_reason is not None:
+            _text(self.evidence_reason, "evidence_reason")
+            if self.groups_are_populated:
+                raise SwingWorkspaceError(
+                    "the evidence projection was reported as having refused and "
+                    "evidence items were carried anyway; a stated refusal beside "
+                    "the evidence it refused to produce says two different things"
+                )
+        else:
+            _text(self.decision_ready_reason, "decision_ready_reason")
+        if self.independence_established and self.independence_caveats:
+            raise SwingWorkspaceError(
+                "independence was established and correlation caveats were "
+                "reported at the same time; the caveats are the reasons it was "
+                "not, and a decision holding both says two different things"
+            )
+
+    @property
+    def groups_are_populated(self) -> bool:
+        """Whether any evidence item at all was carried, in any group."""
+        return bool(
+            self.supporting or self.conflicting or self.missing or self.unavailable
+        )
+
+    @property
+    def evidence_available(self) -> bool:
+        """Whether the projection ran. **Never whether the evidence is good.**"""
+        return self.evidence_reason is None
+
+    @property
+    def correlated_keys(self) -> frozenset[str]:
+        """Every item key some carried item declares it is not independent of.
+
+        A lookup over what the projection already stated, so a renderer marks the
+        non-independent items without re-deriving which they are — and so a test
+        can assert the disclosure survived this seam.
+        """
+        return frozenset(
+            key
+            for group in (
+                self.supporting,
+                self.conflicting,
+                self.missing,
+                self.unavailable,
+            )
+            for item in group
+            for key in item.correlated_with
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -531,6 +751,18 @@ class SwingWorkspace:
     warnings: tuple[WorkspaceWarning, ...]
     ranking_rule: str
     limitations: tuple[tuple[str, str], ...]
+    #: One row per scanned symbol that produced an assessment, in **scan order**.
+    #:
+    #: Spans the three decision sections rather than partitioning them: a symbol
+    #: with a row in `opportunities` also has one here, and a `WAIT` symbol
+    #: — which has no row of its own in any other section — has one here only.
+    #: The section-exclusivity check deliberately does not consult this tuple,
+    #: because overlapping with the other sections is what it is for.
+    #:
+    #: Defaulted to empty so that every existing construction of this object
+    #: stays valid and a page assembled without decisions is a page missing a
+    #: section, never a page that fails to build.
+    decisions: tuple[SymbolDecision, ...] = ()
     schema_version: int = SWING_WORKSPACE_SCHEMA_VERSION
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -557,6 +789,8 @@ class SwingWorkspace:
         _tuple_of(self.wait_list, RankedSetup, "wait_list")
         _tuple_of(self.no_trade, NoTradeGroup, "no_trade")
         _tuple_of(self.unanalysed, UnanalysedSymbol, "unanalysed")
+        _tuple_of(self.decisions, SymbolDecision, "decisions")
+        self._require_one_decision_per_symbol()
         _tuple_of(self.paper, PaperPosition, "paper")
         _tuple_of(self.books, BookExposure, "books")
         _tuple_of(self.warnings, WorkspaceWarning, "warnings")
@@ -583,6 +817,26 @@ class SwingWorkspace:
         ):
             raise TypeError("schema_version must be an int")
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+
+    def _require_one_decision_per_symbol(self) -> None:
+        """No symbol may carry two decision records.
+
+        Unlike the section rule below, repetition is **not** permitted here even
+        for a symbol requested twice: two records for one market are two answers
+        to *"what is the current decision on this?"*, and the detail surface
+        looks a symbol up by name and would silently show whichever came first.
+        The scan's own results are keyed by symbol upstream, so this rejects a
+        defect rather than a legitimate duplicate request.
+        """
+        seen: set[str] = set()
+        for decision in self.decisions:
+            if decision.symbol in seen:
+                raise SwingWorkspaceError(
+                    f"{decision.symbol!r} carries two decision records; one "
+                    "symbol has one current decision, and a page holding two "
+                    "cannot say which is shown"
+                )
+            seen.add(decision.symbol)
 
     def _require_one_section_per_symbol(self) -> None:
         """No symbol may occupy two **different** decision sections.
@@ -645,4 +899,18 @@ class SwingWorkspace:
         for row in self.opportunities + self.wait_list:
             if row.symbol == wanted:
                 return row
+        return None
+
+    def decision(self, symbol: str) -> SymbolDecision | None:
+        """One symbol's decision record, whatever state it reached.
+
+        A lookup by name over a tuple with at most one entry per symbol — never
+        a search that ranks or a nearest match. `None` means the symbol produced
+        no assessment on this run (it failed, or was not scanned), which the
+        `unanalysed` section states; it never means the symbol has no decision.
+        """
+        wanted = _text(symbol, "symbol")
+        for decision in self.decisions:
+            if decision.symbol == wanted:
+                return decision
         return None

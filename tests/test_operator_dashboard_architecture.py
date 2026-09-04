@@ -477,7 +477,7 @@ def test_the_read_models_hold_no_method_that_computes() -> None:
     tree = _tree("fmis.operator_dashboard.models")
     permitted = {
         "__post_init__", "is_available", "failed", "sections",
-        "failed_sections", "with_state", "row_for",
+        "failed_sections", "with_state", "row_for", "decision_for",
     }
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):

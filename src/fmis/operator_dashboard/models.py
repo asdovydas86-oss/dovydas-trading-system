@@ -59,6 +59,9 @@ __all__ = [
     "MacroView",
     "EvidenceView",
     "SetupRow",
+    "FactorRow",
+    "EvidenceItemRow",
+    "SymbolDecisionRow",
     "NoTradeRow",
     "UnreadableRow",
     "SwingView",
@@ -439,6 +442,82 @@ class SetupRow:
 
 
 @dataclass(frozen=True, slots=True)
+class FactorRow:
+    """One directional family, its lean, and what produced it. Carried, not judged."""
+
+    family: str
+    lean: str
+    observed: str
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceItemRow:
+    """One evidence item as the projection produced it — not a count of items.
+
+    `EvidenceView` answers *how many*; this answers *which*, which is the half
+    that tells two `WAIT` symbols apart. ``correlated_with`` and
+    ``independence_note`` travel with the item so a renderer can mark it as a
+    non-independent reading; dropping them here would let the page display one
+    fact seen three ways as three-fold confirmation.
+    """
+
+    key: str
+    status: str
+    statement: str
+    observed: str
+    source: str
+    families: tuple[str, ...] = ()
+    scope: str | None = None
+    as_of: datetime | None = None
+    correlated_with: tuple[str, ...] = ()
+    independence_note: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolDecisionRow:
+    """One scanned symbol's decision, whatever state it reached.
+
+    Carries `fmis.swing_workspace.SymbolDecision` field for field. Its reason for
+    existing is the population `SetupRow` does not cover: a `WAIT` symbol has no
+    `SetupRow`, so before this row a request for ``/swing/BTCUSDT`` on a waiting
+    BTC could only answer *"not an actionable or waiting setup on this
+    refresh"* — while the engine had in fact produced a full assessment, three
+    directional factors, a regime reading and a complete evidence report for it.
+
+    **No score, no rank, no position.** Deliberately absent, and a guard test
+    asserts no field name here matches a ranking vocabulary. Rows are held in
+    scan order and this layer sorts nothing.
+    """
+
+    symbol: str
+    state: str
+    classification: str
+    reason: str
+    sufficiency: str
+    as_of: datetime
+    direction: str | None = None
+    thesis: tuple[str, ...] = ()
+    regime_context: tuple[str, ...] = ()
+    confirmation: tuple[str, ...] = ()
+    invalidation: tuple[str, ...] = ()
+    factors: tuple[FactorRow, ...] = ()
+    supporting: tuple[EvidenceItemRow, ...] = ()
+    conflicting: tuple[EvidenceItemRow, ...] = ()
+    missing: tuple[EvidenceItemRow, ...] = ()
+    unavailable: tuple[EvidenceItemRow, ...] = ()
+    agreeing_families: tuple[str, ...] = ()
+    conflicting_families: tuple[str, ...] = ()
+    independence_established: bool = False
+    independence_caveats: tuple[str, ...] = ()
+    evidence_warnings: tuple[str, ...] = ()
+    open_questions: tuple[str, ...] = ()
+    decision_ready: bool = False
+    decision_ready_reason: str = ""
+    evidence_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class NoTradeRow:
     """A conclusion, not a failure. Rendered as a legitimate outcome."""
 
@@ -468,6 +547,9 @@ class SwingView:
     scanned: int = 0
     regime_note: str = ""
     breadth: tuple[tuple[str, int], ...] = ()
+    #: One row per scanned symbol that produced an assessment, in scan order.
+    #: Spans the three decision sections rather than partitioning them.
+    decisions: tuple[SymbolDecisionRow, ...] = ()
 
     def row_for(self, symbol: str) -> SetupRow | None:
         """The actionable or waiting row for one symbol, if there is one.
@@ -476,6 +558,18 @@ class SwingView:
         order. A symbol appears in at most one of the two groups.
         """
         for row in self.opportunities + self.wait_list:
+            if row.symbol == symbol:
+                return row
+        return None
+
+    def decision_for(self, symbol: str) -> SymbolDecisionRow | None:
+        """One symbol's decision row, whatever state it reached.
+
+        A lookup by name, never a nearest match. `None` means the symbol
+        produced no assessment on this refresh — which the *could not be read*
+        section states — and never that the symbol has no decision.
+        """
+        for row in self.decisions:
             if row.symbol == symbol:
                 return row
         return None

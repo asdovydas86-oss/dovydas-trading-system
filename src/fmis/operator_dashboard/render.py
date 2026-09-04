@@ -45,9 +45,11 @@ from fmis.operator_dashboard.models import (
     PulseView,
     DashboardSection,
     DashboardSectionStatus,
+    EvidenceItemRow,
     SetupRow,
     SourceState,
     SwingView,
+    SymbolDecisionRow,
     WarningRow,
 )
 from fmis.operator_dashboard.theme import (
@@ -643,8 +645,255 @@ def _setup_rows(rows: Sequence[SetupRow]) -> str:
     )
 
 
+def _decision_rows(rows: Sequence[SymbolDecisionRow]) -> str:
+    """Every scanned symbol, one per line. **Scan order, and no other.**
+
+    The columns are the three the owner scans for: what the symbol is, what the
+    engine concluded, and the engine's own sentence for why. There is no rank
+    column and no number column, because there is nothing here to rank by — the
+    order is the order the symbols were requested in and means nothing else.
+    """
+    body = [
+        "<tr>"
+        f'<td class="sym">{_setup_link(row.symbol)}</td>'
+        f"<td>{_setup_chip(row.state)}</td>"
+        f"<td>{_text(row.direction, 'no direction is stated')}</td>"
+        f"<td>{_e(row.classification)}</td>"
+        f"<td>{_e(row.reason)}</td>"
+        "</tr>"
+        for row in rows
+    ]
+    return _table(
+        [
+            ("Symbol", "sym"),
+            ("Status", ""),
+            ("Direction", ""),
+            ("Classification", ""),
+            ("Current condition — the engine's own words", ""),
+        ],
+        body,
+    )
+
+
+#: Printed under the per-symbol table. The order of that table is scan order,
+#: and a table with no visible ordering rule is read as one sorted by something.
+_DECISION_ORDER_NOTE = (
+    "One row per scanned symbol, in the order the symbols were scanned. That "
+    "order carries no meaning: the first row is not closer to a trade than the "
+    "last, and nothing here measures how close any symbol is to anything. "
+    "Open a symbol for the evidence behind its conclusion."
+)
+
+
+def _evidence_item_rows(
+    items: Sequence[EvidenceItemRow], correlated: frozenset[str]
+) -> str:
+    """One evidence group as a table, with non-independence marked on the row.
+
+    A row whose key another item declares itself correlated with, or which
+    declares a correlation of its own, is marked *not independent* — the
+    disclosure `fmis.setup_evidence` produced, carried to the surface rather
+    than summarised away. Three correlated observations rendered as three plain
+    rows read as three-fold confirmation, and they are one reading seen thrice.
+    """
+    body = []
+    for item in items:
+        dependent = bool(item.correlated_with) or item.key in correlated
+        if dependent:
+            why = (
+                f'<span class="why">{_e(item.independence_note)}</span>'
+                if item.independence_note
+                else ""
+            )
+            note = f'<span class="absent">not independent{why}</span>'
+        else:
+            note = '<span class="sub">no correlation stated</span>'
+        shared = (
+            '<br><span class="sub">shares inputs with: '
+            f'{_e(", ".join(item.correlated_with))}</span>'
+            if item.correlated_with
+            else ""
+        )
+        body.append(
+            "<tr>"
+            f"<td>{_e(item.key)}</td>"
+            f"<td>{_e(item.statement)}</td>"
+            f"<td>{_e(item.observed)}</td>"
+            f"<td>{_text(', '.join(item.families), 'no family in the taxonomy')}</td>"
+            f"<td>{_text(item.scope, 'no scope was stated')}"
+            f'<br><span class="sub">{_e(item.source)}</span></td>'
+            f"<td>{note}{shared}</td>"
+            "</tr>"
+        )
+    return _table(
+        [
+            ("Key", ""),
+            ("Statement", ""),
+            ("Observed", ""),
+            ("Family", ""),
+            ("Scope / source", ""),
+            ("Independence", ""),
+        ],
+        body,
+    )
+
+
+def _decision_detail(row: SymbolDecisionRow) -> str:
+    """One symbol's decision, in full. Every value is an engine's own.
+
+    Four panels, in the order the question is actually asked: *what did it
+    conclude*, *what environment did it read*, *how did the families line up*,
+    and *what evidence stands behind it*. Nothing here is computed, ranked or
+    scored; the page is a renderer.
+    """
+    parts: list[str] = [
+        _panel(
+            f"{row.symbol} — decision",
+            _kv(
+                [
+                    ("status", _setup_chip(row.state)),
+                    ("direction", _text(row.direction, "no direction is stated")),
+                    ("classification", _e(row.classification)),
+                    ("decision-context sufficiency", _e(row.sufficiency)),
+                    ("current condition", _e(row.reason)),
+                    (
+                        "assessment as of",
+                        _e(row.as_of.isoformat())
+                        + '<br><span class="sub">the instant the assessment '
+                        "carries. This page states it and makes no claim about "
+                        "whether it is recent enough to act on.</span>",
+                    ),
+                ]
+            )
+            + _details("full thesis", _list(row.thesis), open_=True)
+            + _details("confirmation", _list(row.confirmation))
+            + _details("invalidation", _list(row.invalidation)),
+        ),
+        _panel(
+            f"{row.symbol} — timeframe and regime context",
+            _list(row.regime_context)
+            or _empty(
+                "The engine stated no regime context line for this symbol."
+            ),
+        ),
+    ]
+
+    factor_table = _table(
+        [("Family", ""), ("Lean", ""), ("Observed", ""), ("Source / timeframe", "")],
+        [
+            "<tr>"
+            f"<td>{_e(factor.family)}</td>"
+            f"<td>{_setup_chip(factor.lean)}</td>"
+            f"<td>{_e(factor.observed)}</td>"
+            f"<td>{_e(factor.source)}</td>"
+            "</tr>"
+            for factor in row.factors
+        ],
+    )
+    # `or` on the concatenation would never fire: the note alone is truthy, and
+    # an empty table would render the explanation of a table that is not there.
+    parts.append(
+        _panel(
+            f"{row.symbol} — directional families",
+            (
+                factor_table
+                + '<p class="note">The families the policy tallies, and what '
+                "each one read. A lean of <em>conflicting</em> means the family "
+                "disagreed with itself and cast no vote; <em>unavailable</em> "
+                "means nothing could be read from it. Neither is a vote, and "
+                "these are counted, never weighted.</p>"
+            )
+            if factor_table
+            else _empty("No directional family was recorded for this assessment."),
+        )
+    )
+
+    if row.evidence_reason is not None:
+        parts.append(
+            _panel(f"{row.symbol} — evidence", _absent(row.evidence_reason))
+        )
+        return "".join(parts)
+
+    # Every key some carried item declares it is not independent of. Folded
+    # here rather than stored on the row: `fmis.operator_dashboard.models` holds
+    # lookups and predicates only, and a guard asserts it.
+    groups = (
+        ("supporting", row.supporting, "Nothing supports this conclusion."),
+        ("conflicting", row.conflicting, "Nothing conflicts with it."),
+        (
+            "missing",
+            row.missing,
+            "Nothing named by the policy is still awaited.",
+        ),
+        (
+            "unavailable",
+            row.unavailable,
+            "Everything the projection names could be read.",
+        ),
+    )
+    correlated = frozenset(
+        key
+        for _, items, _ in groups
+        for item in items
+        for key in item.correlated_with
+    )
+    evidence = "".join(
+        _details(
+            f"{name} ({len(items)})",
+            _evidence_item_rows(items, correlated) or _empty(blank),
+            open_=name in ("supporting", "conflicting"),
+        )
+        for name, items, blank in groups
+    )
+    independence = (
+        "independence established"
+        if row.independence_established
+        else '<span class="absent">not established</span>'
+    )
+    parts.append(
+        _panel(
+            f"{row.symbol} — evidence",
+            _kv(
+                [
+                    (
+                        "agreeing families",
+                        _text(", ".join(row.agreeing_families), "none"),
+                    ),
+                    (
+                        "conflicting families",
+                        _text(", ".join(row.conflicting_families), "none"),
+                    ),
+                    ("independence", independence),
+                    (
+                        "decision ready",
+                        _e("yes" if row.decision_ready else "no")
+                        + f'<br><span class="sub">{_e(row.decision_ready_reason)}</span>',
+                    ),
+                ]
+            )
+            + evidence
+            + _details("independence caveats", _list(row.independence_caveats), open_=True)
+            + _details("warnings", _list(row.evidence_warnings))
+            + _details("open questions", _list(row.open_questions))
+            + '<p class="note">Counts of evidence items are counts, not a score. '
+            "Items that share an upstream input are marked <em>not "
+            "independent</em> and must not be read as separate confirmation. "
+            "No probability, confidence or expected return is computed anywhere "
+            "on this page.</p>",
+        )
+    )
+    return "".join(parts)
+
+
 def _swing_body(view: SwingView) -> str:
     parts: list[str] = []
+    parts.append("<h3>Every scanned symbol</h3>")
+    parts.append(
+        _decision_rows(view.decisions)
+        or _empty("No symbol produced an assessment on this refresh.")
+    )
+    if view.decisions:
+        parts.append(f'<p class="note">{_e(_DECISION_ORDER_NOTE)}</p>')
     parts.append("<h3>Top opportunities</h3>")
     parts.append(
         _setup_rows(view.opportunities)
@@ -674,6 +923,13 @@ def _swing_body(view: SwingView) -> str:
         no_trade
         or _empty("No symbol was concluded a no-trade on this refresh.")
     )
+    if view.no_trade:
+        parts.append(
+            '<p class="note">A distribution over the conditions the engine '
+            "named, not a ranking of them. Each symbol above has its own row "
+            "in <em>every scanned symbol</em>, with the evidence behind its "
+            "conclusion.</p>"
+        )
     parts.append("<h3>Could not be read</h3>")
     unreadable = _table(
         [("Symbol", "sym"), ("Detail", "")],
@@ -1299,23 +1555,44 @@ def _swing(snapshot: OperatorDashboardSnapshot) -> str:
 
 
 def _symbol_page(snapshot: OperatorDashboardSnapshot, symbol: str) -> str:
-    """One symbol's detail, or an honest statement that it is not on this page."""
+    """One symbol's detail, whatever the engine concluded about it.
+
+    **Two sources, and the decision one covers the whole scanned universe.**
+    `row_for` finds a `SetupRow`, which exists only for an actionable or waiting
+    setup; `decision_for` finds the decision record, which exists for every
+    symbol that produced an assessment at all — including every `WAIT`. Before
+    this page carried decisions, a waiting BTCUSDT reached the *not on this
+    page* message while the engine had in fact produced a full assessment,
+    three directional factors, a regime reading and a complete evidence report
+    for it. Now the decision panels render for it, and the setup panels are
+    added on top when there is also a `SetupRow`.
+
+    A symbol with neither still gets the honest statement: it produced no
+    analysis on this refresh, which the Swing page's *could not be read*
+    section names.
+    """
+    back = '<p class="note"><a href="/swing">Back to Swing</a></p>'
     if snapshot.swing.failed:
         return _panel("Swing", _failed(snapshot.swing))
     view = snapshot.swing.data
     row = None if view is None else view.row_for(symbol)
-    if row is None:
+    decision = None if view is None else view.decision_for(symbol)
+    if row is None and decision is None:
         return _panel(
             f"{symbol}",
             _empty(
-                f"{symbol} is not an actionable or waiting setup on this "
-                "refresh. It may have been concluded a no-trade, may not have "
-                "been readable, or may not be on the scanned watchlist — the "
-                "Swing page states which."
+                f"{symbol} produced no assessment on this refresh. It may not "
+                "have been readable, or may not be on the scanned watchlist — "
+                "the Swing page states which."
             )
-            + '<p class="note"><a href="/swing">Back to Swing</a></p>',
+            + back,
         )
-    return _swing_detail(row) + '<p class="note"><a href="/swing">Back to Swing</a></p>'
+    parts = []
+    if decision is not None:
+        parts.append(_decision_detail(decision))
+    if row is not None:
+        parts.append(_swing_detail(row))
+    return "".join(parts) + back
 
 
 def _portfolio(snapshot: OperatorDashboardSnapshot) -> str:

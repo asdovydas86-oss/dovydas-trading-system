@@ -47,11 +47,14 @@ from fmis.setup_observation import observe_setup_series
 from fmis.swing_workspace.models import (
     BookExposure,
     EvidenceDigest,
+    EvidenceLine,
+    FactorLine,
     GlobalSummary,
     NoTradeGroup,
     PaperPosition,
     RankedSetup,
     SwingWorkspaceError,
+    SymbolDecision,
     UnanalysedSymbol,
 )
 from fmis.swing_workspace.ranking import rank_setups
@@ -76,6 +79,7 @@ __all__ = [
     "holding_for",
     "ranked_setups",
     "no_trade_groups",
+    "symbol_decisions",
     "unanalysed_from",
     "paper_positions",
     "books_from",
@@ -370,6 +374,12 @@ _INSUFFICIENT = "insufficient"
 #: `SetupState.WAIT.value`, likewise.
 _WAIT = "wait"
 
+#: What a row says when the engine stated no thesis at all. Named once because
+#: the grouped section and the per-symbol section must reach the same string:
+#: two literals is how one page starts calling a symbol something the other does
+#: not.
+_NO_REASON_STATED = "no reason stated"
+
 
 def no_trade_groups(results: Sequence[Any]) -> tuple[NoTradeGroup, ...]:
     """Every `WAIT` result, grouped on the engine's own verbatim reason.
@@ -389,20 +399,182 @@ def no_trade_groups(results: Sequence[Any]) -> tuple[NoTradeGroup, ...]:
         assessment = result.assessment
         if assessment is None or assessment.state.value != _WAIT:
             continue
-        reason = assessment.thesis[0] if assessment.thesis else "no reason stated"
-        classification = (
-            _NOT_CLASSIFIABLE
-            if assessment.sufficiency.value == _INSUFFICIENT
-            else _READ_AND_DECLINED
-        )
-        groups.setdefault((reason, classification), []).append(
-            result.requested_symbol
-        )
+        groups.setdefault(
+            (_reason_of(assessment), _classification_of(assessment)), []
+        ).append(result.requested_symbol)
     ordered = sorted(groups.items(), key=lambda item: len(item[1]), reverse=True)
     return tuple(
         NoTradeGroup(reason=reason, classification=classification, symbols=tuple(symbols))
         for (reason, classification), symbols in ordered
     )
+
+
+def _classification_of(assessment: Any) -> str:
+    """`no_trade_groups`' own split, extracted so the two cannot disagree.
+
+    Called by both, so a symbol classified *could not be classified* in the
+    grouped section is classified identically on its own row. Two copies of one
+    two-branch rule is how the grouped page and the per-symbol page start
+    describing the same symbol differently.
+    """
+    return (
+        _NOT_CLASSIFIABLE
+        if assessment.sufficiency.value == _INSUFFICIENT
+        else _READ_AND_DECLINED
+    )
+
+
+def _reason_of(assessment: Any) -> str:
+    """The engine's own first thesis line — the string `no_trade_groups` keys on."""
+    return assessment.thesis[0] if assessment.thesis else _NO_REASON_STATED
+
+
+def _evidence_lines(items: Sequence[Any]) -> tuple[EvidenceLine, ...]:
+    """One group of the evidence report, item for item. **Nothing is summarised.**
+
+    Every field is copied off an `EvidenceItem` `fmis.setup_evidence` already
+    built — including ``correlated_with`` and ``independence_note``, which are
+    the two that make the difference between showing evidence and claiming
+    corroboration.
+    """
+    return tuple(
+        EvidenceLine(
+            key=item.key,
+            status=item.status.value,
+            statement=item.statement,
+            observed=item.observed,
+            source=item.source,
+            families=tuple(family.value for family in item.families),
+            scope=item.scope,
+            as_of=item.as_of,
+            correlated_with=tuple(item.correlated_with),
+            independence_note=item.independence_note,
+        )
+        for item in items
+    )
+
+
+def symbol_decisions(results: Sequence[Any]) -> tuple[SymbolDecision, ...]:
+    """**One decision record per scanned symbol, in scan order.**
+
+    The seam this milestone exists to close. `ranked_setups` attaches an evidence
+    digest to *actionable* rows only, and `no_trade_groups` folds every `WAIT`
+    into a group keyed on one shared sentence — so for a `WAIT` symbol the
+    directional factors the policy tallied, the regime lines it read, and the
+    entire evidence report `project_setup_evidence` is perfectly able to produce
+    were computed on every run and then discarded at this layer.
+
+    This calls the identical projection `evidence_digest_for` calls, on the
+    identical assessment, and carries the report's items instead of counting
+    them. No assessment is re-evaluated and no market value is read: given the
+    same results this returns an equal tuple, with no clock and no network.
+
+    **Order is scan order and nothing else.** Results are read in the sequence
+    they arrive, which is the sequence the owner requested the symbols in. This
+    function does not sort, does not group and does not partition — ordering
+    these rows by any property of the analysis would be the opportunity ranking
+    no measurement in this repository supports.
+
+    A result that produced no assessment yields no record: a symbol that could
+    not be read has no decision, and the `unanalysed` section is where it is
+    stated. A projection that refuses is isolated to its own row, exactly as it
+    is in `evidence_digest_for` and for the same reason.
+
+    **No `setup_identity` is derived here, deliberately.** `ranked_setups` passes
+    one because its rows *print* it; the projection only stores the reference on
+    the report and reads it nowhere, this record carries no identity field, and
+    for a `WAIT` assessment `identity_ref_for` has nothing to return anyway — a
+    reading with no directional thesis names no idea. Deriving one per scanned
+    symbol would be an `observe_setup_series` call per row whose result is
+    discarded.
+
+    **A record is keyed on the assessment's symbol, not the requested one.**
+    `no_trade_groups` lists `requested_symbol`, because a group is a record of
+    what was *asked*; a decision is a record of what was *concluded*, and the
+    detail route resolves it against the same name the actionable rows and their
+    links already carry (`OpportunityLine.symbol`, which is the assessment's).
+    Keying it on the request would give one symbol two names across two sections
+    of one page.
+
+    **A symbol requested twice produces one record, not two.** `fmits workspace
+    BTCUSDT BTCUSDT` asks about one market twice and the scan answers twice;
+    the actionable sections carry both answers, because two identical rows are
+    the honest rendering of what was requested. This section cannot, and the
+    difference is not an inconsistency: a decision record is what the detail
+    surface looks up *by name*, and two records for one symbol would mean the
+    page silently shows whichever came first. The first is kept, so the record
+    and the first row of the actionable section describe the same reading.
+    """
+    decisions: list[SymbolDecision] = []
+    seen: set[str] = set()
+    for result in results:
+        assessment = result.assessment
+        if assessment is None or assessment.symbol in seen:
+            continue
+        seen.add(assessment.symbol)
+        common: dict[str, Any] = dict(
+            symbol=assessment.symbol,
+            state=assessment.state.value,
+            classification=_classification_of(assessment),
+            reason=_reason_of(assessment),
+            sufficiency=assessment.sufficiency.value,
+            as_of=assessment.as_of,
+            direction=(
+                None if assessment.direction is None else assessment.direction.value
+            ),
+            thesis=tuple(assessment.thesis),
+            regime_context=tuple(assessment.regime_context),
+            confirmation=tuple(assessment.confirmation),
+            invalidation=tuple(assessment.invalidation),
+            factors=tuple(
+                FactorLine(
+                    family=factor.family,
+                    lean=factor.lean.value,
+                    observed=factor.observed,
+                    source=factor.source,
+                )
+                for factor in assessment.directional_factors
+            ),
+        )
+        try:
+            report = project_setup_evidence(assessment)
+        except SetupEvidenceError as failure:
+            decisions.append(
+                SymbolDecision(
+                    evidence_reason=(
+                        f"the evidence projection refused this setup: {failure}"
+                    ),
+                    **common,
+                )
+            )
+            continue
+        confluence = report.confluence
+        decisions.append(
+            SymbolDecision(
+                supporting=_evidence_lines(report.supporting),
+                conflicting=_evidence_lines(report.conflicting),
+                missing=_evidence_lines(report.missing),
+                unavailable=_evidence_lines(report.unavailable),
+                agreeing_families=tuple(
+                    family.value for family in confluence.agreeing_families
+                ),
+                conflicting_families=tuple(
+                    family.value for family in confluence.conflicting_families
+                ),
+                independence_established=confluence.independence_established,
+                independence_caveats=(
+                    ()
+                    if confluence.independence_established
+                    else tuple(confluence.caveats)
+                ),
+                evidence_warnings=tuple(report.warnings),
+                open_questions=tuple(report.open_questions),
+                decision_ready=report.decision_ready,
+                decision_ready_reason=report.decision_ready_reason,
+                **common,
+            )
+        )
+    return tuple(decisions)
 
 
 def unanalysed_from(failed: Sequence[Any]) -> tuple[UnanalysedSymbol, ...]:

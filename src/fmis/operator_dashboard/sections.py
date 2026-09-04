@@ -67,7 +67,10 @@ from fmis.operator_dashboard.models import (
     SetupRow,
     SourceHealth,
     SourceState,
+    EvidenceItemRow,
+    FactorRow,
     SwingView,
+    SymbolDecisionRow,
     UnreadableRow,
     WarningRow,
     ValidationCriterionRow,
@@ -87,6 +90,7 @@ __all__ = [
     "pulse_view",
     "macro_view",
     "swing_view",
+    "symbol_decision_rows",
     "portfolio_view",
     "paper_view",
     "performance_views",
@@ -496,6 +500,72 @@ def _setup_row(ranked: Any) -> SetupRow:
     )
 
 
+def _evidence_items(items: Any) -> tuple[EvidenceItemRow, ...]:
+    """One evidence group, item for item. Nothing counted, nothing dropped."""
+    return tuple(
+        EvidenceItemRow(
+            key=item.key,
+            status=item.status,
+            statement=item.statement,
+            observed=item.observed,
+            source=item.source,
+            families=tuple(item.families),
+            scope=item.scope,
+            as_of=item.as_of,
+            correlated_with=tuple(item.correlated_with),
+            independence_note=item.independence_note,
+        )
+        for item in items
+    )
+
+
+def symbol_decision_rows(decisions: Any) -> tuple[SymbolDecisionRow, ...]:
+    """The workspace's per-symbol decisions, translated field for field.
+
+    **In the order they arrive, which is scan order.** This function does not
+    sort, filter, group or score; reordering here would invent the ranking
+    `fmis.swing_workspace` deliberately refused to produce for this section.
+    """
+    return tuple(
+        SymbolDecisionRow(
+            symbol=decision.symbol,
+            state=decision.state,
+            classification=decision.classification,
+            reason=decision.reason,
+            sufficiency=decision.sufficiency,
+            as_of=decision.as_of,
+            direction=decision.direction,
+            thesis=tuple(decision.thesis),
+            regime_context=tuple(decision.regime_context),
+            confirmation=tuple(decision.confirmation),
+            invalidation=tuple(decision.invalidation),
+            factors=tuple(
+                FactorRow(
+                    family=factor.family,
+                    lean=factor.lean,
+                    observed=factor.observed,
+                    source=factor.source,
+                )
+                for factor in decision.factors
+            ),
+            supporting=_evidence_items(decision.supporting),
+            conflicting=_evidence_items(decision.conflicting),
+            missing=_evidence_items(decision.missing),
+            unavailable=_evidence_items(decision.unavailable),
+            agreeing_families=tuple(decision.agreeing_families),
+            conflicting_families=tuple(decision.conflicting_families),
+            independence_established=decision.independence_established,
+            independence_caveats=tuple(decision.independence_caveats),
+            evidence_warnings=tuple(decision.evidence_warnings),
+            open_questions=tuple(decision.open_questions),
+            decision_ready=decision.decision_ready,
+            decision_ready_reason=decision.decision_ready_reason,
+            evidence_reason=decision.evidence_reason,
+        )
+        for decision in decisions
+    )
+
+
 def swing_view(workspace: Any) -> SwingView:
     """The workspace's four groups, each mapped in the order it arrived."""
     return SwingView(
@@ -517,6 +587,7 @@ def swing_view(workspace: Any) -> SwingView:
         ranking_rule=workspace.ranking_rule,
         scanned=workspace.summary.scanned,
         regime_note=workspace.summary.regime_note,
+        decisions=symbol_decision_rows(workspace.decisions),
         breadth=tuple(workspace.summary.breadth),
     )
 

@@ -500,6 +500,14 @@ def test_the_cli_reaches_neither_the_domain_nor_the_store() -> None:
         # can never become reachable from a trading engine. The two assertions below
         # are unaffected and still prove the store is never reached from here.
         "fmis.universe",
+        # Widened for Milestone CD, on the identical footing as `fmis.universe`
+        # above. `fmis.paired_dependence` is a research package the CLI exposes
+        # as a research SURFACE — `fmits research dependence` — and it computes
+        # nothing about a trade, holds no account, and opens no store. The rule
+        # this guard protects, that `fmis.pipeline` never reaches
+        # `fmis.persistence`, is unaffected and the two assertions below still
+        # prove it.
+        "fmis.paired_dependence",
     )
     reached = {
         name

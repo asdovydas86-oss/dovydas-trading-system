@@ -44,10 +44,11 @@ manufacture one, and it decided no verdict.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from decimal import Decimal
 from random import Random
+from types import MappingProxyType
 from typing import Any, Final
 
 from fmis.paper.models import PriceBar
@@ -329,6 +330,29 @@ class _OutcomeCache:
             )
             self._cache[key] = found
         return found
+
+
+
+def _read_only_record(record: PairedRecord) -> PairedRecord:
+    """A `PairedRecord` whose horizon maps cannot be written through.
+
+    `dataclasses.replace` on a frozen record, with every `Mapping` field wrapped
+    in `MappingProxyType`. The values are identical and `difference` is unchanged;
+    only the ability to mutate them is removed.
+    """
+    return replace(
+        record,
+        admission_forward=MappingProxyType(dict(record.admission_forward)),
+        admission_mfe=MappingProxyType(dict(record.admission_mfe)),
+        admission_mae=MappingProxyType(dict(record.admission_mae)),
+        admission_race=MappingProxyType(dict(record.admission_race)),
+        control_forward=MappingProxyType(dict(record.control_forward)),
+        control_mfe=MappingProxyType(dict(record.control_mfe)),
+        control_mae=MappingProxyType(dict(record.control_mae)),
+        control_race_favourable=MappingProxyType(dict(record.control_race_favourable)),
+        control_race_adverse=MappingProxyType(dict(record.control_race_adverse)),
+        control_race_ambiguous=MappingProxyType(dict(record.control_race_ambiguous)),
+    )
 
 
 def _outcome_for(
@@ -1309,6 +1333,7 @@ def study_from_capture(
     horizons: Sequence[int] = FORWARD_HORIZONS,
     gate_ladder_stride: int = 25,
     progress: Callable[[str], None] | None = None,
+    record_observer: Callable[[Sequence[PairedRecord]], None] | None = None,
 ) -> AdmissionStudy:
     """Run the sealed CA experiment over a persisted Milestone BZ capture.
 
@@ -1322,6 +1347,17 @@ def study_from_capture(
     That is not an optimisation detail — matching is same-symbol by seal, so a
     symbol is the natural unit, and holding every symbol's outcome cache at once
     would cost several hundred megabytes for nothing.
+
+    ``record_observer`` is an **additive sink** and changes nothing. It is handed
+    each family's `PairedRecord`s **at the primary master seed only** — the
+    records this study's own effect is computed from — as they are collected, and
+    its return value is discarded. Milestone CD needs the observation-level paired
+    differences and must not re-derive them from a copy of this loop; Milestone BZ
+    grew the same kind of sink on `capture_geometry_candidates` for the same
+    reason. A regression asserts that a study run with an observer attached is
+    equal, field for field, to one run without it, and that the alternate-seed
+    records — which exist only to answer whether a sign is a property of the data
+    or of one draw — are **not** observed.
 
     Raises:
         SwingLabError: the capture's digest does not verify, a sample names a
@@ -1430,6 +1466,17 @@ def study_from_capture(
                     randomisation=randomisation,
                 )
                 collected[family.family_id].extend(records)
+                if record_observer is not None:
+                    # **The observer sees read-only copies, never the study's own
+                    # records.** `PairedRecord` is frozen, but its horizon maps are
+                    # plain dicts behind a `Mapping` annotation, so an observer
+                    # that wrote into one would silently move this study's
+                    # published effect. Independent review found that exposure.
+                    # Inertness is now a property of the hook rather than of the
+                    # caller's good behaviour.
+                    record_observer(
+                        tuple(_read_only_record(item) for item in records)
+                    )
                 attempted[family.family_id].extend(attempts)
                 alternates[family.family_id][randomisation.primary_seed].extend(records)
                 # The other master seeds exist ONLY to answer whether the sign is

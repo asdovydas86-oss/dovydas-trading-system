@@ -21,6 +21,12 @@ from pathlib import Path
 
 import pytest
 
+from architecture_tiers import (
+    RESEARCH_PACKAGES,
+    assert_tier_partition_is_complete,
+    guard_file_is_real,
+)
+
 _SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src" / "fmis"
 _PACKAGE = _SOURCE_ROOT / "swing_lab"
 
@@ -219,6 +225,40 @@ class TestNoProductionSideEffects:
                     assert node.type.id != "Exception", f"{name} catches Exception"
 
 
+#: The modules permitted to import the laboratory. `pipeline/cli.py` is the
+#: research SURFACE; every other entry belongs to a research package at the same
+#: tier as the laboratory, and each one is admitted only because its own package
+#: is itself unreachable from production — asserted, not assumed, by
+#: `test_every_allowed_research_package_is_itself_unreachable`.
+#: The research tier, imported from the **single** place it is declared. It is a
+#: partition against the filesystem, not a list this test also checks itself
+#: against — see `tests/architecture_tiers.py` for why that distinction is the
+#: whole point, and `tests/test_architecture_tiers.py` for the reviewer's
+#: demonstrated bypass, reproduced and rejected.
+_RESEARCH_TIER = RESEARCH_PACKAGES
+
+_RESEARCH_IMPORTERS = {
+    "pipeline/cli.py",
+    "universe/density.py",
+    "universe/growth.py",
+    "universe/preregistration.py",
+    "paired_dependence/capture.py",
+    "paired_dependence/controls.py",
+    "paired_dependence/estimator.py",
+    "paired_dependence/observations.py",
+    "paired_dependence/preregistration.py",
+    "paired_dependence/study.py",
+    "paired_dependence/integration.py",
+    "paired_dependence/synthetic.py",
+    "paired_dependence/uncertainty.py",
+    "paired_dependence/artifact.py",
+    "paired_dependence/verdict.py",
+    "paired_dependence/render.py",
+    "paired_dependence/models.py",
+    "paired_dependence/__init__.py",
+}
+
+
 class TestTheLaboratoryIsUnreachableFromProduction:
     def _production_sources(self) -> list[tuple[str, str]]:
         return [
@@ -250,23 +290,86 @@ class TestTheLaboratoryIsUnreachableFromProduction:
                     continue
                 if any(item.startswith("fmis.swing_lab") for item in names):
                     offenders.append(name)
-        # Milestone CC adds three `universe/` modules. `fmis.universe` is not an
-        # engine — it is a second RESEARCH package at the same tier as this one,
-        # and it imports the laboratory for exactly the reason a research package
-        # should: to reuse CA's sealed constants, BY's sample windows, CA's
-        # published figures and the production admission replay, rather than
-        # retyping any of them. Its own guard asserts that nothing outside
-        # `pipeline/cli.py` imports IT, so the property this test protects — that
-        # no engine reaches research — still holds transitively.
-        assert set(offenders) <= {
-            "pipeline/cli.py",
-            "universe/density.py",
-            "universe/growth.py",
-            "universe/preregistration.py",
-        }, (
+        # Milestone CC adds three `universe/` modules and Milestone CD five
+        # `paired_dependence/` ones. Neither package is an engine — each is a
+        # RESEARCH package at the same tier as this one, and each imports the
+        # laboratory for exactly the reason a research package should: to reuse
+        # CA's sealed constants, BY's sample windows, CA's published figures and
+        # the production admission replay, rather than retyping any of them.
+        # The property this test protects — that no engine reaches research —
+        # holds transitively, and `test_every_allowed_research_package_is_itself_
+        # unreachable` asserts that transitivity rather than asserting it in prose.
+        assert set(offenders) <= _RESEARCH_IMPORTERS, (
             f"{sorted(set(offenders))} import the laboratory; a research policy "
             "reachable from an engine is a second trading policy in waiting"
         )
+
+    def test_the_research_tier_is_closed_and_reachable_only_from_the_cli(self) -> None:
+        """What makes the allowlist above safe rather than convenient.
+
+        The laboratory admits imports from research packages at its own tier.
+        That is only sound if the tier as a whole is **closed**: research may
+        import research, but nothing outside the tier — no engine, no repository,
+        no surface other than the CLI — may import into it.
+
+        **The exemption set is `_RESEARCH_TIER`, hard-coded, and deliberately NOT
+        derived from `_RESEARCH_IMPORTERS`.** An earlier version of this guard
+        computed the exempt packages *from the allowlist itself*, so adding a line
+        to the allowlist simultaneously removed that package from the guarantee.
+        Independent review demonstrated the hole by admitting a new package that
+        reached into the laboratory with a two-line edit. Keeping the two sets
+        separate and cross-checking them is the whole point: widening
+        `_RESEARCH_IMPORTERS` without widening `_RESEARCH_TIER` is now a **test
+        failure**, which is what this guard was always supposed to be.
+        """
+        allowed = {
+            entry.split("/")[0]
+            for entry in _RESEARCH_IMPORTERS
+            if entry != "pipeline/cli.py"
+        }
+        assert allowed, "the allowlist names no research package to check"
+        assert allowed <= _RESEARCH_TIER, (
+            f"{sorted(allowed - _RESEARCH_TIER)} were added to the laboratory's "
+            "allowlist without being declared members of the research tier, so "
+            "nothing would have checked they are unreachable from production"
+        )
+        for package in sorted(allowed):
+            offenders = set()
+            for path in sorted(_SOURCE_ROOT.rglob("*.py")):
+                relative = str(path.relative_to(_SOURCE_ROOT)).replace("\\", "/")
+                if relative.split("/")[0] in _RESEARCH_TIER:
+                    continue
+                for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                    if isinstance(node, ast.Import):
+                        names = [alias.name for alias in node.names]
+                    elif isinstance(node, ast.ImportFrom):
+                        names = [node.module or ""]
+                    else:
+                        continue
+                    if any(item.startswith(f"fmis.{package}") for item in names):
+                        offenders.add(relative)
+            assert offenders <= {"pipeline/cli.py"}, (
+                f"{package} is allowed to import the laboratory only because the "
+                f"research tier is reachable from the CLI alone, and "
+                f"{sorted(offenders)} reach into it"
+            )
+
+    def test_every_research_tier_member_carries_a_REAL_architecture_guard(self) -> None:
+        """A guard file must actually guard, not merely exist.
+
+        An earlier version asserted only that `test_<package>_architecture.py`
+        existed — which an empty file with the right name satisfies, and
+        independent review proved it. The check now lives in
+        `architecture_tiers.guard_file_is_real`, is shared by every tier guard,
+        and is itself exercised against four placeholder shapes in
+        `tests/test_architecture_tiers.py`.
+        """
+        for package in sorted(_RESEARCH_TIER - {"swing_lab"}):
+            guard_file_is_real(package)
+
+    def test_the_tier_is_a_partition_and_not_a_self_checked_allowlist(self) -> None:
+        """The property that makes the exemption above non-circular."""
+        assert_tier_partition_is_complete()
 
     def test_the_dashboard_depends_on_nothing_in_the_laboratory(self) -> None:
         """The `/lab` page renders lab figures without importing the lab.

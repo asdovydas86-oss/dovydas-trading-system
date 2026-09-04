@@ -89,6 +89,17 @@ from fmis.swing_lab.admission_artifact import (
     encode_admission_study,
     write_admission_study,
 )
+from fmis.paired_dependence import (
+    PairedDependenceError,
+    dependence_rows_of,
+    encode_dependence_study,
+    read_dependence_study,
+    render_dependence_study,
+    study_from_capture as dependence_study_from_capture,
+    study_from_rows as dependence_study_from_rows,
+    verify_dependence_study_digest,
+    write_dependence_study,
+)
 from fmis.universe import (
     CC_PREREGISTRATION_DIGEST,
     SeriesCache,
@@ -3503,7 +3514,7 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
         "area",
         choices=(
             "swing", "geometry", "validation", "persistence", "admission",
-            "design", "universe",
+            "design", "universe", "dependence",
         ),
         help=(
             "which research question to run. 'swing' is the Swing Strategy "
@@ -3532,7 +3543,14 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
             "provider. It discovers instruments from the public read-only "
             "exchangeInfo endpoint, stages a funnel down to eligible economic "
             "assets, measures co-movement between them and reports a feasibility "
-            "verdict that approves NOTHING"
+            "verdict that approves NOTHING; "
+            "'dependence' runs Milestone CD's SEALED paired-effect dependence "
+            "measurement — how dependent the actual admission-versus-control "
+            "paired differences are WITHIN one economic asset and BETWEEN assets "
+            "observed in the same period, and what that does to Milestone CB's "
+            "information requirement. It is measured over a Milestone BZ capture "
+            "and therefore REQUIRES --from-capture, or replays a persisted CD "
+            "artifact with --from-study. It approves NOTHING and measures no edge"
         ),
     )
     parser.add_argument(
@@ -3611,6 +3629,27 @@ def _configure_research(parser: argparse.ArgumentParser) -> None:
             "every series it was computed from — but not the bars themselves. "
             "Pair it with --save-capture for reproduction from raw inputs. "
             "Refuses to overwrite"
+        ),
+    )
+    parser.add_argument(
+        "--from-study", default=None, metavar="PATH", dest="from_study",
+        help=(
+            "dependence only: re-measure Milestone CD from a persisted CD "
+            "artifact instead of replaying a capture. NO NETWORK AND NO CAPTURE "
+            "IS TOUCHED — every figure is re-derived from the observation rows "
+            "the artifact carries, which is what makes offline reproduction real "
+            "rather than claimed. Refuses a corrupted digest, a foreign schema "
+            "version, a foreign seal or a missing provenance field"
+        ),
+    )
+    parser.add_argument(
+        "--save-dependence", default=None, metavar="PATH", dest="save_dependence",
+        help=(
+            "dependence only: write the completed measurement as a "
+            "deterministic, digested artifact carrying EVERY observation-level "
+            "paired difference with the provenance to audit it offline, plus the "
+            "CD seal it was measured under and the capture digest it was measured "
+            "over. Refuses to overwrite"
         ),
     )
     parser.add_argument(
@@ -3740,6 +3779,27 @@ def _run_research(args: argparse.Namespace) -> int:
                 )
                 return EXIT_FAILURE
         return _run_universe_research(args)
+    if args.area == "dependence":
+        for name in ("symbols", "development", "holdout", "variant"):
+            value = getattr(args, name, None)
+            if value:
+                print(
+                    f"fmits research dependence: {name} is not accepted. The "
+                    "universe, the samples, the horizon, the estimator and every "
+                    "threshold are part of the sealed pre-registration",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        for name in ("start", "end"):
+            if getattr(args, name, None) is not None:
+                print(
+                    f"fmits research dependence: --{name} is not accepted. The "
+                    "measurement windows are Milestone BY's, sealed; moving one "
+                    "would make this a different study under the same digest",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+        return _run_dependence_research(args)
     if args.area == "admission":
         for name in ("symbols", "development", "holdout", "variant"):
             value = getattr(args, name, None)
@@ -4200,6 +4260,115 @@ def _run_admission_research(args: argparse.Namespace) -> int:
             encode_admission_study(study, writer="fmits research admission"), target
         )
         print(f"\nwrote {written}", file=sys.stderr)
+    return EXIT_OK
+
+
+def _run_dependence_research(args: argparse.Namespace) -> int:
+    """Run Milestone CD's sealed paired-effect dependence measurement.
+
+    **Offline, always.** There is no live path: CD measures the dependence of
+    Milestone CA's paired differences, CA is a pure function of a saved Milestone
+    BZ capture, and a study that refetched mutable market data would not be
+    reproducible even with frozen code. Either ``--from-capture`` (replay CA over
+    a capture and measure its output) or ``--from-study`` (re-derive every figure
+    from a persisted CD artifact) is required, and they are mutually exclusive.
+
+    The report separates OBSERVATION, MEASUREMENT, UNCERTAINTY, DESIGN
+    IMPLICATION and LIMITATIONS, and prints no recommendation of any kind. The
+    verdict says how well a dependence was identified. It is not permission to
+    trade, to paper trade, to shadow trade or to promote a setup, and Milestone
+    CA's NO_EDGE stands whatever it says.
+    """
+    if bool(args.from_capture) == bool(args.from_study):
+        print(
+            "fmits research dependence: exactly one of --from-capture and "
+            "--from-study is required. --from-capture replays Milestone CA over "
+            "a BZ capture and measures its paired differences; --from-study "
+            "re-derives every figure from a persisted CD artifact. There is no "
+            "live path, because a study that refetched mutable market data would "
+            "not be reproducible even with frozen code",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURE
+    target = None
+    if args.save_dependence:
+        target = Path(args.save_dependence)
+        if target.exists():
+            print(
+                f"fmits research dependence: {target} already exists; a research "
+                "artifact is never overwritten",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
+
+    def say(message: str) -> None:
+        print(message, file=sys.stderr, flush=True)
+
+    try:
+        if args.from_capture:
+            artifact = read_persistence_capture(args.from_capture)
+            if not verify_capture_digest(artifact):
+                print(
+                    f"fmits research dependence: capture {args.from_capture} does "
+                    "not match its own content digest; it has been edited or "
+                    "truncated and no number measured over it can be trusted",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+            missing = [
+                name
+                for name in ("primary", "holdout")
+                if name not in artifact.universe_names
+            ]
+            if missing:
+                print(
+                    f"fmits research dependence: this capture holds no "
+                    f"{', '.join(missing)} universe; it holds "
+                    f"{', '.join(artifact.universe_names)}. CD needs both, "
+                    "because a dependence measured on fifteen assets and one "
+                    "measured on thirty-six are different measurements",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+            study = dependence_study_from_capture(
+                artifact, run_at=datetime.now(timezone.utc), progress=say
+            )
+        else:
+            saved = read_dependence_study(args.from_study)
+            if not verify_dependence_study_digest(saved):
+                print(
+                    f"fmits research dependence: study {args.from_study} does not "
+                    "match its own content digest; it has been edited since it "
+                    "was written",
+                    file=sys.stderr,
+                )
+                return EXIT_FAILURE
+            saved.require_seal()
+            study = dependence_study_from_rows(
+                dependence_rows_of(saved),
+                manifest=saved.manifest,
+                reconstruction=saved.payload["reconstruction"],
+                progress=say,
+            )
+    except (PairedDependenceError, SwingLabError, ResearchDesignError) as error:
+        print(f"fmits research dependence: {error}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    print(render_dependence_study(study))
+
+    if target is not None:
+        payload = encode_dependence_study(study, writer="fmits research dependence")
+        try:
+            written = write_dependence_study(payload, target)
+        except (PairedDependenceError, OSError) as error:
+            print(f"fmits research dependence: {error}", file=sys.stderr)
+            return EXIT_FAILURE
+        print(f"\nSTUDY WRITTEN to {written}", file=sys.stderr)
+        print(
+            f"  content digest {payload['manifest']['content_digest']}",
+            file=sys.stderr,
+        )
+        print(f"  observations   {len(payload['observations']):,}", file=sys.stderr)
     return EXIT_OK
 
 

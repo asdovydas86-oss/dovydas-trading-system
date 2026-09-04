@@ -7,20 +7,158 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** CC — Universe Feasibility & Information Expansion (2026-08-28): the milestone
-that asked whether FMITS can build a universe large enough to test its own question, and found that
-it cannot — for a reason nobody expected. `fmis.universe` discovers every listed Binance spot
-instrument, collapses 3,649 tickers onto **660 economic assets**, and returns **38 eligible**
-against the **467 clusters** Milestone CB requires. Crypto co-moves heavily (mean pairwise
-correlation 0.604, one market factor explaining 62.5 % of variance) — but CA's estimand is a *paired
-within-symbol* difference that removes that factor, and the residual is indistinguishable from
-independence. **Dependence was not the wall.** What removes instruments is FMITS's own production
-warm-up: the weekly context role at 250 candles costs **1,750 days of history per instrument**, and
-**598 of 622 depth exclusions are that requirement**. Zero instruments were lost to data quality or
-liquidity. A post-hoc bound over the provider's entire history reaches only 106 clusters and ~1,089
-admissions against 467 and 4,823. Verdict: **`INFEASIBLE`, binding constraint `cluster_count`**. The
-question FMITS can honestly ask today is ~0.3–0.5 ATR, not +0.10. Full record:
-[report 0039](../../reports/0039_2026-08-28_UNIVERSE_FEASIBILITY_AND_INFORMATION_EXPANSION.md).
+**Last updated for:** CD — Paired-Effect Dependence Measurement (2026-09-03): the
+milestone that measured what Milestone CC's estimator structurally could not, found the
+assumption underneath CC was wrong, and then had **two of its own central claims overturned by
+independent review**. CC concluded the universe was too small; CD shows the deeper problem is that
+**the experiment's own unit of evidence is not independent across assets**. `fmis.paired_dependence`
+first persists the **Milestone BZ capture that had never been written down** — the missing file
+behind CB-1, CB-2 and CC-1 — and with it **2,390 observation-level paired differences**. A fresh
+replay reproduces Milestone CA's counts **and its effects to four decimal places**
+(246/234 candidates; 155/91/234 matched; −0.2028/−0.3347/−0.5337). One estimator on two named axes:
+**within-asset `rho_w` = −0.0355 [−0.0774, −0.0064]**, bounded near zero, so clustering by symbol
+costs no information; **between-asset `r_b` = +0.1984 [−0.0491, +0.4181]**, positive in **all 15
+panels** and **all 16 sensitivity cells**. CC assumed a paired within-symbol difference removes the
+market factor; it does not — **not** because the controls are distant in time (CD's first
+explanation, which review refuted) but because `control_forward` averages 200 draws and retains
+under 3 % of the admission leg's variance, leaving `corr(D, admission) = +0.987`. Review also found
+the effective-cluster arithmetic overstated ~3×: corrected, CC's 38 eligible assets supply
+**8–23** effective clusters and its 106-asset ceiling **9–37**, against 467, and the design-relevant
+dependence is **+0.037** — still **17×** the `1/K*` = 0.002141 at which the requirement stops being
+finite. Verdict **`INCONCLUSIVE`** — 15 assets cannot separate "no penalty" from "unreachable at any
+size" — though 5 of 15 panels are **`UNREACHABLE`** outright. Full record:
+[report 0040](../../reports/0040_2026-09-03_PAIRED_EFFECT_DEPENDENCE_MEASUREMENT.md).
+
+---
+
+## Milestone CD — Paired-Effect Dependence Measurement
+
+**Status: DONE (2026-09-03), uncommitted.** Research only. No production trading policy changed:
+`CONFIRMATION_LOOKBACK_BARS` is still `10`, `MINIMUM_AGREEING_FAMILIES` still `2`,
+`DEFAULT_TIMEFRAMES` still `1w/1d/4h`, `DEFAULT_BACKTEST_LIMIT` still `250`, warm-up still 1,750
+days — each asserted by import. No strategy tested, no threshold tuned, no setup promoted, no order
+placed, no credential read, no AI called. One public unauthenticated endpoint used (`klines`).
+
+**Why it exists.** Milestone CB's requirement of ~467 clusters is stated in *independent* clusters
+and CB could not say how far from independent CA's clusters are (CB-2), because CA's
+observation-level data was never persisted. CC tried to close the gap from outside with a
+price-return proxy, and its own review showed the proxy was **structurally incapable** of answering:
+cross-sectional demeaning pins the residual correlation at `−1/(K−1)` whatever the truth is (CC-7).
+CD measures the dependence from the **actual paired effect observations**.
+
+**The provenance gap it had to close first.** Milestone CA is a pure function of a saved Milestone
+BZ capture and has no live path — and **that capture was never written into the repository**. The
+runner that produced it during BZ was ad hoc and is gone. One unwritten runner degraded three
+milestones. CD wrote it down (`fmis.paired_dependence.capture`, a composition of existing functions
+choosing no window, symbol or threshold of its own) and persisted the result.
+
+**What it delivers.** `fmis.paired_dependence` (13 modules) behind `fmits research dependence`,
+which has **no live path**: either `--from-capture` or `--from-study`, never a fetch. Sealed
+pre-registration `28f8ebed…`, fixed before any estimate existed, deterministic across four
+`PYTHONHASHSEED` values in separate processes, with 47 mutation tests on the digest. Two artifacts:
+the BZ capture (`07b500c7…`, 13.4 MB) and the study (`754dccd6…`, 2,390 observations).
+
+**The one change to a sealed milestone**, and it is 14 lines: `study_from_capture` gained an
+**additive** `record_observer` sink — Milestone BZ's own pattern on `capture_geometry_candidates` —
+so CD reads CA's `PairedRecord`s from CA's own loop instead of copying it. A regression asserts a
+study run with an observer is equal field for field to one without, and that alternate-seed records
+are not observed.
+
+**The distinction it enforces.** One estimator, two grouping axes, two different quantities that are
+never printed in one column: group = **economic asset** yields `rho_w`, which CB's design effect
+`1 + (m−1)ρ` consumes; group = **time block** yields `r_b`, which caps effective clusters at `1/r_b`.
+Substituting one for the other would be wrong by orders of magnitude in the direction that flatters
+the design.
+
+**What it found.**
+
+- **`rho_w` = −0.0355, interval [−0.0774, −0.0064]** across 15 assets and 155 admissions. Repeated
+  admissions on one asset are essentially independent; the design effect is **1.00**. **CB-2 is
+  addressed with a measurement** — read as *bounded near zero* rather than *significantly negative*,
+  since at a true value of zero this estimator produces a zero-excluding interval ~15 % of the time.
+  The information was never lost inside a symbol.
+- **`r_b` = +0.1984, interval [−0.0491, +0.4181]** on the sealed headline; positive in **all 15
+  (family, sample) panels** (+0.095…+0.549, median +0.197) and **all 16 sensitivity cells**
+  (+0.112…+0.514). The 24-bar block gives +0.514 — the sealed 60-bar choice is the conservative half
+  of the grid.
+- **CC's central assumption is wrong — and CD's own first explanation of why was also wrong.**
+  CD initially attributed it to controls sitting 90–360 days away. The matching radius is a
+  **ceiling**, not a floor (10–90 days for 1,387 of 1,430 matched rows), two of five families draw a
+  **same-bar** control (960 of 2,390 rows), and the real cause is that `control_forward` is a mean
+  over **200** draws carrying 2.8 % of the admission leg's variance. `D` is arithmetically close to
+  the raw admission outcome — for `ca_null_opposite_direction`, `D ≡ 2 × admission` to 6e-14.
+- **The design implication is severe, though a third as severe as CD first claimed.** Review found
+  `r_b` is an *observation-level* correlation while `K/(1+(K−1)r)` consumes a *cluster-level* one;
+  arbitrated by simulation, the sealed formula overstates the design effect 2.6×. Corrected, the
+  design-relevant `q · r_b` is **+0.037**, CC's 38 assets supply **8.0–23.1** effective clusters and
+  106 supply **9.1–37.5**, against **467** — a **12–51×** shortfall, not 50–250×.
+- **Verdict `INCONCLUSIVE`**, honestly: the headline interval spans from at-or-below zero to far
+  above the threshold, so 15 assets cannot separate "no dependence penalty" from "unreachable at any
+  universe size". **5 of 15 panels — every family on validation — are `UNREACHABLE`** across their
+  whole interval, but validation is semi-contaminated by construction, so that is corroboration and
+  not confirmation.
+- **A reproducibility result nobody asked for.** A fresh 80-minute replay three years on reproduces
+  CA's 246/234 candidates and 155/91/234 matched admissions **exactly**, and the 21.3 % overlapping-
+  admission share matches report 0037 §23's "33 of 155" to the unit.
+
+**Estimator validation.** 14 synthetic scenarios × 25 replicates. Every point expectation recovered
+within a **derived** `1/(K−1)` tolerance, and the ordering reproduced strictly (0.0007 < 0.0573 <
+0.2016 < 0.4897). The decisive row: applying CC's cross-sectional demeaning to a known panel returns
+**−0.071428 = −1/(15−1)** to six decimal places — **CC's failure reproduced with CD's own
+machinery**. On real data CC's estimator returns −0.05…−0.33 across the fifteen panels, negative
+everywhere, never near the +0.095…+0.549 the data contains.
+
+**What it does NOT do.** No verdict approves trading, paper trading, shadow trading or a strategy —
+`is_approved_for_trading` is `False` for every member of both new enums, asserted over the enums.
+CA's `NO_EDGE`, CB's `UNDERPOWERED` and CC's `INFEASIBLE` all stand; CC's verdict is preserved
+verbatim and the refinement recorded beside it.
+
+**Verification.** 660 CD tests; **14,049 passing repository-wide under `-W error`** (13,384 before;
++665). **43/43 rule-level mutation probes killed**, re-run in one campaign against the final tree — the first pass left 8 survivors and 1 bad
+anchor, and **every one was investigated and closed with a regression**; three turned out to be
+**vacuous tests** passing through the wrong code path (a shared-block floor never exercised because
+`pearson` refused first, a single-bucket refusal reached via the point estimate, and an identity
+test using `BTCUSDT` where base asset and identity are the same string). Offline reproduction proven
+with **both** `fetch_raw_klines` and `study_from_capture` monkeypatched to raise. An architecture
+guard fired on the renderer during development and was **obeyed rather than widened**.
+
+**Repository conventions CD violated and repaired.** The first full-suite run failed 13 tests, all
+genuine: three of CD's exports collided with `fmis.swing_lab` and `fmis.universe`, breaking the
+repository's **zero public-name collision** invariant (CD renamed its own), and four import-
+reachability allowlists needed CD added on the footing CC already established.
+
+**CD's first attempt at strengthening those guards was itself defeated by a reviewer**, who admitted
+a fake package into the laboratory with a two-line allowlist edit and an empty guard file — the
+guards derived their exemption set from the allowlist they were checking. The invariant is now
+declared **once**, in `tests/architecture_tiers.py`, as a **partition**: research ∪ production is
+asserted equal to the packages that exist on disk, so a new package cannot be admitted by silence.
+**56 packages, 4 research, 52 production, and `pipeline/cli.py` is the only non-research module
+importing any research package.** The reviewer's bypass is reproduced step by step and rejected, and
+four unauthorised dependencies injected into `src/` were each caught by 4–5 guards with byte-exact
+restore.
+
+**Independent review — performed, and it changed the science.** Three narrow reviewers
+(statistics; bias and causality; engineering and reproducibility) returned **30 findings, two of
+them critical**, and **every one was reproduced independently before being accepted** — two by
+fresh simulation. The two critical findings overturned CD's *mechanism* and its *effective-cluster
+arithmetic*; neither touched the headline estimates or the verdict, which three reviewers
+recomputed from the artifact and confirmed exactly. Nine defects were fixed with regressions,
+including **a weighted-ICC bug** (a correlation that moved when every weight was multiplied by a
+constant — and whose fix also repaired a real pseudoreplication hole), **an observer hook that could
+have mutated Milestone CA's published effect**, and **two architecture guards CD had claimed as a
+strengthening that were in fact circular** — a reviewer admitted a fake package into the laboratory
+with a two-line edit and an empty file. Five further findings sit inside the digest and are
+**disclosed rather than fixed**, each with its behaviour pinned by a test, exactly as Milestone CA
+did in report 0037 §22. Twelve post-review limitations (CD-8…CD-19) are carried separately from the
+seal. **The report was substantially rewritten**, and every withdrawn claim is marked as withdrawn
+rather than deleted. Dispositions: report 0040 §30.
+
+**Recommended next:** **not** CC's warm-up sensitivity study — CD removes its premise, because
+warm-up moves the *ceiling* and the ceiling is not what binds. The open question is whether the
+**experimental unit** can be redesigned so its estimand is contemporaneously market-neutral (a
+control at the same instant, or an excursion relative to the universe's own move in that window).
+The honest alternative — stopping this swing-admission research branch after five milestones — is
+equally on the table and is the owner's decision.
 
 ---
 

@@ -251,6 +251,57 @@ the automation ladder remains unstarted.
 
 ## 4. Product milestones
 
+> **Record gap, stated rather than quietly filled.** Milestones `BX`, `BY`, `BZ`, `CA`, `CB` and
+> `CC` each added a `fmits research` sub-area and **none was entered in this changelog**, although
+> `BW` was. Those entries are not written retroactively here: this milestone did not perform that
+> work and cannot verify its commit state, and inventing six entries would be worse than recording
+> the gap. They are fully recorded in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md),
+> the [backlog](FMITS_PRODUCT_BACKLOG.md) §8 and reports 0034–0039.
+
+### 2026-09-04 · `CD` — `fmits research dependence` — the owner can ask whether the evidence is independent
+
+**Status:** Released — **a new user-visible capability**, and one that approves nothing.
+**Commit:** recorded on push; see [report 0040](reports/0040_2026-09-03_PAIRED_EFFECT_DEPENDENCE_MEASUREMENT.md) §36.
+
+**Product capability added.** One command — `fmits research dependence` — that measures how
+dependent the swing-admission evidence actually is, within one economic asset and between assets
+observed in the same period, and says what that does to the sample size any honest future experiment
+would need.
+
+**What the owner can now do.** Ask, and get an auditable answer to: *"if I collect more assets, do I
+actually get more information?"* Before this, the answer was assumed. It is now measured — and the
+measurement says **information does not accumulate across assets the way the research design
+assumed**. The command runs entirely offline from a persisted artifact, prints OBSERVATION /
+MEASUREMENT / UNCERTAINTY / DESIGN IMPLICATION / LIMITATIONS as separate blocks, and can be re-run to
+byte-identical output.
+
+**Also delivered, and arguably worth more than the command.** The Milestone BZ capture — the input
+every BZ and CA figure was measured from — **had never been written into the repository**. It is now
+persisted, digest-verified, and reproduces Milestone CA's published effects to four decimal places.
+Three earlier milestones were degraded by its absence.
+
+**Limitations.** Every one is explicit. The verdict is `INCONCLUSIVE`: fifteen assets cannot resolve
+the quantity to the precision the design question needs. The measured dependence is inherited from
+the raw admission outcome rather than from a market-neutralised paired effect. The panel is
+survivor-only. Seven sealed limitations (CD-1…CD-7) and thirteen post-review limitations
+(CD-8…CD-20) travel with the result and print on every report.
+
+**Safety / risk notes.** **No trading capability of any kind.** `DependenceVerdict` and
+`RequirementOutcome` report `is_approved_for_trading` `False` and `earns_forward_test` `False` for
+**every** member, asserted over both enums by a hostile test. No production constant changed, no
+strategy tested, no threshold tuned, no order placed, no credential read, no AI called. Milestone
+CA's `NO_EDGE`, CB's `UNDERPOWERED` and CC's `INFEASIBLE` all stand. One public unauthenticated
+endpoint (`klines`) was used, read-only, to take the capture.
+
+**Related.** [report 0040](reports/0040_2026-09-03_PAIRED_EFFECT_DEPENDENCE_MEASUREMENT.md) ·
+[report 0039](reports/0039_2026-08-28_UNIVERSE_FEASIBILITY_AND_INFORMATION_EXPANSION.md) ·
+[report 0038](reports/0038_2026-08-28_STATISTICAL_POWER_AND_RESEARCH_DESIGN.md) ·
+[report 0037](reports/0037_2026-08-27_SWING_ADMISSION_NULL_MODEL_RESEARCH.md)
+
+**Breaking changes.** None. One additive keyword-only argument on
+`fmis.swing_lab.admission_study.study_from_capture`, defaulting to `None`, asserted by regression to
+leave Milestone CA's study field-for-field identical.
+
 ### 2026-08-25 · `BW` — `fmits research swing` — the owner can ask whether a strategy actually works
 
 **Status:** Released — production commit on top of `d8e1b9e`, with this product-docs commit recorded

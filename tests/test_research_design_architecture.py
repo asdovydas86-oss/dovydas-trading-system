@@ -22,6 +22,11 @@ from pathlib import Path
 
 import pytest
 
+from architecture_tiers import (
+    RESEARCH_PACKAGES,
+    assert_tier_partition_is_complete,
+)
+
 _SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src" / "fmis"
 _PACKAGE = _SOURCE_ROOT / "research_design"
 
@@ -400,6 +405,16 @@ class TestTheProductionBoundary:
         # still runs one way — nothing here imports `fmis.universe` — so the reuse
         # claim is strengthened rather than weakened, and the property this guard
         # protects is unchanged: no ENGINE reaches the design layer.
+        # Milestone CD adds four `paired_dependence/` modules, on the same
+        # footing again: a THIRD research package expressing a third milestone's
+        # question in the general vocabulary. It calls `derive_seed`,
+        # `nearest_rank_quantile`, `largest_share` and `required_information`
+        # rather than retyping any of them — which is the reuse this package
+        # exists for — and it does not import `fmis.universe`'s design layer or
+        # anything else that would make the dependency two-way. The property this
+        # guard protects is unchanged: no ENGINE reaches the design layer, and
+        # the test below asserts that for the newly admitted package rather than
+        # leaving it to this comment.
         assert offenders <= {
             "pipeline/cli.py",
             "swing_lab/admission_matching.py",
@@ -407,7 +422,46 @@ class TestTheProductionBoundary:
             "swing_lab/metrics.py",
             "swing_lab/robustness.py",
             "universe/growth.py",
+            "paired_dependence/controls.py",
+            "paired_dependence/estimator.py",
+            "paired_dependence/observations.py",
+            "paired_dependence/study.py",
+            "paired_dependence/uncertainty.py",
+            "paired_dependence/integration.py",
+            "paired_dependence/synthetic.py",
         }, sorted(offenders)
+
+    def test_the_research_packages_admitted_above_are_themselves_unreachable(
+        self,
+    ) -> None:
+        """What makes admitting a research package safe rather than convenient.
+
+        `fmis.universe` and `fmis.paired_dependence` may import the design layer
+        only because nothing outside the research tier imports THEM. Asserted
+        here from source, so widening the list without widening the guarantee is
+        a test failure.
+        """
+        # The shared partition, not a set restated here. See
+        # `tests/architecture_tiers.py`.
+        research = set(RESEARCH_PACKAGES)
+        assert_tier_partition_is_complete()
+        for package in ("universe", "paired_dependence"):
+            offenders: set[str] = set()
+            for path in sorted(_SOURCE_ROOT.rglob("*.py")):
+                relative = str(path.relative_to(_SOURCE_ROOT)).replace("\\", "/")
+                if relative.split("/")[0] in research:
+                    continue
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        names = [alias.name for alias in node.names]
+                    elif isinstance(node, ast.ImportFrom):
+                        names = [node.module or ""]
+                    else:
+                        continue
+                    if any(item.startswith(f"fmis.{package}") for item in names):
+                        offenders.add(relative)
+            assert offenders <= {"pipeline/cli.py"}, (package, sorted(offenders))
 
     def test_the_dashboard_depends_on_nothing_here(self) -> None:
         dashboard = _SOURCE_ROOT / "operator_dashboard"

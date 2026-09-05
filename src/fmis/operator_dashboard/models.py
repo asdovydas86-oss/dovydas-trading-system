@@ -69,6 +69,9 @@ __all__ = [
     "UnreadableRow",
     "SwingSnapshot",
     "SwingView",
+    "TransitionRow",
+    "SymbolChangeRow",
+    "ScanChangeView",
     "PositionRow",
     "LimitRow",
     "BookRow",
@@ -677,6 +680,91 @@ class SwingView:
 # ---------------------------------------------------------------------------
 # Portfolio
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# What changed since the previous comparable scan
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class TransitionRow:
+    """One dimension that differs, and the two values it differs between.
+
+    ``dimension`` is `fmis.scan_memory.ChangeDimension`'s own value; the
+    operator's wording for it lives beside the other label tables in the
+    renderer, so a second UI supplies its own. ``previous`` and ``current`` are
+    the engines' own values, carried at runtime — this package names no side and
+    invents no vocabulary, on the ADR-0028 boundary every module here observes.
+
+    **No severity, no weight, no arrow beyond the two ends.** There is no field
+    here that could say whether the change was good, and none that could rank it
+    against another symbol's.
+    """
+
+    dimension: str
+    previous: str
+    current: str
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolChangeRow:
+    """One symbol's differences, **with its current state named first.**
+
+    ``state`` is what the symbol is *now*. Everything else on this row qualifies
+    that; nothing replaces it, and a guard asserts no renderer shows a transition
+    without the current state beside it. A page that showed only *BTCUSDT
+    changed* would have told the operator nothing he could act on.
+    """
+
+    symbol: str
+    state: str
+    previous_state: str
+    transitions: tuple[TransitionRow, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ScanChangeView:
+    """This scan beside the previous comparable completed one — or why there is none.
+
+    **Four statuses, and *unchanged* is only ever one of them.** ``compared`` is
+    the only one under which ``changed`` and ``unchanged`` mean anything; the
+    other three carry a ``reason`` and no per-symbol result at all, because
+    *"nothing changed"* and *"there was nothing to compare against"* are
+    different facts and an operator acts differently on them.
+
+    ``recorded`` is `False` when this scan's analysis succeeded and remembering
+    it did not. The page still shows the analysis and says plainly that the scan
+    was not recorded; it never claims change tracking succeeded.
+
+    **No score, no rank, no ordering of its own.** ``changed`` arrives in the
+    scan's own universe order and this layer does not sort it.
+    """
+
+    status: str
+    current_scan_at: datetime
+    previous_scan_at: datetime | None = None
+    reason: str = ""
+    changed: tuple[SymbolChangeRow, ...] = ()
+    unchanged: tuple[str, ...] = ()
+    recorded: bool = True
+    recording_note: str = ""
+
+    @property
+    def compared(self) -> bool:
+        return self.status == "compared"
+
+    def change_for(self, symbol: str) -> SymbolChangeRow | None:
+        """One symbol's differences, by name. **A lookup, never a nearest match.**
+
+        `None` means *this symbol did not change* only when `compared` is true.
+        Under every other status it means there was no comparison at all, and
+        the surfaces say which.
+        """
+        for row in self.changed:
+            if row.symbol == symbol:
+                return row
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1300,6 +1388,12 @@ class OperatorDashboardSnapshot:
     geometry: DashboardSection[GeometryView] | None = None
     validation: DashboardSection[ValidationView] | None = None
     warnings: tuple[WarningRow, ...] = ()
+    #: What changed since the previous comparable completed scan. `None` on a
+    #: snapshot composed without scan memory — a page missing the temporal
+    #: section, never a page that invents one. Supplied already computed by the
+    #: layer that owns the history store, because **this package writes nothing**
+    #: and a guard asserts it.
+    scan_change: ScanChangeView | None = None
     limitations: tuple[tuple[str, str], ...] = ()
     schema_version: int = DASHBOARD_SCHEMA_VERSION
     metadata: Mapping[str, Any] = field(default_factory=dict)

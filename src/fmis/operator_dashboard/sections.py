@@ -74,9 +74,12 @@ from fmis.operator_dashboard.models import (
     DevelopingEvidenceRow,
     EvidenceItemRow,
     FactorRow,
+    ScanChangeView,
     SwingSnapshot,
     SwingView,
+    SymbolChangeRow,
     SymbolDecisionRow,
+    TransitionRow,
     TimeframeRow,
     UnreadableRow,
     WarningRow,
@@ -99,6 +102,7 @@ __all__ = [
     "swing_view",
     "symbol_decision_rows",
     "swing_snapshot",
+    "scan_change_view",
     "portfolio_view",
     "paper_view",
     "performance_views",
@@ -1458,4 +1462,50 @@ def validation_view(
         ),
         limitations=tuple(manifest["limitations"]),
         candidate_policy_ids=artifact.candidate_policy_ids,
+    )
+
+
+# ---------------------------------------------------------------------------
+# What changed since the previous comparable scan
+# ---------------------------------------------------------------------------
+
+
+def scan_change_view(comparison: Any) -> ScanChangeView:
+    """One `fmis.scan_memory.ScanComparison`, translated field for field.
+
+    **A translation and nothing else.** No dimension is added, dropped, merged
+    or reordered here, and no symbol is filtered: the comparator decided what
+    changed and this function carries that decision across the seam. Reordering
+    the changed symbols would invent an attention ranking the engine
+    deliberately refused to produce, so the tuple arrives in the scan's own
+    universe order and leaves in it.
+
+    The enum members are read at runtime for their own values, exactly as
+    `_developing_row` and `_blocker_row` read theirs — this package names no
+    dimension vocabulary of its own.
+    """
+    return ScanChangeView(
+        status=comparison.status.value,
+        current_scan_at=comparison.current_scan_at,
+        previous_scan_at=comparison.previous_scan_at,
+        reason=comparison.reason,
+        changed=tuple(
+            SymbolChangeRow(
+                symbol=change.symbol,
+                state=change.state,
+                previous_state=change.previous_state,
+                transitions=tuple(
+                    TransitionRow(
+                        dimension=transition.dimension.value,
+                        previous=transition.previous,
+                        current=transition.current,
+                    )
+                    for transition in change.transitions
+                ),
+            )
+            for change in comparison.changes
+        ),
+        unchanged=tuple(comparison.unchanged),
+        recorded=comparison.recorded,
+        recording_note=comparison.recording_note,
     )

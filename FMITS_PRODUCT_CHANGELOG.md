@@ -258,6 +258,80 @@ the automation ladder remains unstarted.
 > the gap. They are fully recorded in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md),
 > the [backlog](FMITS_PRODUCT_BACKLOG.md) §8 and reports 0034–0039.
 
+### 2026-09-05 · `DU` — FMITS remembers the last scan, so you do not have to
+
+**Status:** Released — pending commit. **Adds a user-visible capability.**
+
+**What the owner can do that was impossible before: open FMITS after a refresh
+and see, in seconds, whether anything decision-relevant has actually moved since
+the last comparable scan — and exactly what.**
+
+Slices 1 and 2 answered *what is happening with this symbol now, and why*.
+Nothing answered *what changed since I last looked*. The scan is twenty symbols
+and most of them sit at `WAIT` for days, so the only way to notice a change was
+to hold twenty symbols' worth of state in your head between sessions. In
+practice that comparison did not happen.
+
+**`/swing` now opens with *Since the previous comparable scan*.** When the previous
+scan and this one are comparable, it names both instants, how many symbols
+changed, how many did not, and — for each symbol that changed — its **current**
+decision, what it was before, and every named dimension that moved:
+
+```
+BTCUSDT — WAIT   previously wait
+
+Changed                  From                      To
+Blocker                  HTF regime not eligible   timeframes disagree
+HTF context structure    neutral                   sustained lower
+```
+
+That is the case worth having. The decision did not move and the situation did:
+the higher-timeframe gate BTC could not pass is now passed, and what stops it is
+a disagreement between timeframes instead. Before this, those two states rendered
+identically.
+
+**`/swing/SYMBOL` carries the same block**, beneath the current decision and
+above the evidence audit. It states only the dimensions that moved.
+
+**Twelve things it will tell you about, and nothing else:** whether the symbol
+was in the scan at all, the decision, the policy direction, decision-context
+sufficiency, developing evidence, the named blocker, the structural trend of each
+of the three timeframe roles, whether evidence independence was established,
+whether the evidence projection ran, and the four evidence-group counts.
+
+**It is quiet when nothing happened.** Zero changes prints one sentence, not
+twenty rows saying *unchanged* — the workspace below already shows every symbol's
+current state.
+
+**It never guesses, and it never says *unchanged* when it means *unknown*.**
+There are four distinct answers and they are different facts: *baseline scan
+recorded* on the first run, *no previous comparable scan* when the watchlist or
+the timeframes changed, *history could not be read* when a stored record is
+damaged — and only after a real comparison, *no material change*. In all three of
+the first cases the market analysis on the page is completely unaffected.
+
+**The clock moving is not a change.** A refresh an hour later over an unchanged
+market reports nothing at all. Data ages and bar counts are shown, as before,
+where they belong — they are never compared, so they never generate noise.
+
+**It survives restarting the dashboard.** Verified live: the process was killed,
+a new one started, and the next scan compared against the scan the previous
+process had recorded. Opening pages never records anything — only a refresh does.
+
+**What it deliberately is not.** No score, no rank, no importance, no urgency:
+`WAIT → CANDIDATE` is a named factual transition, not a 95/100, and changed
+symbols are listed in the scan's own order. No alert, no notification, no
+Telegram, no email. No AI — the comparison is deterministic end to end. No
+freshness verdict. And nothing here is a signal, a forecast, a validated edge or a
+reason to trade; it is a record of what this system's own conclusions did.
+
+**Nothing changed about the analysis itself.** The trading policy is byte-for-byte
+identical to Slice 1's and Slice 2's, and history is structurally incapable of
+reaching a decision: the packages that compute assessments cannot import the
+package that holds it.
+
+---
+
 ### 2026-09-04 · `DT` — the Swing workspace answers before you open a symbol
 
 **Status:** Released — pending commit. **Adds a user-visible capability, and

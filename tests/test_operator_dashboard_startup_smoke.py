@@ -127,7 +127,9 @@ class _Dashboard:
                 stream.close()
 
 
-def _start(store_root: Path, *, break_mode: str = "none") -> _Dashboard:
+def _start(
+    store_root: Path, scan_history_root: Path, *, break_mode: str = "none"
+) -> _Dashboard:
     process = subprocess.Popen(
         [
             sys.executable,
@@ -141,6 +143,10 @@ def _start(store_root: Path, *, break_mode: str = "none") -> _Dashboard:
             "0",
             "--store-root",
             str(store_root),
+            # The command remembers completed scans. Pointed at the test's own
+            # directory so a smoke run never writes to the owner's history.
+            "--scan-history-root",
+            str(scan_history_root),
             "--break",
             break_mode,
         ],
@@ -162,7 +168,7 @@ def dashboard(tmp_path):
     def start(*, break_mode: str = "none") -> _Dashboard:
         store = tmp_path / "store"
         store.mkdir(exist_ok=True)
-        running = _start(store, break_mode=break_mode)
+        running = _start(store, tmp_path / "scan_memory", break_mode=break_mode)
         started.append(running)
         return running
 
@@ -235,6 +241,36 @@ def test_the_operators_command_starts_serves_the_dashboard_and_stops(dashboard) 
     assert any("stopped" in line for line in running.stderr), (
         f"the command did not report stopping; stderr was {running.stderr!r}"
     )
+
+
+def test_the_started_command_remembers_its_scan_and_page_loads_do_not(
+    dashboard, tmp_path
+) -> None:
+    """**Slice 3, in a real process.** The command the operator types records the
+    completed scan; the pages he then opens record nothing.
+
+    This is the one place the recording seam is exercised through the real
+    argument vector, the real parser, the real `SnapshotHolder` and a real
+    socket — the sequence the startup smoke test exists for. Everything else
+    about scan memory is asserted offline in
+    `tests/test_swing_scan_change_surface.py`; what could only fail *here* is the
+    wiring between the command and the store.
+    """
+    running = dashboard()
+    url = running.url()
+    assert url is not None, running.stdout
+
+    scans = tmp_path / "scan_memory" / "scans"
+    recorded = sorted(scans.glob("*.json"))
+    assert len(recorded) == 1, [path.name for path in recorded]
+
+    # Six page loads across three routes. A `GET` renders the held snapshot and
+    # performs no refresh, so it writes no history.
+    for _ in range(2):
+        for path in ("/", "/swing", "/swing/BTCUSDT"):
+            status, _headers, _body = _get(url, path)
+            assert status == 200, (path, status)
+    assert sorted(scans.glob("*.json")) == recorded
 
 
 def test_the_url_is_announced_only_once_it_can_be_answered(dashboard) -> None:

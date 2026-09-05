@@ -49,9 +49,11 @@ from fmis.operator_dashboard.models import (
     DevelopingEvidenceRow,
     EvidenceItemRow,
     SetupRow,
+    ScanChangeView,
     SourceState,
     SwingSnapshot,
     SwingView,
+    SymbolChangeRow,
     SymbolDecisionRow,
     TimeframeRow,
     WarningRow,
@@ -1326,6 +1328,193 @@ def _decision_detail(row: SymbolDecisionRow) -> str:
     return "".join(parts)
 
 
+# ---------------------------------------------------------------------------
+# What changed since the previous comparable scan
+# ---------------------------------------------------------------------------
+
+#: The operator's wording for each change dimension. Presentation, exactly like
+#: `_BLOCKER_LABELS` above: the models carry `fmis.scan_memory`'s own value and a
+#: second UI supplies its own words.
+_DIMENSION_LABELS: dict[str, str] = {
+    "presence": "In this scan",
+    "decision": "Decision",
+    "policy_direction": "Policy direction",
+    "decision_context": "Decision context",
+    "developing_evidence": "Developing evidence",
+    "blocker": "Blocker",
+    "context_structure": "HTF context structure",
+    "setup_structure": "Setup structure",
+    "execution_structure": "Execution structure",
+    "evidence_independence": "Evidence independence",
+    "evidence_availability": "Evidence projection",
+    "evidence_composition": "Evidence composition",
+}
+
+#: What the temporal surface is, and — just as importantly — what it is not.
+#: Printed on the page rather than left for the owner to infer, on the same
+#: terms as every other limitation this dashboard states.
+_CHANGE_NOTE = (
+    "A difference between two named states this system already decided. "
+    "Nothing here is scored, ranked or weighted, no transition is more "
+    "important than another, and none of them is a signal, a forecast or a "
+    "reason to trade. Instants, ages and bar counts are not compared at all, "
+    "so a refresh over an unchanged market reports nothing."
+)
+
+
+def _symbols(count: int) -> str:
+    """``"1 symbol"`` / ``"20 symbols"``. Counting, not a calculation."""
+    return f"{count} symbol" if count == 1 else f"{count} symbols"
+
+
+def _transition_value(dimension: str, value: str) -> str:
+    """One end of a transition, in the vocabulary the rest of the page uses."""
+    if dimension == "blocker":
+        return _label(value, _BLOCKER_LABELS)
+    return value.replace("_", " ")
+
+
+def _transition_rows(row: SymbolChangeRow) -> str:
+    """One symbol's differences. **From and to, and nothing between them.**
+
+    No arrow is coloured, no end is called better, and the two values are the
+    engines' own. `fmis.scan_memory` constructs a transition only when the ends
+    differ, so a row reading ``trending → trending`` cannot be produced here.
+    """
+    return _table(
+        [("Changed", ""), ("From", ""), ("To", "")],
+        [
+            "<tr>"
+            f"<td>{_e(_label(item.dimension, _DIMENSION_LABELS))}"
+            f'<br><span class="sub">{_e(item.dimension)}</span></td>'
+            f"<td>{_e(_transition_value(item.dimension, item.previous))}</td>"
+            f"<td>{_e(_transition_value(item.dimension, item.current))}</td>"
+            "</tr>"
+            for item in row.transitions
+        ],
+    )
+
+
+def _changed_symbol(row: SymbolChangeRow) -> str:
+    """One changed symbol: **what it is now, then what it changed from.**
+
+    The current decision is the heading and the transitions hang beneath it.
+    Reversing that would put an operator's attention on a state the market has
+    already left.
+    """
+    return (
+        '<div class="change">'
+        f'<h4 class="sym">{_setup_link(row.symbol)} — {_setup_chip(row.state)}'
+        f'<span class="sub"> previously {_e(row.previous_state)}</span></h4>'
+        f"{_transition_rows(row)}"
+        "</div>"
+    )
+
+
+def _scan_change_body(view: ScanChangeView) -> str:
+    """The temporal surface. **Quiet when nothing happened.**
+
+    Zero changes prints one sentence, not twenty rows of *unchanged*: the
+    workspace below already states every symbol's current state, and a
+    monitoring surface that shouts on a quiet day trains its reader to skip it.
+    """
+    parts: list[str] = []
+    if not view.compared:
+        parts.append(_empty(view.reason))
+        if view.recording_note:
+            parts.append(f'<p class="note">{_e(view.recording_note)}</p>')
+        parts.append(f'<p class="note">{_e(_CHANGE_NOTE)}</p>')
+        return "".join(parts)
+
+    total = len(view.changed) + len(view.unchanged)
+    parts.append(
+        '<div class="tiles">'
+        + _tile("Previous comparable scan", _stamp(view.previous_scan_at), small=True)
+        + _tile("This scan", _stamp(view.current_scan_at), small=True)
+        + _tile("Changed", _e(len(view.changed)))
+        + _tile("No material change", _e(len(view.unchanged)))
+        + "</div>"
+    )
+    if view.changed:
+        parts.append("".join(_changed_symbol(row) for row in view.changed))
+        parts.append(
+            f'<p class="note">{_e(len(view.changed))} of {_e(_symbols(total))} '
+            "changed on at least one dimension, in the scan's own order. This "
+            "is not an ordering by importance.</p>"
+        )
+    else:
+        parts.append(
+            _empty(
+                "No material Swing state change since the previous comparable "
+                "scan."
+            )
+        )
+    if view.unchanged:
+        parts.append(
+            _details(
+                f"{_symbols(len(view.unchanged))} with no material change",
+                f'<p class="sym">{_e(", ".join(view.unchanged))}</p>',
+            )
+        )
+    if view.recording_note:
+        parts.append(f'<p class="note">{_e(view.recording_note)}</p>')
+    parts.append(f'<p class="note">{_e(_CHANGE_NOTE)}</p>')
+    return "".join(parts)
+
+
+def _scan_change_panel(view: ScanChangeView | None) -> str:
+    """The *what changed* panel, or nothing at all when history is not wired.
+
+    A snapshot composed without scan memory renders the workspace exactly as it
+    did before this section existed — a page missing the section, never a page
+    claiming that nothing changed.
+    """
+    if view is None:
+        return ""
+    return _panel("Since the previous comparable scan", _scan_change_body(view))
+
+
+def _absent_symbol_change(view: ScanChangeView | None, symbol: str) -> str:
+    """The change block for a symbol this scan did not assess, when there is one.
+
+    Deliberately narrower than `_symbol_change_panel`: a symbol with no decision
+    and no comparison gets **nothing** rather than *no material change*, because
+    the two would then be indistinguishable from a symbol that was never on the
+    watchlist at all.
+    """
+    if view is None or not view.compared or view.change_for(symbol) is None:
+        return ""
+    return _symbol_change_panel(view, symbol)
+
+
+def _symbol_change_panel(view: ScanChangeView | None, symbol: str) -> str:
+    """One symbol's change block, stated only when a comparison exists.
+
+    **Unchanged dimensions are omitted.** A block that listed every dimension
+    with both ends equal would bury the two that moved, which is the failure
+    this whole surface exists to fix.
+    """
+    if view is None:
+        return ""
+    if not view.compared:
+        return _panel(
+            "Since the previous comparable scan", _empty(view.reason)
+        )
+    row = view.change_for(symbol)
+    if row is None:
+        body = _empty(
+            "No material Swing state change for this symbol since the previous "
+            "comparable scan."
+        )
+    else:
+        body = _transition_rows(row) + (
+            f'<p class="note">Previously {_e(row.previous_state)}. The current '
+            "decision above is what this symbol is now; this states only what "
+            "is different from the previous comparable scan.</p>"
+        )
+    return _panel("Since the previous comparable scan", body)
+
+
 def _swing_body(view: SwingView) -> str:
     parts: list[str] = []
     parts.append("<h3>This scan</h3>")
@@ -1994,7 +2183,16 @@ def _markets(snapshot: OperatorDashboardSnapshot) -> str:
 
 
 def _swing(snapshot: OperatorDashboardSnapshot) -> str:
-    return _guarded(snapshot.swing, "Swing decision workspace", _swing_body)
+    """**What changed, then the current workspace.**
+
+    The temporal panel comes first because the question it answers — *is there
+    anything here I have not already seen?* — is the one that decides whether
+    the twenty rows below need reading at all. It never replaces them: the
+    workspace beneath is the current state, in full, exactly as before.
+    """
+    return _scan_change_panel(snapshot.scan_change) + _guarded(
+        snapshot.swing, "Swing decision workspace", _swing_body
+    )
 
 
 def _symbol_page(snapshot: OperatorDashboardSnapshot, symbol: str) -> str:
@@ -2021,18 +2219,28 @@ def _symbol_page(snapshot: OperatorDashboardSnapshot, symbol: str) -> str:
     row = None if view is None else view.row_for(symbol)
     decision = None if view is None else view.decision_for(symbol)
     if row is None and decision is None:
-        return _panel(
-            f"{symbol}",
-            _empty(
-                f"{symbol} produced no assessment on this refresh. It may not "
-                "have been readable, or may not be on the scanned watchlist — "
-                "the Swing page states which."
+        # The change block is still shown when there is one. A symbol that was
+        # assessed on the previous comparable scan and produced nothing on this
+        # one is exactly the case where *what changed* is the only thing there
+        # is to say — and dropping it here would say nothing at all.
+        return (
+            _panel(
+                f"{symbol}",
+                _empty(
+                    f"{symbol} produced no assessment on this refresh. It may "
+                    "not have been readable, or may not be on the scanned "
+                    "watchlist — the Swing page states which."
+                ),
             )
-            + back,
+            + _absent_symbol_change(snapshot.scan_change, symbol)
+            + back
         )
     parts = []
     if decision is not None:
         parts.append(_decision_detail(decision))
+    # After the operator summary and before the evidence audit: the current
+    # decision stays first, and history qualifies it rather than burying it.
+    parts.append(_symbol_change_panel(snapshot.scan_change, symbol))
     if row is not None:
         parts.append(_swing_detail(row))
     return "".join(parts) + back

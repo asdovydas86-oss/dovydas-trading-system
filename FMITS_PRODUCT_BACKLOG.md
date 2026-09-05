@@ -664,6 +664,12 @@ outage named as the immediate next task on 2026-09-04. Its row is left in place 
 point-in-time record; the resolution is `DR` in §8. **EP-21 is not covered by it** and is now the
 recommended next dashboard task.
 
+**Swing Product Slice 3 is DONE** *(2026-09-05, report 0044)*: the operator could read the current
+state of twenty symbols and could not tell which of them had *moved*. Resolved as `DU` in §8. It
+**does not satisfy the exactly-one-NOW rule**, which remains outstanding. Slice 3 is deterministic
+temporal state comparison and nothing else: it built no alert, no notification, no AI
+interpretation, no ranking and no freshness policy, and it did not begin Slice 4.
+
 **Swing Product Slice 2 is DONE** *(2026-09-04, report 0043)*: the operator used Slice 1 and
 reported that the page answered an audit question before a trading one. Resolved as `DT` in §8. It
 **does not satisfy the exactly-one-NOW rule**, which remains outstanding. Slice 1's deferred second
@@ -745,6 +751,29 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `DU` — Swing Product Slice 3: Scan Memory and "What Changed" · **DONE**
+
+| Field | Value |
+|---|---|
+| **What shipped** | **FMITS remembers the previous scan, so the operator does not have to.** `/swing` opens with *Since the previous comparable scan* — which symbols changed, and exactly which named dimensions moved, from what to what; `/swing/SYMBOL` carries the same block beneath the current decision. **No policy change, no alert, no notification, no AI, no ranking, no freshness verdict, no redesign** |
+| **The problem** | Slices 1 and 2 answered *what is happening with this symbol now, and why*. Nothing answered *what changed since I last looked*. The Swing scan is twenty symbols and most of them sit at `WAIT` for days — so a `WAIT` symbol whose **reason** moved from *the higher-timeframe regime gate rejected it* to *the directional families disagree* is in a materially different situation and rendered identically. The comparison required holding twenty symbols × eight states in his head between sessions, and in practice it did not happen |
+| **Persistence — reuse, then a bounded store** | Four existing mechanisms were read first. `fmis.persistence.RecordStore` is the trade domain's journalled audit trail of money movements and **never prunes**; `fmis.archive.ArchiveStore` (ADR-0027) is permanent by definition and pruning it is forbidden; `fmis.snapshotting` has no producer. So the *primitive* was reused — `fmis.archive.atomic.atomic_write`, exactly as `fmis.persistence.store` reuses it — and the store is a small bounded rolling buffer of its own, at `~/.fmits/scan_memory`, **outside the git checkout** beside the archive and the durable store. No ignore rule was needed or added |
+| **The central invariant** | **Scan memory observes decisions; it does not participate in them.** The arrow runs `swing_workspace → scan_memory` and never back, asserted for **26 packages** by an import-direction guard, and again functionally: the same workspace renders the same decision, direction, blocker and developing-evidence state against an empty store, a matching baseline and a *contradicting* one |
+| **Where the write lives** | Not in `fmis.operator_dashboard`, which writes nothing by any means and has three guards saying so. `fmis/pipeline/scan_memory.py` wraps `refresh` through its **existing** `workspace_runner` seam, so the scan the page renders and the scan that is remembered are **one call** — the same discipline the three research artifacts already follow, applied to the one input produced per refresh |
+| **Structured state, never prose** | A change is a difference between two named values an engine already decided. `CHANGE_DIMENSIONS` — twelve members — **is the whole comparison surface**, and a test asserts the comparator reads exactly it. No sentence, thesis line, blocker statement or rendered fragment is compared anywhere, guarded by name over thirteen prose fields |
+| **Time passing is not a change** | Structural, not intentional: **no instant, age or bar count is a dimension, and per-role instants, ages and bar counts are not persisted at all** — so the comparator cannot report a routine observation update, because it cannot see one. Proved live: two real scans 83 s apart, every per-role age advanced, **zero events** |
+| **Honest absence** | Four statuses, and *unchanged* is only one of them. First scan → *Baseline scan recorded*; incomparable → the reason; unreadable history → the reason, with the market analysis untouched; write failure → *this scan was not recorded*. `ScanComparison` **refuses at the type level** to carry per-symbol results under any status but `COMPARED`, so *nothing changed* cannot be said without a real comparison |
+| **No score, no rank** | No field in the package could hold one, guarded against a sixteen-word vocabulary. Attention is a **partition** — changed before unchanged, each group in the scan's own universe order — asserted as an ordering test. The whole package contains **five arithmetic expressions**, written out and checked as a set: four path joins and one set difference |
+| **Restart continuity** | The acceptance requirement, proved three ways: offline across two store objects, in a real subprocess through the real command, and **live** — the dev dashboard was killed, a new process started over the same history root, and the second scan compared against the surviving baseline |
+| **Idempotence** | The record path is a pure function of the scan's identity, and the identity digest deliberately **excludes the results** — a digest over states would make *nothing changed* indistinguishable from *nothing ran*. A page `GET` renders a held snapshot, performs no refresh, and records nothing: asserted offline, and again in a real process across six page loads |
+| **Policy non-regression** | **Byte-identical, and identical to Slices 1 and 2**: the same 81 fixtures through the full composition root, `sha256 096a575a…`. No policy file was touched |
+| **Live verification** | Port 8799 with an isolated history root; **the operator's 8787 instance (PID 49813) was never stopped**, verified by `lsof` before and after. 20 symbols, complete, baseline persisted (11,080 bytes), decoded by a *new* store object, 7 page loads → still 1 record, process restarted → baseline survived, second scan compared → **0 material changes across 20 symbols**, honestly |
+| **Performance** | Per refresh: append 0.26 ms · read+decode 0.13 ms · compare 0.08 ms · render +0.07 ms — about **0.5 ms** against a 30–45 s provider fetch. 9.7 KB per scan, at most 8 retained (~78 KB) |
+| **Tests** | **375 new**, all offline, plus a seventh startup smoke test that proves the real command records one scan and page loads record none. Invariant/property tests over generated pairs, and non-vacuity proved by reconstructing the product without the feature |
+| **Verification** | Focused suites green (1,247 across the Slice 3 scope and every guard it touches); full suite **14,155 → 14,531 collected**, **14,529 passed / 2 failed** under `-W error` (12:21), zero skips and zero new warnings — the delta is exactly the tests added. Two genuine regressions were found by the full suite and fixed at the architecture — an export-name collision with `fmis.swing_workspace.UNSTATED`, and a pipeline import-direction breach — with **no guard weakened**. **The 2 failures are pre-existing and are not this milestone's**: two startup smoke tests time out waiting for the dashboard subprocess to exit after `SIGINT`, they fail only when run after ~4,650 other tests, and they were **reproduced identically in a clean worktree at `77b956d`** with Slice 3 absent. No fix was attempted — it is outside scope and the code it would touch is the shutdown path report 0041 repaired. See report 0044 §16.1; recommended as the next dashboard task |
+| **What it did NOT deliver** | Alerts of any kind, AI interpretation, long-term history analytics, historical charts, opportunity ranking, a validated freshness policy, terminal renderer parity, and any Slice 4 work |
+| **Report** | [report 0044](reports/0044_2026-09-05_SWING_SCAN_MEMORY_SLICE_3.md) |
 
 ### `DT` — Swing Product Slice 2: The Operator Decision Layer · **DONE** *(not committed, not pushed)*
 

@@ -393,6 +393,29 @@ dl.kv dd { margin: 0; word-break: break-word; }
 ul.plain { margin: 4px 0; padding-left: 17px; }
 ul.plain li { margin: 2px 0; max-width: 92ch; }
 
+/* ------------------------------------------- what changed since last scan */
+
+/* One changed symbol. Separated by a rule rather than by a colour: no change
+   is better or worse than another, and a coloured card would be the severity
+   ranking `fmis.scan_memory` deliberately refuses to produce. */
+.change {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+.change:first-of-type { border-top: none; margin-top: 4px; padding-top: 0; }
+
+.change h4.sym {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.change h4.sym .sub { font-weight: 400; }
+
+p.sym { font-weight: 600; margin: 4px 0; word-break: break-word; }
+
 /* ---------------------------------------------------------------- chart */
 
 .chart { display: block; height: auto; max-width: 100%; width: 100%; }

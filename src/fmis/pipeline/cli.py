@@ -39,6 +39,7 @@ import json
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -142,6 +143,10 @@ from fmis.swing_lab.validation_study import run_validation_experiment
 from fmis.swing_lab.geometry_study import run_geometry_experiment
 from fmis.swing_lab.render import render_robustness, render_study
 from fmis.operator_dashboard.sections import geometry_view, lab_view, validation_view
+from fmis.pipeline.scan_memory import (
+    build_scan_history_store,
+    refresh_with_scan_memory,
+)
 from fmis.swing_setup import (
     BacktestError,
     DEFAULT_BACKTEST_DAYS,
@@ -3423,6 +3428,19 @@ def _configure_dashboard(parser: argparse.ArgumentParser) -> None:
             "per refresh; this skips both the section and the request"
         ),
     )
+    parser.add_argument(
+        "--scan-history-root",
+        default=None,
+        metavar="PATH",
+        dest="scan_history_root",
+        help=(
+            "where completed Swing scans are remembered, so /swing can state "
+            "what changed since the previous comparable one (default: the "
+            "owner's, outside the repository). A bounded rolling buffer of "
+            "market-analysis state — no credential, key or token is ever "
+            "written to it"
+        ),
+    )
 
 
 def _run_dashboard(args: argparse.Namespace) -> int:
@@ -3508,6 +3526,15 @@ def _run_dashboard(args: argparse.Namespace) -> int:
             host=args.host,
             port=args.port,
             holder=SnapshotHolder(
+                # The refresher that remembers. Wired HERE, deliberately: the
+                # dashboard package writes nothing and three guards assert it,
+                # so the one seam that persists a completed scan is placed in
+                # the application layer, exactly as the three artifact files
+                # above are decoded here rather than there.
+                refresher=partial(
+                    refresh_with_scan_memory,
+                    store=build_scan_history_store(args.scan_history_root),
+                ),
                 symbols=tuple(args.symbols) or None,
                 store_root=args.store_root,
                 with_relationships=not args.no_relationships,

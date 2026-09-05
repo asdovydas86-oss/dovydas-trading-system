@@ -478,6 +478,10 @@ def test_the_read_models_hold_no_method_that_computes() -> None:
     permitted = {
         "__post_init__", "is_available", "failed", "sections",
         "failed_sections", "with_state", "row_for", "decision_for",
+        # `ScanChangeView`: one predicate over a stored status, one lookup by
+        # symbol name. Neither derives a value; both exist so a renderer does
+        # not re-derive what `fmis.scan_memory` already decided.
+        "compared", "change_for",
     }
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):

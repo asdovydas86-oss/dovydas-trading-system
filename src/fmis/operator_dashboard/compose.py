@@ -69,6 +69,7 @@ from fmis.operator_dashboard.models import (
     PulseView,
     DashboardSection,
     DashboardSectionStatus,
+    ScanChangeView,
     SwingView,
 )
 from fmis.operator_dashboard.sections import (
@@ -91,11 +92,19 @@ from fmis.today import TodayError
 
 __all__ = [
     "REFRESH_READS",
+    "DEFAULT_WORKSPACE_RUNNER",
     "DASHBOARD_LIMITATIONS",
     "WORKSPACE_ERRORS",
     "build_snapshot",
     "refresh",
 ]
+
+#: The workspace read `refresh` performs unless a caller injects another.
+#: **Named so a layer that must wrap it takes *this* default** rather than
+#: importing `fmis.swing_workspace` a second time — two names for one default is
+#: how the two drift, and `fmis.swing_workspace` is guarded to be imported from
+#: exactly one module of `fmis.pipeline`.
+DEFAULT_WORKSPACE_RUNNER = run_swing_workspace
 
 #: Every engine read one refresh performs, named so the count is a contract
 #: rather than an accident. A test asserts the composition root calls exactly
@@ -191,6 +200,7 @@ def build_snapshot(
     lab: LabView | None = None,
     geometry: Any | None = None,
     validation: Any | None = None,
+    scan_change: ScanChangeView | None = None,
 ) -> OperatorDashboardSnapshot:
     """Assemble one snapshot from engine outputs that have already been read.
 
@@ -390,6 +400,12 @@ def build_snapshot(
         geometry=geometry_section,
         validation=validation_section,
         warnings=warnings,
+        # NOT computed and NOT read here. The comparison against the previous
+        # scan is produced by the layer that owns the history store, exactly as
+        # the three research artifacts above are decoded by the caller — which
+        # is what keeps this package free of every write and every open, and a
+        # guard asserts both.
+        scan_change=scan_change,
         limitations=DASHBOARD_LIMITATIONS,
         schema_version=DASHBOARD_SCHEMA_VERSION,
     )
@@ -403,7 +419,7 @@ def refresh(
     store_root: Path | str | None = None,
     benchmarks: Sequence[str] | None = None,
     with_relationships: bool = True,
-    workspace_runner: Callable[..., Any] = run_swing_workspace,
+    workspace_runner: Callable[..., Any] = DEFAULT_WORKSPACE_RUNNER,
     pulse_runner: Callable[..., Any] = run_market_pulse,
     macro_runner: Callable[..., Any] = run_macro_context,
     statistics_runner: Callable[..., Any] = report_for_store,

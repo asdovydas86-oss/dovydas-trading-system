@@ -58,23 +58,19 @@ BREAK_CHOICES = ("none", "startup", "route", "slow")
 SLOW_REFRESH_SECONDS = 3.0
 
 
-def _offline_refresher(break_mode: str):
-    """`compose.refresh`, with its three networked runners bound to fixtures."""
+def _offline_runners(break_mode: str):
+    """The three networked runners, bound to the suite's own fixtures.
+
+    Returned as keyword arguments rather than as a finished refresher, because
+    the command wires its own refresher — `compose.refresh` with scan memory
+    around it — and this driver must keep that wiring rather than replace it.
+    Binding the runners into whatever the command wired replaces exactly the
+    three reads that reach a network and nothing else.
+    """
     import time
 
-    from fmis.operator_dashboard import compose
     from operator_dashboard_helpers import benchmark, macro_of, pulse_of, reading_for
     from swing_workspace_helpers import assessment, result, workspace_of
-
-    if break_mode == "startup":
-
-        def raise_at_startup(**_kwargs):
-            # Not a provider failure — `compose.refresh` absorbs every one of
-            # those into a section that says so. This is the shape of a defect
-            # that escapes it, which is what the outage would have looked like.
-            raise RuntimeError("smoke driver: deliberately broken first refresh")
-
-        return raise_at_startup
 
     workspace = workspace_of(result(assessment()))
     pulse = pulse_of((reading_for(benchmark("BTC")), reading_for(benchmark("ETH"))))
@@ -97,27 +93,47 @@ def _offline_refresher(break_mode: str):
 
         workspace_runner = slow_workspace_runner
 
-    return partial(
-        compose.refresh,
-        workspace_runner=workspace_runner,
-        pulse_runner=pulse_runner,
-        macro_runner=macro_runner,
-    )
+    return {
+        "workspace_runner": workspace_runner,
+        "pulse_runner": pulse_runner,
+        "macro_runner": macro_runner,
+    }
 
 
 def _install(break_mode: str) -> None:
+    from fmis.operator_dashboard import compose
     from fmis.operator_dashboard import server as server_module
     from fmis.operator_dashboard.server import SnapshotHolder
     from fmis.pipeline import cli
     from operator_dashboard_helpers import AT
 
-    refresher = _offline_refresher(break_mode)
+    if break_mode == "startup":
+
+        def raise_at_startup(**_kwargs):
+            # Not a provider failure — `compose.refresh` absorbs every one of
+            # those into a section that says so. This is the shape of a defect
+            # that escapes it, which is what the outage would have looked like.
+            raise RuntimeError("smoke driver: deliberately broken first refresh")
+
+        runners = None
+    else:
+        runners = _offline_runners(break_mode)
 
     class OfflineSnapshotHolder(SnapshotHolder):
-        """The production holder, reading fixtures instead of the network."""
+        """The production holder, reading fixtures instead of the network.
 
-        def __init__(self, **kwargs) -> None:
-            super().__init__(refresher=refresher, clock=lambda: AT, **kwargs)
+        ``refresher`` arrives from the command — which since Slice 3 wraps
+        `compose.refresh` in scan memory — and is **kept**, with only the three
+        networked runners bound. Discarding it would silently take the recording
+        seam out of the very startup path this test exists to exercise.
+        """
+
+        def __init__(self, *, refresher=None, **kwargs) -> None:
+            if runners is None:
+                wired = raise_at_startup
+            else:
+                wired = partial(refresher or compose.refresh, **runners)
+            super().__init__(refresher=wired, clock=lambda: AT, **kwargs)
 
     cli.SnapshotHolder = OfflineSnapshotHolder
 
@@ -131,6 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", default="0")
     parser.add_argument("--store-root", required=True)
+    # Required, never defaulted: without it the command would resolve the
+    # owner's real `~/.fmits/scan_memory` and a test would write to it.
+    parser.add_argument("--scan-history-root", required=True)
     parser.add_argument("--break", dest="break_mode", default="none", choices=BREAK_CHOICES)
     args = parser.parse_args(argv)
 
@@ -138,7 +157,17 @@ def main(argv: list[str] | None = None) -> int:
 
     from fmis.pipeline.cli import main as cli_main
 
-    return cli_main(["dashboard", "--port", args.port, "--store-root", args.store_root])
+    return cli_main(
+        [
+            "dashboard",
+            "--port",
+            args.port,
+            "--store-root",
+            args.store_root,
+            "--scan-history-root",
+            args.scan_history_root,
+        ]
+    )
 
 
 if __name__ == "__main__":

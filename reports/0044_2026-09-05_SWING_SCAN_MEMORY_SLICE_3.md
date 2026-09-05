@@ -540,3 +540,30 @@ edit rather than a drift.
 
 **No `docs/AI_HANDOFF/CURRENT_STATE.md` update**, on the same footing as Slices 1 and 2 — the
 milestone history there is maintained separately from a milestone's own closure.
+
+## 24. Dashboard handoff
+
+The operator's instance was identified by `lsof -nP -iTCP:8787 -sTCP:LISTEN -t` and its full command
+line read from `ps` — never by assuming the reported PID, and never by `pkill -f`. It was left
+running for the whole of development; all manual work used port 8799 and a scratch history root.
+
+**Whether it served old code was decided by the server's own response**, not by a substring guess
+about the process: `GET /swing` on the running instance returned **zero** occurrences of the
+temporal panel, and the process had started 2026-09-04 14:36:35 — before the commit existed. So a
+restart was required.
+
+The stop was guarded: the PID's command line was matched against `fmits dashboard` and the kill was
+refused otherwise.
+
+**Restart continuity was then proved on the operator's own instance**, not only offline:
+
+| | |
+|---|---|
+| PID 73935, first Slice 3 process | 20 symbols, baseline recorded at `2026-09-05 09:13Z`; `/swing` said *Baseline scan recorded* |
+| stopped | history preserved: 1 record on disk with no process alive |
+| PID 74079, second process, same history root | found the baseline the previous process left and compared against it |
+| `/swing` | `Previous comparable scan 2026-09-05 09:13Z · This scan 09:14Z · Changed 0 · No material change 20` — honestly, because nothing moved in 71 s |
+| `/swing/BTCUSDT` | *No material Swing state change for this symbol since the previous comparable scan* |
+| 12 further page loads across 4 routes | history unchanged at 2 records |
+
+**Final state: PID 74079, `http://127.0.0.1:8787/`, all three routes `200`.**

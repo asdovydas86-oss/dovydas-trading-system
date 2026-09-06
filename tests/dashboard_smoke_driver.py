@@ -26,6 +26,13 @@ and `MacroContextReport` values rather than stubs. The fourth read,
 `report_for_store`, is left alone: it reads a store root the test supplies and
 touches no network.
 
+**The one thing it adds to the startup path, and why.** `_enable_ctrl_c` puts
+`SIGINT` back to the handler CPython installs at startup. A shell without job
+control hands a background job an *ignored* `SIGINT`, that disposition survives
+`exec`, and a dashboard that cannot receive `SIGINT` turns the two Ctrl-C tests
+into a measurement of how the suite was launched. The driver stands in for the
+operator's terminal; a terminal always has Ctrl-C live. See the function.
+
 **The break modes are the test's non-vacuity proof.** ``--break startup`` makes
 the first refresh raise, ``--break route`` makes the main route resolve to
 nothing, and ``--break slow`` makes the refresh cost real seconds. A smoke test
@@ -44,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import sys
 from functools import partial
 
@@ -170,5 +178,43 @@ def main(argv: list[str] | None = None) -> int:
     )
 
 
+def _enable_ctrl_c() -> None:
+    """Start with Ctrl-C live, whatever the session that spawned this had.
+
+    A shell without job control — ``pytest &``, `nohup`, and most CI and agent
+    runners — starts a background job with `SIGINT` set to `SIG_IGN`, and an
+    *ignored* disposition is one of the few things that survives `exec`.
+    `subprocess`'s ``restore_signals`` does not undo it: it restores only the
+    three signals CPython itself ignores (`SIGPIPE`, `SIGXFZ`, `SIGXFSZ`), not
+    one inherited from a shell.
+
+    So a dashboard spawned from such a session cannot receive `SIGINT` at all,
+    and the two smoke tests that press Ctrl-C were measuring how the suite had
+    been launched rather than how `serve` shuts down: they timed out after 30 s
+    against a process that was serving correctly and had never been signalled.
+    Backgrounded, the whole suite reported those two — and only those two — as
+    failures; in a terminal the same commit passed.
+
+    This driver stands in for the operator's terminal, where Ctrl-C is always
+    live, so it installs the handler CPython installs at startup and the test
+    goes back to measuring the dashboard.
+
+    **Here, in the child, rather than `preexec_fn` in the parent.** `preexec_fn`
+    runs between `fork` and `exec` and is documented as unsafe in a process that
+    has threads — and the smoke harness keeps one pipe-draining thread per
+    running dashboard, so it is exactly the process that must not use it.
+
+    **Production is deliberately left alone.** ``fmits dashboard &`` ignoring
+    Ctrl-C is correct POSIX behaviour for a background job, and a command that
+    overrode its own caller's signal disposition would be compensating in the
+    product for how a test was started.
+    """
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
 if __name__ == "__main__":
+    # Only when run as a process. Imported — the smoke test reads
+    # `SLOW_REFRESH_SECONDS` from here — this file must change nothing about the
+    # pytest process it is imported into.
+    _enable_ctrl_c()
     raise SystemExit(main())

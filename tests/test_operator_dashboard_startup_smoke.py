@@ -25,10 +25,12 @@ from __future__ import annotations
 
 import os
 import signal
+import socket
 import subprocess
 import sys
 import threading
 import time
+from contextlib import contextmanager
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -49,6 +51,13 @@ ROUTES = tuple(path for path, _ in PAGES)
 #: rather than hanging it.
 READY_TIMEOUT = 60.0
 EXIT_TIMEOUT = 30.0
+
+#: What stopping is actually allowed to cost. `EXIT_TIMEOUT` is the point at
+#: which the suite gives up on a hung process; this is the point at which a
+#: local, read-only dashboard has taken too long to put the prompt back. The
+#: measured cost is tens of milliseconds, so the budget is loose enough to
+#: survive a loaded machine and still six times tighter than the timeout.
+SHUTDOWN_BUDGET = 5.0
 
 #: The line `_run_dashboard` prints once, and only once, a request to the
 #: address can be answered. Its arrival *is* the readiness signal — that is the
@@ -339,6 +348,107 @@ def test_starting_the_dashboard_needs_no_live_market_provider(dashboard) -> None
     assert running.url() is not None
     status, _, _ = _get(running.url(), "/")
     assert status == 200
+
+
+# ---------------------------------------------------------------------------
+# The shutdown contract
+# ---------------------------------------------------------------------------
+
+
+@contextmanager
+def _a_session_that_ignores_ctrl_c():
+    """Run the body with this process's `SIGINT` ignored, then put it back.
+
+    Not an exotic state. A shell without job control — ``pytest &``, `nohup`,
+    a CI step, an agent running the suite in the background — starts the job
+    with `SIGINT` set to `SIG_IGN`, and that is what a full run of this suite is
+    launched from more often than not.
+    """
+    previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
+def test_ctrl_c_stops_the_dashboard_even_when_the_session_that_started_it_ignores_it(
+    dashboard,
+) -> None:
+    """**The defect this file could not see, and the reason it could not.**
+
+    An *ignored* signal disposition is inherited across `exec`, and
+    `subprocess`'s ``restore_signals`` does not undo it — it restores only the
+    three signals CPython itself ignores. So a dashboard spawned from a
+    backgrounded pytest could not receive `SIGINT` at all: the two tests that
+    press Ctrl-C waited out the full `EXIT_TIMEOUT` against a process that was
+    serving perfectly and had never been signalled, and reported the dashboard
+    as broken.
+
+    It looked like an ordering defect, because the only runs long enough to be
+    backgrounded were the full ones — so the file passed alone, passed early,
+    and failed after four and a half thousand tests. It was never the ordering.
+    It was the launcher, and the child now sets its own `SIGINT` back to the
+    handler a terminal-started process has.
+
+    Revert `dashboard_smoke_driver._enable_ctrl_c` and this test fails in a
+    terminal too, in five seconds, instead of hiding until the next full run.
+    """
+    with _a_session_that_ignores_ctrl_c():
+        running = dashboard()
+        url = running.url()
+        assert url is not None, (
+            "the dashboard never announced a URL; stdout was "
+            f"{running.stdout!r}, stderr was {running.stderr!r}"
+        )
+        status, _headers, _body = _get(url)
+        assert status == 200, f"the main route answered {status}"
+        code = running.interrupt()
+
+    assert code == 0, f"Ctrl-C exited {code}; stderr was {running.stderr!r}"
+    assert any("stopped" in line for line in running.stderr), (
+        f"the command did not report stopping; stderr was {running.stderr!r}"
+    )
+
+
+def test_starting_and_stopping_repeatedly_is_prompt_and_leaves_nothing_behind(
+    dashboard,
+) -> None:
+    """**The operator's contract, three times over.**
+
+    He types the command, opens the page, presses Ctrl-C and expects the prompt
+    back — then does it again tomorrow. Each cycle must return the terminal
+    promptly, release the port rather than orphan it, and cost no more than the
+    one before, so a leak that only shows on the third start is not waiting for
+    him to find.
+
+    The port check is the one that would catch a listener left bound by a
+    shutdown that returned without closing it: binding is refused while a live
+    listener holds the address, `SO_REUSEADDR` or not.
+    """
+    latencies: list[float] = []
+    for cycle in range(3):
+        running = dashboard()
+        url = running.url()
+        assert url is not None, (cycle, running.stdout, running.stderr)
+        status, _headers, _body = _get(url)
+        assert status == 200, (cycle, status)
+
+        port = int(url.rstrip("/").rsplit(":", 1)[1])
+        started = time.monotonic()
+        code = running.interrupt()
+        latencies.append(time.monotonic() - started)
+        assert code == 0, (cycle, code, running.stderr)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            # The same option the server itself sets, so this asks the question
+            # the product asks: is anything still *listening* on that address.
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind(("127.0.0.1", port))
+
+    assert max(latencies) < SHUTDOWN_BUDGET, (
+        f"stopping took {max(latencies):.2f}s; the operator is waiting on a "
+        f"local read-only page to close. Cycles: {latencies}"
+    )
 
 
 # ---------------------------------------------------------------------------

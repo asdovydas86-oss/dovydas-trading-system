@@ -752,6 +752,27 @@ The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
 
+### `DV` — Dashboard Shutdown Reliability Gate · **DONE**
+
+Not a product milestone: an engineering-reliability gate that removes a blocker to trusting the
+suite at all. It is recorded here because report 0044 §16.1 left it as the named next dashboard
+task, and because the finding corrects that report's diagnosis.
+
+| Field | Value |
+|---|---|
+| **The blocker** | The suite could not be trusted. Two startup smoke tests failed every full run — `14,529 passed / 2 failed` — and the working diagnosis was **order dependence** ("only after ~4,650 tests") with a very high `RLIMIT_NOFILE` suspected. A suite with two accepted failures cannot tell anyone whether the next change broke something |
+| **Root cause** | **A `SIG_IGN` disposition is inherited across `exec`, and `subprocess` does not restore it.** A shell without job control starts a background job with `SIGINT` and `SIGQUIT` **ignored**; `Popen(restore_signals=True)` restores only the three signals CPython itself ignores (`SIGPIPE`, `SIGXFZ`, `SIGXFSZ`); and CPython deliberately does not override an inherited `SIG_IGN`. So a dashboard spawned from a **backgrounded** pytest could not receive `SIGINT` at all, and `os.kill` was discarded by the kernel |
+| **Why it looked like ordering** | Only long runs get backgrounded. The short isolated runs were foreground and passed; the long full runs were backgrounded and failed. The reproducer was reduced from 4,660 tests to **7** — the smoke file alone: `2 failed / 65.85 s` from a `SIG_IGN` session, `7 passed / 5.26 s` from a terminal. The 67-file prefix run that was reported failing passes **3/3** in a terminal and reproduces `2 failed / 4,658 passed / 90.62 s` under `SIG_IGN`, matching report 0044 to 0.03 s |
+| **What was excluded, with evidence** | `RLIMIT_NOFILE` in **both** directions (`ulimit -n 4096` still fails; `1048576` still passes). Descriptor leaks, thread leaks, orphan children, pipe deadlock, process-group errors and leaked global state — all excluded structurally, because the failure reproduces on 7 tests where nothing can accumulate and does not reproduce on 4,660 where accumulation is maximal. `setrlimit`, `signal.signal`, `os.chdir` and `set_start_method` appear **nowhere** in `tests/` or `src/` |
+| **The hung child, observed** | Single-threaded, 9 descriptors, no child process, `ps` state `S` at 0 % CPU, stack in `serve_forever`'s `poll()` — **exactly where a healthy serving dashboard sits**. Not stalled in `shutdown()`, not on a lock, not on a pipe, not on a socket. A second `SIGINT` 60 s later changed nothing |
+| **The fix, and the layer** | `tests/dashboard_smoke_driver.py` restores its own `SIGINT` handler under `if __name__ == "__main__"`. In the child rather than `preexec_fn`, which is unsafe in a process with threads and the harness keeps one pump thread per dashboard. **`src/` is deliberately untouched** — `fmits dashboard &` ignoring Ctrl-C is correct POSIX for a background job, and overriding it in the product would be compensating for how a test was launched. **156 added lines, 0 deletions, two test files** |
+| **Tests** | **Two** (14,531 → **14,533**): a root-cause reproducer that ignores `SIGINT` in the pytest process and asserts Ctrl-C still works — **it fails in a plain terminal pre-fix**, so the defect can no longer hide until the next full run — and a three-cycle start/stop contract asserting exit 0, a re-bindable port and a 5 s shutdown budget against a measured 23 ms. Nothing weakened: no timeout raised, no sleep, no retry, no `xfail`, no `skip`, no reordering, no `SIGKILL` as normal shutdown |
+| **Verification** | Full suite **14,533 passed in 11:18** under `-W error` **in the exact formerly-failing `SIG_IGN` session**, plus a normal-session full run; the failing scenarios re-run eleven times with zero failures. Real `fmits dashboard` on port 8799: address at 0.25 s, ready after the genuine **37.8 s** warm refresh, first HTTP **5.3 ms**, Ctrl-C → exit **84 ms** code 0, port released — report 0041's startup repair measured intact |
+| **Non-regression** | Policy per-fixture digests all match, 72 `WAIT` / 9 `CANDIDATE` unchanged; no `src/` file touched. Live 8787 instance (PID **74079**) never stopped or signalled — `/`, `/swing`, `/swing/BTCUSDT` all 200, the *Since the previous comparable scan* block comparing two real scans across a restart, and three page loads recorded **no** history |
+| **A correction to reports 0042–0044** | The aggregate `sha256 096a575a…` those reports quote over "81 records" is **not reproducible from this repository** — the formula was never committed, and 36 plausible reconstructions fail to match. The committed per-fixture table is strictly stronger and passes. Report 0045 §11.6 states a reproducible aggregate and its formula |
+| **What it did NOT deliver** | No product capability whatsoever, and nothing in `FMITS_PRODUCT_CHANGELOG.md` — this changed no behaviour the owner can observe. Slice 4 not started |
+| **Report** | [report 0045](reports/0045_2026-09-06_DASHBOARD_SHUTDOWN_RELIABILITY_GATE.md) |
+
 ### `DU` — Swing Product Slice 3: Scan Memory and "What Changed" · **DONE**
 
 | Field | Value |

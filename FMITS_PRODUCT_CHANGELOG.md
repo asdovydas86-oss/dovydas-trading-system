@@ -258,6 +258,83 @@ the automation ladder remains unstarted.
 > the gap. They are fully recorded in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md),
 > the [backlog](FMITS_PRODUCT_BACKLOG.md) §8 and reports 0034–0039.
 
+### 2026-09-06 · `DV` — FMITS can tell you what a trade would risk
+
+**Status:** Released — pending commit. **Adds a user-visible capability, and
+materially reduces financial risk.**
+
+**What the owner can do that was impossible before: see, for any scanned symbol,
+what a trade there would actually put at risk — the entry, the invalidation, the
+risk per unit, the capital at risk, the position size and the ceiling that bounds
+it — or exactly which input is missing.**
+
+Slices 1 to 3 answered *what is happening, why, and what changed*. Nothing
+answered *and if I acted on this, what would it cost me?* The engine that
+computes all of it had been built and was complete — and no figure from it had
+ever reached a page. Opening `/swing/BTCUSDT` gave a full decision and a full
+evidence report and said nothing whatever about risk, including nothing about the
+fact that it was saying nothing.
+
+**`/swing/SYMBOL` now carries a *risk and trade planning* panel**, above the
+evidence audit and below the decision. For a symbol the engine has given no
+direction — which is most of the watchlist, most of the time — it says so in one
+sentence and shows **nothing else**: no entry, no stop, no size, and not a zero.
+A waiting symbol with a position size beside it reads as almost a trade, and it
+is not almost anything.
+
+For a directional candidate, once the owner has declared what capital he plans
+against and what fraction of it he risks, the panel shows the entry, the
+invalidation, the risk per unit, the reward-to-risk, the capital at risk, the
+maximum quantity and the position value — each computed by the engine that was
+already there, each traceable to an input he supplied.
+
+**The 2 % ceiling is now enforced by the system rather than stated in a
+document.** `PROJECT_SPECIFICATION_V1` §8.1 calls a maximum of 2 % portfolio risk
+per trade *a hard ceiling, not a default target*, and until now that number lived
+in no code at all. A risk fraction above it can no longer be expressed: the
+declaration refuses to exist, so there is no path — no form, no flag, no file —
+that produces one. And it is **not** a default: declaring no fraction produces
+*not evaluable, a per-trade risk fraction is missing*, never a size at the
+ceiling. Leverage does not move it; a loss outside the ceiling is outside it.
+
+**It never invents a number.** No stop is derived from an ATR multiple, no target
+is assumed to be 2R or 3R, and no capital figure is guessed from anything. The
+entry is the engine's own reference price and the page says plainly that it is a
+recorded close and **not an order price**. Where an input is missing, the panel
+names it and says what to write.
+
+**Unknown risk is never shown as no risk.** Every figure these calculations
+cannot produce prints its reason where the number would have been. Portfolio
+impact is always stated as *not evaluated* — no position, exposure or correlation
+is read for these figures — with the consequence spelled out: a trade that fits
+the per-trade ceiling is **not** thereby one the book has room for.
+
+**It is honest about what the number is.** The risk shown is the defined loss if
+the invalidation is honoured at exactly that price. A gap through it, slippage or
+a venue outage loses more; no fee or funding cost is included; the arithmetic is
+correct for linear spot-like instruments and no leverage is modelled. All of that
+is printed on the panel rather than left to be discovered.
+
+**What it deliberately is not.** It places no order, previews none, records none
+and connects to no exchange or broker — no credential of any kind is read,
+stored or requested. It ranks nothing: the `/swing` risk column carries a state
+and never a figure, because a column of position sizes is a column the eye sorts.
+It is not an opinion — a size is *how much*, never *whether* — and no evidence
+count, family agreement, confidence or setup state can change a risk figure by
+any path, which is enforced by guards rather than by care.
+
+**Nothing changed about the analysis itself.** The trading policy is byte-for-byte
+identical to Slices 1 to 3, and a risk figure cannot reach a decision: `WAIT`
+remains `WAIT` and `CANDIDATE` remains `CANDIDATE` whatever the risk panel says.
+
+**One thing the owner must do.** Until he writes `~/.fmits/risk_policy.json` —
+the capital he plans against, and the fraction of it he risks per trade — every
+planning section states that no risk policy is declared and prints the file to
+write. Nothing is assumed in its place, and that is the correct answer rather
+than a gap.
+
+---
+
 ### 2026-09-05 · `DU` — FMITS remembers the last scan, so you do not have to
 
 **Status:** Released — pending commit. **Adds a user-visible capability.**

@@ -7,7 +7,43 @@ data it points you to, not an entry point on its own.
 should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
 update this file.
 
-**Last updated for:** CD — Paired-Effect Dependence Measurement (2026-09-03): the
+**Last updated for:** `DV` — Swing Product Slice 4: Risk & Trade-Planning Foundation
+(2026-09-06). **The risk engine was finished and the owner could not reach any part of it.**
+A read-only audit of ~8,300 lines across `fmis.risk`, `fmis.portfolio_risk`,
+`fmis.position_sizing`, `fmis.portfolio`, `fmis.valuation` and `fmis.money` found the code correct
+and already satisfying almost every capital-preservation principle — and found two breaks at the
+edges. **`RiskBudget(` and `RiskLimit(` appeared nowhere in `src/`**, only in four test files, so
+`per_trade_ceiling` was never consulted, `SizingPolicy.fraction_for` never resolved, and the chain
+was unreachable by construction; and `swing_view` read `workspace.metadata` nowhere, so the
+dashboard could not even say why no figure appeared. `SPEC` §8.1's 2 % ceiling lived in no code at
+all. Slice 4 adds **one new package, `fmis.risk_policy`** — the owner's declaration boundary and the
+**only producer of a `RiskBudget` in the repository** — plus a *risk and trade planning* panel on
+`/swing/SYMBOL` for every scanned symbol and a state column and note on `/swing`. The ceiling is
+structural (a declaration above 2 % cannot be constructed) and never a default; capital is
+**declared** in `~/.fmits/risk_policy.json`, `ASSERTED`, never inferred; no geometry is invented; and
+unknown portfolio risk is never zero. Two ADRs:
+[ADR-0029](../adr/ADR-0029-money-and-numeric-semantics.md) ratifies the already-implemented
+`Decimal`/`float` boundary **changing no production code**, and
+[ADR-0030](../adr/ADR-0030-risk-policy-declaration-boundary.md) sites the ceiling and the producer.
+157 new tests, 12/12 targeted mutants killed, policy non-regression byte-identical
+(`sha256 8b22e6c9…`, 72 `WAIT` / 9 `CANDIDATE`). Full record:
+[report 0046](../../reports/0046_2026-09-06_SWING_RISK_AND_TRADE_PLANNING_SLICE_4.md).
+
+**One operator action is outstanding**: the owner must declare his planning capital and per-trade
+risk fraction in `~/.fmits/risk_policy.json`. It was deliberately not chosen for him. Until then
+every planning section states the absence and prints the file to write.
+
+**Swing Product Slices 1–3 are not separately summarised in this file.** They shipped between
+2026-09-04 and 2026-09-05 and did not update this document; they are fully recorded in
+[report 0042](../../reports/0042_2026-09-04_SWING_SYMBOL_DECISION_SURFACE_SLICE_1.md),
+[report 0043](../../reports/0043_2026-09-04_SWING_OPERATOR_DECISION_LAYER_SLICE_2.md),
+[report 0044](../../reports/0044_2026-09-05_SWING_SCAN_MEMORY_SLICE_3.md),
+[report 0045](../../reports/0045_2026-09-06_DASHBOARD_SHUTDOWN_RELIABILITY_GATE.md) and
+[`FMITS_PRODUCT_BACKLOG.md`](../../FMITS_PRODUCT_BACKLOG.md) §8 (`DS`, `DT`, `DU`, `DV`). Recorded as
+a gap rather than reconstructed here, because this milestone did not perform that work.
+
+**The section below describes CD** — Paired-Effect Dependence Measurement (2026-09-03), the last
+milestone that did update this file, and the research state it left is unchanged by Slice 4: the
 milestone that measured what Milestone CC's estimator structurally could not, found the
 assumption underneath CC was wrong, and then had **two of its own central claims overturned by
 independent review**. CC concluded the universe was too small; CD shows the deeper problem is that

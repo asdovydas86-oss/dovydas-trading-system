@@ -537,6 +537,78 @@ class BlockerRow:
 
 
 @dataclass(frozen=True, slots=True)
+class TradeRiskPlanRow:
+    """One symbol's trade-planning figures, or exactly why there are none.
+
+    Carries `fmis.risk_policy.TradeRiskPlan` field for field, with every amount
+    already rendered as the text the domain itself produced. **This layer
+    computes nothing**: `money_at_risk` is `Money.text` plus its asset, not a
+    multiplication, and a guard asserts the renderer holds no arithmetic.
+
+    **Every figure is `None` unless it was produced, and `None` prints its
+    reason rather than a blank.** A blank where a size belongs reads as a size
+    of nothing, and `AP` §14.3 is the whole discipline: *"a zero makes the total
+    look plausible and survives for years."*
+
+    ``portfolio_impact_reason`` is always populated and there is deliberately no
+    ``portfolio_impact`` beside it. No portfolio is read for these figures, so
+    total open risk, concentration and correlation are **not evaluated** — which
+    is a different fact from their being zero, and a page silent about portfolio
+    risk reads as a page reporting none.
+
+    ``status`` is `PlanningStatus`'s own value. `no_trade_plan` — the state of
+    most of the watchlist — carries no figures at all: not a zero size, not an
+    empty one. A waiting symbol with a quantity beside it reads as almost a
+    trade, and that is the single rendering this row exists to prevent.
+    """
+
+    symbol: str
+    status: str
+    #: What the owner has not declared, one entry per input. Never a default.
+    missing: tuple[str, ...] = ()
+    #: The engine's own sentence for why there is no number, verbatim.
+    reason: str = ""
+    direction: str | None = None
+    direction_reason: str = ""
+    entry: str | None = None
+    entry_caveat: str = ""
+    invalidation: str | None = None
+    risk_per_unit: str | None = None
+    risk_per_unit_reason: str = ""
+    equity: str | None = None
+    equity_reason: str = ""
+    declared_at: str | None = None
+    #: The risk-policy contract these figures were computed under, so a reader —
+    #: or a future archived decision — can ask *which policy produced this*.
+    contract_version: int = 0
+    risk_fraction: str | None = None
+    risk_fraction_reason: str = ""
+    money_at_risk: str | None = None
+    money_at_risk_reason: str = ""
+    quantity: str | None = None
+    quantity_reason: str = ""
+    notional: str | None = None
+    notional_reason: str = ""
+    reward_risk: str | None = None
+    reward_risk_reason: str = ""
+    #: The specification's hard maximum, printed whatever the owner declared.
+    ceiling: str = ""
+    ceiling_source: str = ""
+    #: Why `risk_fraction` is the number it is. A fraction with no stated
+    #: provenance is a number something chose on the owner's behalf.
+    basis: str = ""
+    #: The ceilings that actually reduced the size, in the order applied.
+    caps: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
+    portfolio_impact_reason: str = ""
+    #: What these figures are not — `fmis.risk_policy.PLANNING_LIMITATIONS`,
+    #: carried as `(title, detail)` pairs. On the row rather than reached for by
+    #: the renderer, which imports no domain package: a limitation belongs beside
+    #: the number, and the layer that owns the number owns the caveat.
+    limitations: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class SymbolDecisionRow:
     """One scanned symbol's decision, whatever state it reached.
 
@@ -584,6 +656,10 @@ class SymbolDecisionRow:
     #: One row per timeframe role that was read, in role order: context, then
     #: setup, then execution. Empty when the result carried no readings.
     timeframes: tuple[TimeframeRow, ...] = ()
+    #: This symbol's trade-planning figures. `None` on a page built with no
+    #: declared risk policy — a page with no planning section, never a page that
+    #: invents one, and never a page that shows a zero where a size belongs.
+    plan: TradeRiskPlanRow | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -652,6 +728,23 @@ class SwingView:
     #: The scan's own tallies. Defaulted so a view built without it renders the
     #: page without the snapshot rather than failing to render at all.
     snapshot: SwingSnapshot = field(default_factory=lambda: SwingSnapshot())
+    #: Whether trade-planning figures were produced for this page and, when they
+    #: were not, which input is missing. **Defaulted to the honest
+    #: pre-declaration answer**, so a view built without one states an absence
+    #: rather than rendering a silent page — the failure this field exists to
+    #: prevent is the one the audit found: the workspace already produced this
+    #: note and the dashboard dropped it, so the surface said nothing at all
+    #: about why no size was ever shown.
+    risk_note: str = (
+        "No risk policy is declared, so no trade-planning figure was produced "
+        "for any symbol. Nothing is assumed in its place — not a capital "
+        "figure, and above all not a risk fraction. Do not read a symbol with "
+        "no planning figures as one that carries no risk."
+    )
+    #: The default above is the pre-declaration answer and is deliberately the
+    #: *default* rather than something a caller must remember to pass: a view
+    #: built without this field states the absence instead of rendering a page
+    #: that is silent about why no size appears.
 
     def row_for(self, symbol: str) -> SetupRow | None:
         """The actionable or waiting row for one symbol, if there is one.

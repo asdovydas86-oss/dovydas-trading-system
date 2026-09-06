@@ -30,14 +30,14 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from fmis.swing_setup import BlockerKind, DevelopingEvidenceState
-
 from fmis.market_pulse import (
     FreshnessState,
     MarketPulse,
     MarketReading,
     MarketUnavailable,
 )
+from fmis.risk_policy import ENTRY_CAVEAT, PLANNING_LIMITATIONS
+from fmis.swing_setup import BlockerKind, DevelopingEvidenceState
 from fmis.operator_dashboard.models import (
     BenchmarkRow,
     BookRow,
@@ -79,6 +79,7 @@ from fmis.operator_dashboard.models import (
     SwingView,
     SymbolChangeRow,
     SymbolDecisionRow,
+    TradeRiskPlanRow,
     TransitionRow,
     TimeframeRow,
     UnreadableRow,
@@ -561,6 +562,89 @@ def _blocker_row(value: Any) -> BlockerRow | None:
     )
 
 
+def _amount_or_reason(value: Any) -> tuple[str | None, str | None]:
+    """Split a `Money`/`Quantity`/`Decimal` or `Absent` into text and a reason.
+
+    **This function performs no arithmetic.** `Money.text` and `Quantity.text`
+    are the domain's own canonical spelling of an amount it already computed;
+    the asset is appended so a figure on the page always names what it is
+    denominated in. A bare number beside a size would be an amount with no
+    asset, which does not exist in this domain.
+    """
+    if value is None:
+        return None, None
+    reason = getattr(value, "reason", None)
+    if reason is not None:
+        return None, str(reason)
+    text = getattr(value, "text", None)
+    asset = getattr(value, "asset", None)
+    if text is not None:
+        return (f"{text} {asset}" if asset is not None else str(text)), None
+    return str(value), None
+
+
+def _trade_plan_row(plan: Any) -> TradeRiskPlanRow | None:
+    """One `fmis.risk_policy.TradeRiskPlan`, translated field for field.
+
+    `None` in, `None` out: a decision assembled with no declared risk policy has
+    no planning row, and the Swing view's own note says why rather than leaving
+    a reader to infer it from a missing panel.
+
+    **Nothing is computed and nothing is defaulted.** Every value is the plan's
+    own; every absence carries the plan's own reason.
+    """
+    if plan is None:
+        return None
+    direction, direction_reason = _amount_or_reason(plan.direction)
+    entry, _ = _amount_or_reason(plan.entry)
+    invalidation, _ = _amount_or_reason(plan.invalidation)
+    risk_per_unit, risk_per_unit_reason = _amount_or_reason(plan.risk_per_unit)
+    equity, equity_reason = _amount_or_reason(plan.equity)
+    fraction, fraction_reason = _text_or_reason(plan.fraction_text)
+    money_at_risk, money_at_risk_reason = _amount_or_reason(plan.money_at_risk)
+    quantity, quantity_reason = _amount_or_reason(plan.quantity)
+    notional, notional_reason = _amount_or_reason(plan.notional)
+    reward_risk, reward_risk_reason = _text_or_reason(plan.reward_risk)
+    return TradeRiskPlanRow(
+        symbol=plan.symbol,
+        status=plan.status.value,
+        missing=tuple(plan.missing),
+        reason=plan.reason,
+        direction=direction,
+        direction_reason=direction_reason or "",
+        entry=entry,
+        entry_caveat=ENTRY_CAVEAT if entry is not None else "",
+        invalidation=invalidation,
+        risk_per_unit=risk_per_unit,
+        risk_per_unit_reason=risk_per_unit_reason or "",
+        equity=equity,
+        equity_reason=equity_reason or "",
+        declared_at=(
+            None
+            if getattr(plan.declared_at, "reason", None) is not None
+            else plan.declared_at.isoformat()
+        ),
+        contract_version=plan.contract_version,
+        risk_fraction=fraction,
+        risk_fraction_reason=fraction_reason or "",
+        money_at_risk=money_at_risk,
+        money_at_risk_reason=money_at_risk_reason or "",
+        quantity=quantity,
+        quantity_reason=quantity_reason or "",
+        notional=notional,
+        notional_reason=notional_reason or "",
+        reward_risk=reward_risk,
+        reward_risk_reason=reward_risk_reason or "",
+        ceiling=plan.ceiling_text,
+        ceiling_source=plan.ceiling_source,
+        basis=plan.basis,
+        caps=tuple(plan.caps),
+        notes=tuple(plan.notes),
+        portfolio_impact_reason=plan.portfolio_impact.reason,
+        limitations=PLANNING_LIMITATIONS,
+    )
+
+
 def symbol_decision_rows(decisions: Any) -> tuple[SymbolDecisionRow, ...]:
     """The workspace's per-symbol decisions, translated field for field.
 
@@ -616,6 +700,7 @@ def symbol_decision_rows(decisions: Any) -> tuple[SymbolDecisionRow, ...]:
                 )
                 for line in decision.timeframes
             ),
+            plan=_trade_plan_row(decision.plan),
         )
         for decision in decisions
     )
@@ -675,6 +760,19 @@ def swing_snapshot(view_decisions: Any, *, unreadable: int) -> SwingSnapshot:
     )
 
 
+def _note_text(value: Any) -> str:
+    """A `str | NotAvailable | None` note as the one sentence a page prints.
+
+    `None` — a workspace built before this field existed — falls through to
+    `SwingView`'s own default, which states the pre-declaration answer rather
+    than nothing.
+    """
+    if value is None:
+        return SwingView.__dataclass_fields__["risk_note"].default
+    reason = getattr(value, "reason", None)
+    return str(value) if reason is None else str(reason)
+
+
 def swing_view(workspace: Any) -> SwingView:
     """The workspace's groups, each mapped in the order it arrived, plus the tally.
 
@@ -706,6 +804,11 @@ def swing_view(workspace: Any) -> SwingView:
         decisions=decisions,
         snapshot=swing_snapshot(decisions, unreadable=len(unreadable)),
         breadth=tuple(workspace.summary.breadth),
+        # The workspace has always produced this note and this layer has always
+        # dropped it: `workspace.metadata` was read nowhere, so the dashboard
+        # could not say whether a size had been computed or why not. Carried now,
+        # with the pre-declaration default kept when the metadata has no entry.
+        risk_note=_note_text(workspace.metadata.get("risk_note")),
     )
 
 

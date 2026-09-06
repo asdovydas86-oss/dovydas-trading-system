@@ -64,6 +64,12 @@ PERMITTED = (
     "fmis.setup_observation",
     "fmis.trade_capture",
     "fmis.position_sizing",
+    # The owner's declared risk policy, and the only producer of a `RiskBudget`
+    # in `src/`. Added deliberately: this page attaches a `TradePlan` to every
+    # symbol decision, and the alternative was for this package to build the
+    # budget and the sizing policy itself — which would put the specification's
+    # per-trade ceiling in a surface, and put sizing arithmetic in a projection.
+    "fmis.risk_policy",
     "fmis.swing_setup",
     "fmis.money",
     "fmis.provenance",

@@ -86,6 +86,8 @@ from fmis.operator_dashboard.sections import (
 from fmis.pipeline.macro import macro_universe, run_macro_context
 from fmis.pipeline.pulse import run_market_pulse
 from fmis.position_sizing import APPROVAL_ERRORS
+from fmis.provenance import Absent
+from fmis.risk_policy import RiskPolicyError, RiskPolicyFileError, load_declaration
 from fmis.statistics import STATISTICS_ERRORS, report_for_store, statistics_store_root
 from fmis.swing_workspace import SwingWorkspaceError, run_swing_workspace
 from fmis.today import TodayError
@@ -95,6 +97,7 @@ __all__ = [
     "DEFAULT_WORKSPACE_RUNNER",
     "DASHBOARD_LIMITATIONS",
     "WORKSPACE_ERRORS",
+    "RISK_POLICY_ERRORS",
     "build_snapshot",
     "refresh",
 ]
@@ -152,6 +155,15 @@ WORKSPACE_ERRORS: tuple[type[BaseException], ...] = (
     SwingWorkspaceError,
     TodayError,
     *APPROVAL_ERRORS,
+)
+
+#: The families that mean *the owner's declared risk policy could not be read*.
+#: Separate from `WORKSPACE_ERRORS` because the remedy is different and the
+#: page says so: a malformed declaration is a file the owner can fix, not a
+#: market that could not be reached.
+RISK_POLICY_ERRORS: tuple[type[BaseException], ...] = (
+    RiskPolicyFileError,
+    RiskPolicyError,
 )
 
 
@@ -426,6 +438,7 @@ def refresh(
     lab: LabView | None = None,
     geometry: Any | None = None,
     validation: Any | None = None,
+    risk_policy_path: Path | str | None = None,
 ) -> OperatorDashboardSnapshot:
     """Perform one refresh: four reads, each isolated, then one snapshot.
 
@@ -448,16 +461,40 @@ def refresh(
     """
     at = reference_time or refreshed_at
 
-    workspace: Any | None = None
+    # The owner's declared risk policy, read before the scan so a malformed
+    # declaration is reported as itself rather than as a workspace failure. A
+    # missing file is `Absent` and is passed through as `None`: no policy
+    # declared is the ordinary state, and every surface below states it.
+    declaration: Any | None = None
     workspace_error: BaseException | None = None
     try:
-        workspace = (
-            workspace_runner(symbols, reference_time=at, store_root=store_root)
-            if symbols
-            else workspace_runner(reference_time=at, store_root=store_root)
-        )
-    except WORKSPACE_ERRORS as error:
+        loaded = load_declaration(risk_policy_path)
+        declaration = None if isinstance(loaded, Absent) else loaded
+    except RISK_POLICY_ERRORS as error:
+        # The page still renders. A typo in a capital figure must not cost the
+        # owner every setup on the watchlist, and the planning section says what
+        # happened where the figures would have been.
         workspace_error = error
+
+    workspace: Any | None = None
+    if workspace_error is None:
+        try:
+            workspace = (
+                workspace_runner(
+                    symbols,
+                    reference_time=at,
+                    store_root=store_root,
+                    risk_declaration=declaration,
+                )
+                if symbols
+                else workspace_runner(
+                    reference_time=at,
+                    store_root=store_root,
+                    risk_declaration=declaration,
+                )
+            )
+        except WORKSPACE_ERRORS as error:
+            workspace_error = error
 
     pulse: Any | None = None
     pulse_error: BaseException | None = None

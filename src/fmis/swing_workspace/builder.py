@@ -42,6 +42,7 @@ from fmis.swing_workspace.ranking import (
 )
 from fmis.swing_workspace.sections import (
     aggregated_warnings,
+    trade_plans,
     books_from,
     global_summary,
     no_trade_groups,
@@ -143,12 +144,25 @@ SWING_WORKSPACE_LIMITATIONS: tuple[tuple[str, str], ...] = (
 )
 
 
-def build_swing_workspace(run: TodayRun) -> SwingWorkspace:
+def build_swing_workspace(
+    run: TodayRun, *, risk_declaration: Any | None = None
+) -> SwingWorkspace:
     """Assemble the workspace from one already-completed run. **Pure.**
 
     Fetches nothing, opens nothing and reads no clock: given the same `TodayRun`
     it returns an equal workspace. That is what lets a test assemble a full page
     from hand-built domain objects with no store and no network at all.
+
+    ``risk_declaration`` is the owner's `fmis.risk_policy.RiskPolicyDeclaration`,
+    or `None` when they have declared no risk policy. It is a parameter rather
+    than something read here for the reason every other input to this function is
+    one: this package fetches nothing and opens nothing, so the same run and the
+    same declaration produce an equal workspace forever.
+
+    **The declaration reaches the plans and nothing else.** No decision, no
+    ranking, no group and no summary field changes because a risk policy exists,
+    and a test asserts the workspace is otherwise identical with and without one.
+    Risk observes the decision; it never participates in making it.
 
     Raises:
         TypeError: ``run`` is not a `TodayRun`.
@@ -184,7 +198,10 @@ def build_swing_workspace(run: TodayRun) -> SwingWorkspace:
 
     no_trade = no_trade_groups(run.results)
     unanalysed = unanalysed_from(opportunities.failed)
-    decisions = symbol_decisions(run.results, reference_time=today.reference_time)
+    plans, risk_note = trade_plans(run.results, declaration=risk_declaration)
+    decisions = symbol_decisions(
+        run.results, reference_time=today.reference_time, plans=plans
+    )
     return SwingWorkspace(
         reference_time=today.reference_time,
         objective=OBJECTIVE,
@@ -216,6 +233,7 @@ def build_swing_workspace(run: TodayRun) -> SwingWorkspace:
         metadata={
             "excluded_from_ranking": EXCLUDED_FROM_RANKING,
             "approval_note": opportunities.approval_note,
+            "risk_note": risk_note,
             "evidence_note": opportunities.evidence_note,
             "dust_policy": today.metadata.get("dust_policy"),
             "today_schema_version": today.schema_version,
@@ -243,6 +261,7 @@ def run_swing_workspace(
     book: Any = DEFAULT_BOOK,
     classification: Any | None = None,
     timezone: str | None = None,
+    risk_declaration: Any | None = None,
 ) -> SwingWorkspace:
     """Run one workspace end to end. **One scan, one store read, one valuation.**
 
@@ -270,7 +289,8 @@ def run_swing_workspace(
             being handled.
     """
     return build_swing_workspace(
-        assemble_today(
+        risk_declaration=risk_declaration,
+        run=assemble_today(
             symbols,
             reference_time=reference_time,
             store_root=store_root,

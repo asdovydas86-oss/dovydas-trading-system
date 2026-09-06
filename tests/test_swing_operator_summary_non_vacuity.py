@@ -216,16 +216,23 @@ def test_the_old_overview_had_three_columns_and_no_operator_state() -> None:
 def test_the_symbol_page_opened_with_the_audit_rather_than_the_decision() -> None:
     """Slice 1's panel order put the evidence audit second of four.
 
-    Slice 2's first panel answers the trading question; the audit is fourth and
-    behind a disclosure. The audit itself is unchanged and still complete —
+    Slice 2's first panel answers the trading question and the audit moved to
+    last, behind a disclosure. The audit itself is unchanged and still complete —
     `test_the_full_evidence_audit_is_still_present_and_complete` asserts that.
+
+    **The audit's position is asserted as *last*, not as index 3.** It was third
+    of four at Slice 2 and is fourth of five since Slice 4 added the risk and
+    trade-planning panel above it. The claim this test makes is about the
+    ordering, and pinning the integer made a panel count into an invariant it
+    never was.
     """
     html = render_page(
         snapshot_of(live(BTC_SHAPED, "AAAUSDT")), "/swing", symbol="AAAUSDT"
     )
     panels = re.findall(r"<h2>([^<]+)", html)
     assert panels[0] == "AAAUSDT — decision"
-    assert panels.index("AAAUSDT — evidence and independence audit") == 3
+    own = [title for title in panels if title.startswith("AAAUSDT")]
+    assert own[-1] == "AAAUSDT — evidence and independence audit"
     # The summary answers before the audit is reached, in the first panel.
     first = html.split("</section>")[0]
     assert "what is holding it" in first

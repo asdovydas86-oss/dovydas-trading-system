@@ -428,6 +428,20 @@ class SymbolDecision:
     #: context, then setup, then execution. Empty when the result carried no
     #: readings, which the surfaces state rather than paper over.
     timeframes: tuple[TimeframeLine, ...] = ()
+    #: The deterministic trade-planning arithmetic for this symbol, projected by
+    #: `fmis.risk_policy`. Carried by reference for the reason `developing` and
+    #: `blocker` are: `TradeRiskPlan` states a **direction** and a **size**, and
+    #: reproducing either vocabulary here would put it in a second place.
+    #:
+    #: `None` on a decision assembled without a declared risk policy — a page
+    #: with no planning section, never a page that invents one. It is never a
+    #: zero size, and a `TradeRiskPlan` for a `WAIT` symbol carries no figures at
+    #: all: a waiting symbol with a quantity beside it reads as almost a trade.
+    #:
+    #: **Nothing here reaches the decision.** The plan is computed from the
+    #: assessment; the assessment is never computed from the plan, and no field
+    #: on this record changes because a size could or could not be produced.
+    plan: Any | None = None
 
     def __post_init__(self) -> None:
         for name in ("symbol", "state", "classification", "reason", "sufficiency"):

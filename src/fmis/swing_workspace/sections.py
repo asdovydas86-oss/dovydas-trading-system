@@ -43,6 +43,7 @@ from fmis.setup_evidence import (
     SetupIdentityRef,
     project_setup_evidence,
 )
+from fmis.risk_policy import SPECIFICATION_PER_TRADE_CEILING, plans_for_results
 from fmis.setup_observation import observe_setup_series
 from fmis.swing_setup import summarise_decision
 from fmis.swing_workspace.models import (
@@ -81,6 +82,7 @@ __all__ = [
     "holding_for",
     "ranked_setups",
     "no_trade_groups",
+    "trade_plans",
     "symbol_decisions",
     "unanalysed_from",
     "paper_positions",
@@ -496,8 +498,71 @@ def _timeframe_lines(readings: Any, reference: Any) -> tuple[TimeframeLine, ...]
     )
 
 
+def trade_plans(
+    results: Sequence[Any], *, declaration: Any | None
+) -> tuple[Mapping[str, Any] | None, str | NotAvailable]:
+    """A trade plan per scanned symbol, or the stated reason there are none.
+
+    **The whole population, not the actionable part of it.** Every symbol that
+    produced an assessment gets a plan, and for the great majority — everything
+    the engine gave no direction — that plan says *there is no trade to plan*
+    in its own words. A mapping that held only the candidates would leave a
+    `WAIT` symbol's planning section blank, and a blank where a plan belongs
+    reads as a plan nobody produced rather than as a symbol with no trade in it.
+
+    Returns the mapping and the note that explains it. `None` and a
+    `NotAvailable` when no policy is declared: *"the owner has declared no risk
+    policy"* is a true, actionable and extremely common state, and it is stated
+    rather than rendered as an empty section.
+
+    **This function computes nothing.** `fmis.risk_policy.plans_for_results`
+    owns the arithmetic, and it reaches `fmis.position_sizing` for every
+    quotient. Nothing here multiplies, divides or compares an amount of money.
+    """
+    if declaration is None:
+        return None, NotAvailable(
+            reason=(
+                "no risk policy is declared, so no trade-planning figure can be "
+                "produced for any symbol. Nothing is assumed in its place — not "
+                "a capital figure, and above all not a risk fraction. Declare "
+                "one in ~/.fmits/risk_policy.json: the capital you plan against, "
+                "and the fraction of it you risk per trade (at most "
+                f"{canonical_decimal_text(SPECIFICATION_PER_TRADE_CEILING)}, "
+                "which is a ceiling and not a target)"
+            ),
+            owned_by=(
+                "the owner — write ~/.fmits/risk_policy.json with the capital "
+                "you plan against and the fraction of it you risk per trade"
+            ),
+            forbidden_inference=(
+                "Do not read a symbol with no planning figures as one that "
+                "carries no risk, and do not read the absence of a size as a "
+                "size of nothing."
+            ),
+        )
+    plans = plans_for_results(results, declaration=declaration)
+    fraction = declaration.fraction_text
+    stated = (
+        f"risking {fraction} of it per trade"
+        if isinstance(fraction, str)
+        else "with no per-trade risk fraction declared, so no size is produced"
+    )
+    return plans, (
+        f"{len(plans)} symbol(s) planned against declared capital "
+        f"{declaration.equity.text} {declaration.equity.asset}, {stated}. The "
+        f"hard ceiling is "
+        f"{canonical_decimal_text(declaration.ceiling)} of equity per trade and "
+        "is not a target. Every figure is for one trade in isolation: no "
+        "portfolio, position, exposure or correlation is read, so total open "
+        "risk is not evaluated — which is not the same as its being zero."
+    )
+
+
 def symbol_decisions(
-    results: Sequence[Any], *, reference_time: Any = None
+    results: Sequence[Any],
+    *,
+    reference_time: Any = None,
+    plans: Mapping[str, Any] | None = None,
 ) -> tuple[SymbolDecision, ...]:
     """**One decision record per scanned symbol, in scan order.**
 
@@ -523,6 +588,12 @@ def symbol_decisions(
     not be read has no decision, and the `unanalysed` section is where it is
     stated. A projection that refuses is isolated to its own row, exactly as it
     is in `evidence_digest_for` and for the same reason.
+
+    ``plans`` maps a symbol to its `fmis.risk_policy.TradeRiskPlan`. A parameter
+    rather than a derivation, and the direction of the arrow is the point: a plan
+    is computed **from** a decision and is attached to it here, at the projection
+    seam. Nothing in this function reads a plan to decide anything about a
+    record, and `None` — no risk policy declared — changes no other field.
 
     ``reference_time`` is the page's own instant, used only to ask each
     `TimeframeReading` how old it is. It is never compared to a threshold: this
@@ -565,6 +636,10 @@ def symbol_decisions(
         summary = summarise_decision(assessment, readings)
         common: dict[str, Any] = dict(
             symbol=assessment.symbol,
+            # Looked up by the assessment's own symbol, the same key this record
+            # is filed under, so a decision and its plan can never describe two
+            # different markets. `None` when no policy was declared.
+            plan=None if plans is None else plans.get(assessment.symbol),
             developing=summary.developing,
             blocker=summary.blocker,
             timeframes=_timeframe_lines(readings, reference_time),

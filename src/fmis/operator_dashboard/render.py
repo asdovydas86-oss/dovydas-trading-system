@@ -55,6 +55,7 @@ from fmis.operator_dashboard.models import (
     SwingView,
     SymbolChangeRow,
     SymbolDecisionRow,
+    TradeRiskPlanRow,
     TimeframeRow,
     WarningRow,
 )
@@ -838,10 +839,16 @@ def _swing_snapshot(snapshot: SwingSnapshot) -> str:
 def _decision_rows(rows: Sequence[SymbolDecisionRow]) -> str:
     """Every scanned symbol, one per line. **Scan order, and no other.**
 
-    The columns are the three the owner scans for: what the symbol is, what the
-    engine concluded, and the engine's own sentence for why. There is no rank
-    column and no number column, because there is nothing here to rank by — the
-    order is the order the symbols were requested in and means nothing else.
+    The columns are the ones the owner scans for: what the symbol is, what the
+    engine concluded, the engine's own sentence for why, and whether a trade
+    here could be sized at all. There is no rank column and no number column,
+    because there is nothing here to rank by — the order is the order the
+    symbols were requested in and means nothing else.
+
+    **The risk column carries a state and never a figure.** A column of position
+    sizes or reward:risk ratios is a column the eye sorts, and the research
+    record is explicit that reward:risk was measured to associate with a *worse*
+    outcome. The numbers live on the symbol's own page.
     """
     body = [
         "<tr>"
@@ -851,6 +858,7 @@ def _decision_rows(rows: Sequence[SymbolDecisionRow]) -> str:
         f"<td>{_state_cell(row.timeframes, 'context')}</td>"
         f"<td>{_state_cell(row.timeframes, 'setup')}</td>"
         f"<td>{_blocker_cell(row.blocker, row.reason)}</td>"
+        f"<td>{_plan_cell(row.plan)}</td>"
         f"<td>{_freshness_cell(row.timeframes)}</td>"
         "</tr>"
         for row in rows
@@ -863,10 +871,30 @@ def _decision_rows(rows: Sequence[SymbolDecisionRow]) -> str:
             ("HTF context", ""),
             ("Setup state", ""),
             ("What is holding it", ""),
+            ("Risk", ""),
             ("Data age", ""),
         ],
         body,
     )
+
+
+def _plan_cell(plan: TradeRiskPlanRow | None) -> str:
+    """One symbol's planning state, in as few characters as it can honestly take.
+
+    **A state, never a number.** No size, no capital at risk and no reward:risk
+    reaches this column: a table of position sizes is a table the eye ranks, and
+    nothing in this repository supports ranking symbols by any of them. The
+    figures are on the symbol's own page, one decision at a time, which is where
+    a size is actually read.
+
+    An em dash is deliberately not used for the un-planned case — a dash in a
+    risk column is read as a zero. `_absent` spells *unavailable* instead.
+    """
+    if plan is None:
+        return _absent("no risk policy is declared")
+    if plan.status == "no_trade_plan":
+        return '<span class="sub">no trade to plan</span>'
+    return _planning_chip(plan.status)
 
 
 def _blocker_cell(row: BlockerRow | None, reason: str) -> str:
@@ -1110,7 +1138,182 @@ def _timeframe_table(rows: Sequence[TimeframeRow]) -> str:
     )
 
 
-def _decision_detail(row: SymbolDecisionRow) -> str:
+#: The operator's wording for each `PlanningStatus`. Held here beside the other
+#: label tables, not in the domain: `fmis.risk_policy` names the states and this
+#: layer names them *for a reader*, so a second surface can word them its own way.
+_PLANNING_LABELS: dict[str, str] = {
+    "no_trade_plan": "NO TRADE PLAN",
+    "not_evaluable": "NOT EVALUABLE",
+    "planned": "WITHIN DECLARED RISK BUDGET",
+    "refused": "GEOMETRY REFUSED",
+}
+
+
+def _planning_chip(status: str) -> str:
+    """The planning status, worded for a reader and coloured like a conclusion.
+
+    `no_trade_plan` is the state of most of the watchlist and is a conclusion,
+    not a fault — it reaches the same neutral treatment `_setup_chip` gives WAIT,
+    for the same reason: painting a correct refusal in the colour of an error
+    teaches the owner to distrust it.
+    """
+    return _chip(_PLANNING_LABELS.get(status, status), status.replace("_", "-"))
+
+
+def _plan_panel(row: SymbolDecisionRow, note: str) -> str:
+    """One symbol's risk and trade planning. **Nothing here is computed.**
+
+    Every figure is a string `fmis.risk_policy` already produced from
+    `fmis.position_sizing`'s arithmetic. This function multiplies nothing, sums
+    nothing and divides nothing, and a guard test asserts it names no `Money` or
+    `Quantity` constructor — so a number cannot appear on this page that no
+    engine can be held to.
+
+    **A symbol with no trade plan gets no figures, and that is the point.** Most
+    of the watchlist is waiting, and a waiting symbol shown with an entry, a
+    stop and a position size beside it reads as almost a trade. Those rows print
+    one sentence and stop.
+
+    **Portfolio impact is always stated and never a number.** No portfolio is
+    read for these figures, so total open risk, concentration and correlation
+    are *not evaluated* — which is a different fact from their being zero, and a
+    panel silent about them would be read as one reporting none.
+    """
+    plan = row.plan
+    if plan is None:
+        return _panel(
+            f"{row.symbol} — risk and trade planning",
+            _absent(note),
+        )
+    header = _kv([("planning", _planning_chip(plan.status))])
+    if plan.status == "no_trade_plan":
+        return _panel(
+            f"{row.symbol} — risk and trade planning",
+            header
+            + _empty(
+                "No trade plan is available for risk evaluation: "
+                + (plan.direction_reason or "the engine states no direction for "
+                   "this symbol")
+                + " No entry, invalidation or position size is shown, because "
+                "there is no trade here to size."
+            ),
+        )
+
+    geometry = _kv(
+        [
+            ("direction", _text(plan.direction, plan.direction_reason)),
+            (
+                "entry",
+                _text(plan.entry, "no reference price was produced")
+                + (
+                    f'<br><span class="sub">{_e(plan.entry_caveat)}</span>'
+                    if plan.entry_caveat
+                    else ""
+                ),
+            ),
+            (
+                "invalidation",
+                _text(plan.invalidation, "no structural stop level was produced")
+                + '<br><span class="sub">the execution-timeframe level the '
+                "engine reports as the stop. It is where the thesis is wrong, "
+                "and it is not an order resting at a venue.</span>",
+            ),
+            (
+                "risk per unit",
+                _text(plan.risk_per_unit, plan.risk_per_unit_reason),
+            ),
+            ("reward : risk", _text(plan.reward_risk, plan.reward_risk_reason)),
+        ]
+    )
+    budget = _kv(
+        [
+            (
+                "declared capital",
+                _text(plan.equity, plan.equity_reason)
+                + (
+                    f'<br><span class="sub">declared {_e(plan.declared_at)} — a '
+                    "figure the owner typed, not a balance this system "
+                    "observed. Computed under risk policy contract "
+                    f"v{_e(plan.contract_version)}.</span>"
+                    if plan.declared_at
+                    else ""
+                ),
+            ),
+            (
+                "risk per trade",
+                _text(plan.risk_fraction, plan.risk_fraction_reason)
+                # Where the fraction came from, under the fraction. A basis
+                # printed as a loose paragraph further down explains a number the
+                # reader has already scrolled past, and a fraction with no stated
+                # provenance is a number something chose on the owner's behalf.
+                + (
+                    f'<br><span class="sub">{_e(plan.basis)}</span>'
+                    if plan.basis
+                    else ""
+                ),
+            ),
+            (
+                "hard ceiling",
+                _text(plan.ceiling)
+                + f'<br><span class="sub">{_e(plan.ceiling_source)}</span>',
+            ),
+        ]
+        # The three figures a size produces. When there is no size all three are
+        # absent for the **same** reason, and printing that reason three times
+        # under three labels buries it — so they collapse into one row that
+        # states it once. They stay three rows whenever there are three numbers.
+        + (
+            [
+                (
+                    "capital at risk",
+                    _text(plan.money_at_risk, plan.money_at_risk_reason),
+                ),
+                ("maximum quantity", _text(plan.quantity, plan.quantity_reason)),
+                ("position value", _text(plan.notional, plan.notional_reason)),
+            ]
+            if plan.quantity is not None
+            else [
+                (
+                    "capital at risk, quantity, position value",
+                    _absent(plan.quantity_reason),
+                )
+            ]
+        )
+    )
+    body = header + geometry + budget
+    if plan.missing:
+        body += _details(
+            f"missing before a size can be produced ({len(plan.missing)})",
+            _list(plan.missing),
+            open_=True,
+        )
+    if plan.status == "refused" and plan.reason:
+        body += f'<p class="note">{_e(plan.reason)}</p>'
+    body += _kv([("portfolio impact", _absent(plan.portfolio_impact_reason))])
+    body += _details("what reduced the size", _list(plan.caps))
+    body += _details("notes on this figure", _list(plan.notes))
+    body += (
+        '<p class="note">A size is <em>how much</em>, never <em>whether</em>. '
+        "Nothing here says this trade is worth taking, and no figure on this "
+        "panel changed the decision above it.</p>"
+    )
+    # `fmis.risk_policy`'s own list, rendered rather than restated. Every entry
+    # is a property of the build — what the arithmetic does not include and what
+    # it is not correct for — and it belongs beside the number rather than in a
+    # document the reader has to go and find.
+    body += _details(
+        f"what these figures are not ({len(plan.limitations)})",
+        "<dl class=\"kv\">"
+        + "".join(
+            f"<dt>{_e(title)}</dt><dd>{_e(detail)}</dd>"
+            for title, detail in plan.limitations
+        )
+        + "</dl>",
+    )
+    return _panel(f"{row.symbol} — risk and trade planning", body)
+
+
+def _decision_detail(row: SymbolDecisionRow, risk_note: str = "") -> str:
     """One symbol's decision, in full. Every value is an engine's own.
 
     **Four panels, in the order the question is actually asked**, and the order
@@ -1123,7 +1326,9 @@ def _decision_detail(row: SymbolDecisionRow) -> str:
         2. timeframe context and data times — the environment, and when each
            role was last read;
         3. directional families — how the tally lined up;
-        4. evidence and independence audit — every item, behind a disclosure.
+        4. risk and trade planning — what a trade here would risk against the
+           owner's declared capital, or exactly which input is missing;
+        5. evidence and independence audit — every item, behind a disclosure.
 
     Slice 1 built panels 3 and 4 and put them first, and the operator's own
     report was that the page answered an audit question before it answered a
@@ -1228,6 +1433,12 @@ def _decision_detail(row: SymbolDecisionRow) -> str:
             else _empty("No directional family was recorded for this assessment."),
         )
     )
+
+    # Between the families and the evidence audit, deliberately. The trading
+    # question — *if this became actionable, what would it risk* — sits above the
+    # audit question, which is the ordering Slice 2 established and the reason
+    # the evidence panel is last rather than first.
+    parts.append(_plan_panel(row, risk_note))
 
     if row.evidence_reason is not None:
         parts.append(
@@ -1526,6 +1737,11 @@ def _swing_body(view: SwingView) -> str:
     )
     if view.decisions:
         parts.append(f'<p class="note">{_e(_DECISION_ORDER_NOTE)}</p>')
+    # Whether a size was computed for this page at all, and when one was not,
+    # which input is missing. The workspace has always produced this sentence;
+    # before this milestone the dashboard dropped it, so the page could not say
+    # why no figure ever appeared. A blank there read as *nothing to report*.
+    parts.append(f'<p class="note">Risk: {_e(view.risk_note)}</p>')
     parts.append("<h3>Top opportunities</h3>")
     parts.append(
         _setup_rows(view.opportunities)
@@ -2237,7 +2453,7 @@ def _symbol_page(snapshot: OperatorDashboardSnapshot, symbol: str) -> str:
         )
     parts = []
     if decision is not None:
-        parts.append(_decision_detail(decision))
+        parts.append(_decision_detail(decision, view.risk_note if view else ""))
     # After the operator summary and before the evidence audit: the current
     # decision stays first, and history qualifies it rather than burying it.
     parts.append(_symbol_change_panel(snapshot.scan_change, symbol))

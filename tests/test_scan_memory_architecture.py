@@ -84,6 +84,10 @@ DECIDING_PACKAGES = (
     "decision_support", "trading_context", "features", "alignment",
     "relative_value", "position_sizing", "portfolio_risk", "risk", "today",
     "workspace", "daily", "paper", "plan", "proposal",
+    # Slice 4. It turns the owner's declaration into a `RiskBudget` and a size,
+    # so a remembered state reaching it would let history change what a trade is
+    # allowed to risk — the same prohibition, one layer over.
+    "risk_policy",
 )
 
 

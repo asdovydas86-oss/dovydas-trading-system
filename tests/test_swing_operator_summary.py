@@ -510,15 +510,28 @@ def test_two_symbols_show_visibly_different_blockers_on_the_overview() -> None:
 
 
 def test_the_symbol_page_puts_the_summary_above_the_audit() -> None:
-    """§16's hierarchy, asserted as an order rather than as a presence."""
+    """§16's hierarchy, asserted as an order rather than as a presence.
+
+    **Stated as a relation, not as a fixed list.** This test previously pinned
+    the first four panel titles exactly, which made it fail when Slice 4 inserted
+    the risk and trade-planning panel — a change that does not touch the
+    invariant it exists to protect. The invariant is that the decision comes
+    first and the audit comes last, and a milestone that adds a trading panel
+    between them should not have to relitigate it.
+    """
     html = render_page(snapshot_of(live(BTC_SHAPED, "AAAUSDT")), "/swing", symbol="AAAUSDT")
     panels = re.findall(r"<h2>([^<]+)", html)
-    assert panels[:4] == [
-        "AAAUSDT — decision",
-        "AAAUSDT — timeframe context and data times",
-        "AAAUSDT — directional families",
-        "AAAUSDT — evidence and independence audit",
-    ]
+    assert panels[0] == "AAAUSDT — decision"
+    assert panels[1] == "AAAUSDT — timeframe context and data times"
+    assert panels[2] == "AAAUSDT — directional families"
+    # Last of this symbol's panels. Anything after it belongs to another section
+    # of the page (the scan-change block), not to the decision.
+    audit = panels.index("AAAUSDT — evidence and independence audit")
+    assert audit == max(
+        index for index, title in enumerate(panels) if title.startswith("AAAUSDT")
+    )
+    # And every trading question is answered above it.
+    assert audit > panels.index("AAAUSDT — risk and trade planning")
 
 
 def test_the_summary_panel_answers_the_operator_questions() -> None:

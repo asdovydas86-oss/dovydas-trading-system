@@ -25,8 +25,9 @@ unknown portfolio risk is never zero. Two ADRs:
 [ADR-0029](../adr/ADR-0029-money-and-numeric-semantics.md) ratifies the already-implemented
 `Decimal`/`float` boundary **changing no production code**, and
 [ADR-0030](../adr/ADR-0030-risk-policy-declaration-boundary.md) sites the ceiling and the producer.
-157 new tests, 12/12 targeted mutants killed, policy non-regression byte-identical
-(`sha256 8b22e6c9…`, 72 `WAIT` / 9 `CANDIDATE`). Full record:
+**165 new tests**, 12/12 targeted mutants killed, policy non-regression byte-identical
+(`sha256 8b22e6c9…`, 72 `WAIT` / 9 `CANDIDATE`), and a full suite of **14,699 passed, 0 failed,
+0 skipped, 0 warnings** under `-W error`. Full record:
 [report 0046](../../reports/0046_2026-09-06_SWING_RISK_AND_TRADE_PLANNING_SLICE_4.md).
 
 **One operator action is outstanding**: the owner must declare his planning capital and per-trade

@@ -41,8 +41,9 @@ was created on disk, and `architecture_tiers.assert_tier_partition_is_complete` 
 unclassified package. Proved by moving the directory aside and re-running that file alone —
 **174 passed**. The clean baseline is 14,533. The guard behaved exactly as designed.
 
-All development ran on port **8799**. The operator's instance was never stopped, never signalled,
-and `pkill` was not used at any point.
+All development ran on port **8799**. The operator's instance was never stopped and never signalled
+**during development**; it was stopped once, deliberately, at handoff, because production code
+changed and it was serving the old build — see §15.3. `pkill` was not used at any point.
 
 ## 3. Gate C — the risk and portfolio capability audit
 
@@ -379,7 +380,9 @@ measurable on the page.
 
 ## 13. Live verification
 
-Development instance on **8799** (PID 15519), operator's 8787 untouched throughout.
+Development instances on **8799** (PIDs 15519, 16746, 45350 across sessions), each stopped by its
+own exact PID. The operator's 8787 was untouched throughout development and was restarted once at
+handoff — §15.3.
 
 | | |
 |---|---|
@@ -410,8 +413,8 @@ What it does and does not mean, checked rather than assumed:
 
 **The records were deliberately not deleted.** The store is append-only by design, they contain
 correct data, and removing them would be a second unrequested mutation of the owner's runtime state
-to tidy away the first. The operator's dashboard process itself was never stopped or signalled at
-any point.
+to tidy away the first. The operator's dashboard process was not stopped or signalled by this —
+the restart in §15.3 is a separate, deliberate act.
 
 **No live candidate was fabricated.** The live market produced only `WAIT` on this scan, so
 candidate-specific verification used controlled fixtures through the real projection and renderer
@@ -420,11 +423,13 @@ declared-state check lives in the session scratchpad only.
 
 ## 14. Full regression
 
-Run started **after** the last production and test edit, under `-W error`, with **no other pytest
-process alive** and a unique output path:
+Run started **after** the last production and test edit — the §15.2 punctuation repair and the two
+tests that pin it — under `-W error`, with **no other pytest process alive** and a unique output
+path. Started 19:26:28, finished 19:37:38 on 2026-09-07; `find src tests -name '*.py' -newermt` over
+the start instant returns nothing, so no source or test file changed while it ran:
 
 ```
-14697 passed in 676.49s (0:11:16)
+14699 passed in 669.95s (0:11:09)
 EXIT=0
 ```
 
@@ -436,10 +441,10 @@ than merely reported:
 | | |
 |---|---|
 | baseline at `03dd4e0` | 14,533 |
-| new `tests/test_risk_policy_*.py` | + 163 |
+| new `tests/test_risk_policy_*.py` | + 165 |
 | `risk_policy` added to `test_scan_memory_architecture.DECIDING_PACKAGES` (parametrized) | + 1 |
-| **expected** | **14,697** |
-| **collected and passed** | **14,697** |
+| **expected** | **14,699** |
+| **collected and passed** | **14,699** |
 
 ### 14.1 A second process slip, and what caught it
 
@@ -455,6 +460,10 @@ to `test_scan_memory_architecture.DECIDING_PACKAGES` (a parametrized guard) = **
 run reported 14,692 — exactly **4** short, matching the four tests added after it started. Without
 that accounting a stale number would have been written into this report and the gate called closed
 on it.
+
+*(Those are the figures as they stood at that moment. §14's total is **14,699**, because the resumed
+session in §15.2 added two more tests. The two sections are not in conflict: 163 + 2 = 165, and
+14,697 + 2 = 14,699.)*
 
 Both runs also contended for CPU, which independently disqualifies a result covering the
 timing-sensitive dashboard smoke tests.
@@ -515,6 +524,58 @@ A fourth item was a **test defect rather than a product one**: the assertion tha
 claims a maximum possible loss was a bare substring check, and it began failing the moment the page
 started **denying** the claim in those words. Rewritten to assert the claim is absent — every
 occurrence negated — rather than that the phrase is.
+
+## 15.2 A defect found after the first closure, and fixed
+
+**A copy fix landed on one side of a seam and not the other.** The `WAIT` panel's sentence is
+assembled from three pieces — a fixed opening, the engine's own reason, and a fixed closing. An
+earlier edit capitalised the engine's reason and gave it a terminal stop, but the renderer's join was
+left as a colon, so the live page read:
+
+```
+No trade plan is available for risk evaluation: The engine states no direction for this symbol.
+```
+
+A colon introducing a capitalised sentence. Worse, the renderer's *fallback* string — used when a
+plan carries no reason of its own — was still lowercase with no terminal stop, so that branch would
+have rendered `…for this symbol No entry, invalidation or position size is shown`. That branch is
+unreachable today, because a `NO_TRADE_PLAN` always states a reason; a fallback nobody exercises is
+a fallback nobody notices is malformed.
+
+This is the **one sentence most of the watchlist ever shows** — every `WAIT` symbol, every day — so
+it is worth more than its size suggests. Both sides of the seam are now correct, and the *joined*
+result is pinned by two tests rather than the pieces, because pinning the pieces is exactly what let
+a half-landed fix pass. The tests were proved non-vacuous by restoring the defective construction in
+a copy of `src/` and confirming they fail.
+
+The full suite was re-run after this edit; §14 records that run and no earlier one.
+
+## 15.3 Operator dashboard handoff, and a live confirmation of report 0045
+
+Production code changed, so the operator's instance was serving a stale build and had to be
+restarted. It was stopped by **its own exact PID**; `pkill` was not used.
+
+**`SIGINT` did not stop it, and that is report 0045's root cause observed in production.** PID 74079
+was started as a background job, so its `SIGINT` disposition was `SIG_IGN` — inherited across `exec`
+and never restored — and the kernel discarded the signal. Ten seconds of waiting confirmed it was
+still serving. `SIGTERM` ended it in under two seconds.
+
+This is **not** a defect and nothing was changed for it. Report 0045 fixed the *test harness*
+(`tests/dashboard_smoke_driver.py`) and deliberately left `src/` alone, on the grounds that
+`fmits dashboard &` ignoring Ctrl-C is correct POSIX behaviour. What is new here is the operational
+consequence, worth recording because it is not obvious: **Ctrl-C in the terminal that owns the
+dashboard works; `kill -INT` against a backgrounded instance silently does nothing.** Use `SIGTERM`.
+
+| | before | after |
+|---|---|---|
+| PID | 74079 (started 2026-09-05 11:14) | **18359** (started 2026-09-06 20:05) |
+| URL | `http://127.0.0.1:8787/` | unchanged |
+| code served | pre-Slice-4 | Slice 4 |
+
+Verified after the restart: `/`, `/markets`, `/swing`, `/swing/BTCUSDT`, `/swing/ETHUSDT` and
+`/portfolio` all **200**; the risk panel present in position four; repeated `GET`s **byte-identical**;
+and scan-memory continuity intact **across the restart** — the new process compared against the scan
+the previous one had recorded and reported 0 material changes across 20 symbols.
 
 ## 16. Product First — before and after
 

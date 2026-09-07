@@ -1191,9 +1191,14 @@ def _plan_panel(row: SymbolDecisionRow, note: str) -> str:
             f"{row.symbol} — risk and trade planning",
             header
             + _empty(
-                "No trade plan is available for risk evaluation: "
-                + (plan.direction_reason or "the engine states no direction for "
-                   "this symbol")
+                "No trade plan is available for risk evaluation. "
+                # The engine's own sentence, which is capitalised and already
+                # ends in a full stop. Joined with a period rather than a colon:
+                # a colon introduces a clause, and what follows is a sentence.
+                + (
+                    plan.direction_reason
+                    or "The engine states no direction for this symbol."
+                )
                 + " No entry, invalidation or position size is shown, because "
                 "there is no trade here to size."
             ),

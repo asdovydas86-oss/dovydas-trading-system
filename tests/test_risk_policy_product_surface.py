@@ -17,6 +17,7 @@ Each of those is hand-calculated and written as a literal.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
 import pytest
@@ -318,3 +319,42 @@ def test_the_page_names_the_policy_contract_the_figures_were_computed_under() ->
 
     panel = _risk_panel(_page(result(assessment("BTCUSDT", state=SetupState.CONFIRMED))))
     assert f"risk policy contract v{RISK_POLICY_CONTRACT_VERSION}" in panel
+
+
+def test_the_no_trade_sentence_reads_as_prose_and_not_as_two_fragments() -> None:
+    """The panel's one sentence for a `WAIT` symbol, asserted as written text.
+
+    It is assembled from three pieces — a fixed opening, the engine's own reason,
+    and a fixed closing — and a punctuation slip at either seam is invisible to
+    every other test here while being the only thing most of the watchlist ever
+    shows. An earlier fix to this landed on one side of the seam and not the
+    other, producing *"risk evaluation: The engine states…"*, which is why the
+    joined result is pinned rather than the pieces.
+    """
+    panel = _risk_panel(_page(result(assessment("BTCUSDT", direction=None))))
+    text = " ".join(re.sub(r"<[^>]+>", " ", panel).split())
+    assert "risk evaluation. The engine states no direction" in text
+    assert "risk evaluation:" not in text
+    # No fragment runs into the next without a stop between them.
+    assert "nothing is wrong. No entry" in text
+    assert "symbol No entry" not in text
+
+
+def test_the_fallback_sentence_is_also_complete_prose() -> None:
+    """The branch taken when a plan carries no reason of its own. Unreachable
+    today — a `NO_TRADE_PLAN` always states one — and asserted anyway, because a
+    fallback nobody exercises is a fallback nobody notices is malformed."""
+    from fmis.operator_dashboard.models import SymbolDecisionRow, TradeRiskPlanRow
+    from fmis.operator_dashboard.render import _decision_detail
+
+    row = SymbolDecisionRow(
+        symbol="BTCUSDT",
+        state="wait",
+        classification="read and declined",
+        reason="r",
+        sufficiency="sufficient",
+        as_of=datetime(2026, 9, 6, tzinfo=UTC),
+        plan=TradeRiskPlanRow(symbol="BTCUSDT", status="no_trade_plan"),
+    )
+    text = " ".join(re.sub(r"<[^>]+>", " ", _decision_detail(row, "note")).split())
+    assert "The engine states no direction for this symbol. No entry" in text

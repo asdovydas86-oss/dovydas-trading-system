@@ -7,9 +7,17 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | Milestone BP's production commit `e1cfad0`, on top of `3a2bd3a`, with this product-docs commit recorded directly on top of it. Milestone BO's production commit `e4195fc` sits on top of `51814b1`, with its product-docs commit directly on top of it. Milestone BN's own entry was verified against its product-docs commit on top of `b66a88f`, committed and pushed. Milestones `BJ`–`BM`, recorded here as pending commit, are in fact in `origin/main` at `4519d0a`; those entries are point-in-time records and are not revised |
-| **Verified on** | 2026-08-18 |
-| **Verification method** | live repository + `git log` + full test run + accepted ADRs |
+| **Last verified against** | **`HEAD` = `main` = `origin/main` = `66bab74`** |
+| **Verified on** | **2026-09-16** (Project Memory & Documentation Gate, [report 0048](reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md)) |
+| **Verification method** | live repository + `git` inspection + accepted ADRs |
+| **Latest capability entry** | **Swing Product Slice 4 — Risk & Trade-Planning Foundation** (2026-09-06). §3 below still opens *"As of Milestone `BS`"* and is superseded by §3.1 |
+| **Previously** | Verified 2026-08-18 against Milestone BP's production commit `e1cfad0`, on top of `3a2bd3a`. Milestone BO's `e4195fc` sits on top of `51814b1`; Milestone BN's entry was verified against its product-docs commit on top of `b66a88f`. Milestones `BJ`–`BM`, recorded here as pending commit, are in fact in `origin/main` at `4519d0a`. Those entries are point-in-time records and are not revised |
+
+> **The Project Memory & Documentation Gate (2026-09-16) has no entry in this changelog, deliberately.**
+> It changed no user-visible capability. It is recorded as `DW` in
+> [`FMITS_PRODUCT_BACKLOG.md`](FMITS_PRODUCT_BACKLOG.md) §8 and in
+> [report 0048](reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md). Per §1, documentation
+> and refactors are never recorded here as product releases.
 
 ---
 
@@ -67,8 +75,38 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-**As of Milestone `BS` (Swing Decision Workspace v1) — what the owner can
-do today.**
+### 3.1 Current — verified 2026-09-16 at `66bab74`
+
+**25 CLI commands**, plus an operator dashboard of **10 fixed pages** and one dynamic route:
+
+```
+fmits facts · mtf · regime · swing · setup · evidence · scan · backtest · daily · today · workspace
+      pulse · macro · portfolio · approve · trade · simulate · statistics · performance · expectancy
+      equity · trades · research · dashboard · archive
+
+dashboard:  / · /markets · /swing · /swing/SYMBOL · /portfolio · /paper
+            /performance · /lab · /geometry · /validation · /system
+```
+
+**Since `BS`, the Swing product gained four slices**, each recorded in §4 below: the per-symbol
+decision page (`/swing/SYMBOL`), the operator decision layer that puts the trading question above the
+audit question, scan memory and *"what changed since the previous comparable scan"*, and the risk &
+trade-planning panel.
+
+**Risk sizing is product-unavailable until the owner declares his planning capital** in
+`~/.fmits/risk_policy.json` — verified absent on 2026-09-16. Every planning panel states the absence
+and prints the file to write. **2 % per-trade risk is a hard ceiling, never a default.**
+
+**The standing limitation:** the operator still sees too many undifferentiated `WAIT`s, and the
+product cannot yet distinguish *nothing interesting* from *a directional opportunity is developing but
+unconfirmed*. See [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0.7.
+
+### 3.2 Historical snapshot — as of Milestone `BS`
+
+> **Superseded by §3.1.** Left unrevised as a point-in-time record.
+
+**As of Milestone `BS` (Swing Decision Workspace v1) — what the owner could
+do then.**
 
 ```
 fmits workspace                                 # the operator's page, ordered by a stated key

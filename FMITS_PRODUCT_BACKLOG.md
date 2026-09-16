@@ -11,9 +11,15 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `HEAD` at `dbc4765` (Milestones BC, BH and BI, committed locally and **not pushed**; `origin/main` is at `f9ddc54`) plus **Milestones BJ — Daily Trading Workspace MVP** and **BK — Trade Capture & Decision Recording**, both in the working tree and **not committed** (§4, §8) |
-| **Verified on** | 2026-08-13 |
-| **Verification method** | live repository + `git log` + full test run + accepted ADRs |
+| **Last verified against** | **`HEAD` = `main` = `origin/main` = `66bab74`**, tracked tree clean, `0/0` ahead/behind, remote verified with `git ls-remote` |
+| **Verified on** | **2026-09-16** (Project Memory & Documentation Gate, [report 0048](reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md)) |
+| **Verification method** | live repository + `git` inspection + live `src/` inspection + accepted ADRs. **The test suite was not re-run** — that session changed no `src/` or `tests/` byte |
+| **Previously** | `HEAD` at `dbc4765`, verified 2026-08-13. That row is superseded; §8's per-milestone entries remain point-in-time records and are not revised |
+
+> **Current state lives in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0,
+> and capability status in [`docs/AI_HANDOFF/CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md).**
+> This board is **planning**, not implementation truth. §4's table below carries historical rows that
+> were true when written; where it disagrees with `CURRENT_STATE.md` §0, §0 wins.
 
 ---
 
@@ -66,7 +72,24 @@ before?"* An item that cannot answer it does not belong here.
 
 ## 4. Current product state
 
-**Every figure below was measured, not quoted.**
+> **Verified 2026-09-16 at `66bab74`:**
+>
+> | Fact | Value |
+> |---|---|
+> | **`HEAD` · `main` · `origin/main`** | all `66bab74`; `0/0` ahead/behind |
+> | **Latest completed product milestone** | **Swing Product Slice 4 — Risk & Trade-Planning Foundation** (`DV`, 2026-09-06, [report 0046](reports/0046_2026-09-06_SWING_RISK_AND_TRADE_PLANNING_SLICE_4.md)) |
+> | **Most recent milestone of any kind** | **Project Memory & Documentation Gate** (`DW`, 2026-09-16, §8) — documentation only, **no product capability** |
+> | **Test baseline** | 14,699 passed / 0 failed / 0 skipped / 0 warnings under `-W error`; last actually run 2026-09-07 |
+> | **Policy baseline** | `sha256 8b22e6c9…`, 81 fixtures, 72 `WAIT` / 9 `CANDIDATE`; Reliability Gate 9/9 |
+> | **Product surface** | 25 CLI commands + a 10-page operator dashboard with a dynamic `/swing/SYMBOL` route |
+> | **NOW** | **TA Slice 5A — Recover Technical Context** (§5) — *named, not started* |
+>
+> Full detail: [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0.
+
+**The table below is a historical accumulation.** Every figure in it was measured when written; rows
+are **not** revised as the project moves, per this board's point-in-time convention. Several are
+superseded by the block above — most notably the **Immediate next milestone** row, which still reads
+*awaiting the owner's decision*.
 
 | Fact | Value |
 |---|---|
@@ -202,15 +225,43 @@ close, and the inherited limitations — computed from live exchange data.
 
 ## 5. NOW
 
-**Exactly one item, by rule** ([`START_HERE_FOR_AI.md`](docs/AI_HANDOFF/START_HERE_FOR_AI.md) §5 states
-this rule without exception). **That rule is not currently satisfied.** `AP` shipped on **2026-08-06**
-(§8, commit `0ea0414`) and no successor has been sequenced — the same deliberate, temporary,
-explicitly-authorized exception the board recorded after `AO`, not a silent redefinition of the rule:
-the milestone brief that closed `AP` explicitly forbade choosing the next milestone in the same task.
+**Exactly one item, by rule.**
 
-This is therefore an **outstanding action for the owner**, not a stable resting state — **the next NOW
-item must be named before the next implementation task on this board begins.** §6 holds the sequenced
-work `AP` itself defined; §7 holds the epics still awaiting sequencing.
+### `DX` — TA Slice 5A: Recover Technical Context · **NOW** *(named 2026-09-16; not started)*
+
+| Field | Value |
+|---|---|
+| **What the owner gets** | The technical facts FMITS **already computes and currently throws away** reach a surface he can read. Today roughly half of what the engine derives about a market dies in one 75-line function before it reaches any page |
+| **The blocker it removes** | `build_setup_inputs` (`src/fmis/swing_setup/compose.py:225`) receives three complete `StructuralFactSheet`s and passes through trend, the context regime, evidence state, decision-context state and execution levels/breaks. **Context-role levels, every level crossing, every CHoCH, nearest levels, setup-role breaks and all three `FeatureSet`s stop there.** Verified live 2026-09-16 |
+| **Also in scope** | An **additive** `compute_series()` on the `Feature` protocol. Indicators return the latest scalar only, so slope, ROC and divergence are not derivable *in principle* — review item **R5**, open since 2026-07-24 — and it is the prerequisite for four later capabilities plus establishment-time ATR |
+| **Required** | A small **real product consumer**. A library no surface reads repeats the very defect this slice exists to fix |
+| **Explicitly NOT in scope** | Any Swing **policy** change · price zones · `WATCH`/opportunity states · invented TA thresholds · any risk/capital change |
+| **GO condition** | Dovydas + ChatGPT have reviewed the Memory Gate (`DW`), **and** this slice has its own implementation brief |
+| **STOP condition** | The slice ends when already-computed facts reach a real operator surface and `compute_series()` exists additively. **It does not continue into Slice 5B** |
+| **Authority** | [report 0047](reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) as modified by [its review disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md) · [`CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md) §6 |
+
+> **The exactly-one-NOW rule is satisfied again as of 2026-09-16, for the first time since `AP`
+> shipped on 2026-08-06.** For those six weeks the board recorded the rule as *temporarily
+> unsatisfied* while `AT`–`AV`, `BH`–`BN`, the `BG-D1` line, `BR`–`BV`, `CC`, `CD` and `DR`–`DW` were
+> delivered as explicitly-scoped, owner-directed implementation tasks rather than NOW selections. That
+> history is left in place below and in §8 rather than tidied away — it is the honest record, and it
+> is precisely the drift the Memory Gate exists to stop.
+
+<details>
+<summary><strong>Historical: the six-week NOW gap (2026-08-06 → 2026-09-16), and every owner-directed task delivered during it, as the board recorded them at the time</strong></summary>
+
+*Point-in-time records. Each paragraph below states that the exactly-one-NOW rule "remains
+outstanding" — true when written, **no longer true** as of 2026-09-16. Left unrevised by convention.*
+
+**Exactly one item, by rule.** **That rule was not satisfied between 2026-08-06 and 2026-09-16.**
+`AP` shipped on **2026-08-06** (§8, commit `0ea0414`) and no successor was sequenced — the same
+deliberate, temporary, explicitly-authorized exception the board recorded after `AO`, not a silent
+redefinition of the rule: the milestone brief that closed `AP` explicitly forbade choosing the next
+milestone in the same task.
+
+This was therefore an **outstanding action for the owner**, not a stable resting state. §6 holds the
+sequenced work `AP` itself defined; §7 holds the epics still awaiting sequencing.
+
 
 **`BR` — Setup Evidence — is DONE (2026-08-20), and was an owner-directed implementation task, not a
 NOW selection.** It sits on the same footing as `AT`, `AU`, `AV`, `BH`–`BN` and the `BG-D1` line
@@ -654,10 +705,44 @@ code; full suite 8,703 passing under `-W error`. See
 > rather than patched in, and it should be designed before it is built. See
 > [report 0029](reports/0029_2026-08-20_SWING_DECISION_WORKSPACE_IMPLEMENTATION.md) §11.
 
+</details>
+
 ## 6. NEXT
 
+### 6.1 The Technical Analysis sequence *(recorded 2026-09-16 — planning state, not authorization)*
+
+Follows `DX` — TA Slice 5A (§5). **Each step needs its own implementation brief.** Product-first, and
+expected to be revised when live implementation reveals new facts.
+
+| # | Step | Purpose | Gated by |
+|---|---|---|---|
+| **0** | **TA Slice 5A — Recover Technical Context** | Stop discarding computed facts; establish historical series access | — *(this is **NOW**, §5)* |
+| 1 | **TA Slice 5B — Price Zones & Interactions** | Let FMITS understand *areas* and what price has done at them | 0 · owner decision **D1** (zone-width policy) · **D2** (zone role/naming) · `compute_series()` if width uses establishment-time ATR |
+| 2 | **Price Phases** | Impulse / retracement / consolidation / range / compression–expansion primitives **with explicit scale semantics** | 1 |
+| 3 | **Market Opportunity** | Distinguish *nothing interesting* from *a developing directional opportunity* **without weakening strategy policy** | 2 · owner decision **D3** (may an opportunity state name a side — [ADR-0028](docs/adr/ADR-0028-directional-interpretation-boundary.md)) |
+| 4 | **Indicator Context** | EMA geometry, MACD dynamics, RSI dynamics | `compute_series()` |
+| 5 | **Volume & volatility at events** | Volume and volatility read *at* a structural event | 1, 4 |
+| 6 | **Divergence** | Price vs oscillator — approved scope, entirely absent today | `compute_series()` |
+| 7 | **Trend Geometry** | Trendlines and channels — approved scope, entirely absent today | 2 *(anchor scoping)* |
+| — | ***re-evaluate here, with real usage*** | Whether steps 8+ earn their place is decided **after the owner has used 0–7** | — |
+| 8 | **Simple Patterns** | Bull/bear flag, then double top/bottom — built from primitives, not as a framework | 7 |
+| — | Fibonacci | **Only if its research supports it.** `CANDIDATE`, not approved scope | research design approved |
+| — | Elliott | **Not scheduled.** `DEFERRED`, hypothesis-level only | — |
+
+**Binding constraints on this sequence** — from [the 0047 review disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md):
+Opportunity ≠ Strategy · `MissingConfirmation` ≠ policy `Blocker` · `compute_series()` before
+ATR-based zones · zone-evidence independence **not established** · support/resistance role from
+**interaction history, never position** · the phase-segmentation model, trendline-anchor rule and
+divergence-alignment policy are **deliberately not frozen**.
+
+**More indicators add no independence — a new *family* does.** Step 4 is contextual market
+information, **not** three more votes.
+
+### 6.2 The trading-domain sequence *(from `AP`, unchanged)*
+
 The forced sequence. Each item is blocked on the one above it. **Sequenced, not started** — none of
-these is a NOW item until the owner names one.
+these is a NOW item until the owner names one. It runs on a different track from §6.1 and is not
+currently prioritised ahead of it.
 
 **Item 0 was the exception, and it is now DONE** *(2026-09-04, report 0041)*: a live product
 outage named as the immediate next task on 2026-09-04. Its row is left in place as the
@@ -761,6 +846,31 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `DW` — Project Memory & Documentation Gate · **DONE** *(2026-09-16)*
+
+**Not a product milestone.** It delivered **no market-analysis capability**, nothing was added to
+[`FMITS_PRODUCT_CHANGELOG.md`](FMITS_PRODUCT_CHANGELOG.md), and it must never be described as a
+product release.
+
+| Field | Value |
+|---|---|
+| **The blocker it removes** | **Continuity failure had become a blocker to safe product development.** Capabilities and design intent existed in specifications, prompts, reports and past conversations but had become hard to see as the repository evolved. Concretely: `CURRENT_STATE.md` carried a current banner at the top while its own `## Current milestone` section still named **AV** (August 2026), `## Test count` said **10,671** against a true **14,699**, and `## Repository status` claimed Milestone AP was unpushed. No document anywhere answered *what capabilities exist, and what is their actual status* |
+| **Product-First justification** | Under §1's rule this is the second permitted form — *removes a clearly identified blocker preventing measurable user value*. **What it unblocks: safe continuation of TA Slice 5A, and it prevents deferred capabilities and decisions from disappearing across AI sessions.** It claims no user capability |
+| **The rule established** | **DEFERRED ≠ FORGOTTEN.** A `DEFERRED` or `CANDIDATE` capability is not cancelled; each records why it was set aside, what must exist first, and what triggers reconsideration. Only an explicit recorded decision may move anything to `REJECTED` |
+| **Created** | [`docs/AI_HANDOFF/CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md) — the canonical capability-status index, twelve non-collapsible states · [`docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md`](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md) · [`docs/AI_HANDOFF/CHATGPT_PROJECT_INSTRUCTIONS.md`](docs/AI_HANDOFF/CHATGPT_PROJECT_INSTRUCTIONS.md) · `docs/AI_HANDOFF/daily/` with a template and the first handoff |
+| **Rewritten** | [`START_HERE_FOR_AI.md`](docs/AI_HANDOFF/START_HERE_FOR_AI.md) — a thin cold-start router carrying the source-authority hierarchy and the startup/shutdown ritual, no longer a second specification |
+| **Restructured** | [`CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) — a maintained **§0 CURRENT STATE** block at the top; the ~3,200-line history below it explicitly marked as an archive, with **six** silently-stale sections given in-place banners. **No history deleted** |
+| **Report 0047 disposition** | **APPROVED WITH REQUIRED ARCHITECTURAL MODIFICATIONS** — twelve of them, including *Opportunity ≠ Strategy*, *`MissingConfirmation` ≠ policy `Blocker`*, *`compute_series()` before ATR-based zones*, *zone-evidence independence **not established***, and explicit refusals to freeze the phase, trendline-anchor and divergence-alignment policies. **Report 0047 itself is unmodified** — it remains immutable point-in-time evidence |
+| **Live re-verification** | The six `features/` placeholders measured **110 lines, zero math**; `build_setup_inputs` confirmed to drop context-role levels, all crossings, all CHoCH, nearest levels, setup-role breaks and every `FeatureSet`; `AverageVolume` constructed **nowhere** in `src/`; `Fibonacci`/`Elliott` **0 occurrences** in both approved sources and in `src/`; `price_zones`, `trendline` and price/oscillator `divergence` absent |
+| **What it did NOT do** | No production code. No tests. **`git diff -- src tests` empty.** No TA engine, no zones, no `compute_series()`, no `WATCH` state, no Swing policy change, no risk/capital configuration, no `~/.fmits/risk_policy.json`, no ADR created, no dashboard disturbed, no historical report rewritten, and the 16 pre-existing untracked research documents untouched |
+| **Validation** | Proportional to a documentation-only change: `git diff -- src tests` proved empty; links and referenced files checked; report numbering verified; registry statuses sampled against live code. **The full suite was deliberately not re-run, and no "suite green" claim is made** |
+| **Report** | [report 0048](reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md) |
+
+> **A label collision, recorded rather than silently fixed:** `DV` below is used **twice** — for the
+> Dashboard Shutdown Reliability Gate and for Swing Product Slice 4. Both are DONE and both are
+> referenced by that label in reports 0045 and 0046, so renaming either would break the paper trail.
+> This gate takes `DW`, and the next milestone takes `DX`.
 
 ### `DV` — Dashboard Shutdown Reliability Gate · **DONE**
 

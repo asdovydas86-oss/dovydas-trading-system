@@ -1,72 +1,234 @@
 # Current State
 
-**Arriving fresh?** Start at [`START_HERE_FOR_AI.md`](START_HERE_FOR_AI.md) instead — this file is the
-data it points you to, not an entry point on its own.
+**Arriving fresh?** Start at [`START_HERE_FOR_AI.md`](START_HERE_FOR_AI.md) — it is the entry point and
+routes you here.
 
-**Snapshot document.** This file records the repository as it is **today**. It is the one document that
-should be updated at the end of every milestone. If it disagrees with the code, the code is correct —
-update this file.
-
-**Last updated for:** `DV` — Swing Product Slice 4: Risk & Trade-Planning Foundation
-(2026-09-06). **The risk engine was finished and the owner could not reach any part of it.**
-A read-only audit of ~8,300 lines across `fmis.risk`, `fmis.portfolio_risk`,
-`fmis.position_sizing`, `fmis.portfolio`, `fmis.valuation` and `fmis.money` found the code correct
-and already satisfying almost every capital-preservation principle — and found two breaks at the
-edges. **`RiskBudget(` and `RiskLimit(` appeared nowhere in `src/`**, only in four test files, so
-`per_trade_ceiling` was never consulted, `SizingPolicy.fraction_for` never resolved, and the chain
-was unreachable by construction; and `swing_view` read `workspace.metadata` nowhere, so the
-dashboard could not even say why no figure appeared. `SPEC` §8.1's 2 % ceiling lived in no code at
-all. Slice 4 adds **one new package, `fmis.risk_policy`** — the owner's declaration boundary and the
-**only producer of a `RiskBudget` in the repository** — plus a *risk and trade planning* panel on
-`/swing/SYMBOL` for every scanned symbol and a state column and note on `/swing`. The ceiling is
-structural (a declaration above 2 % cannot be constructed) and never a default; capital is
-**declared** in `~/.fmits/risk_policy.json`, `ASSERTED`, never inferred; no geometry is invented; and
-unknown portfolio risk is never zero. Two ADRs:
-[ADR-0029](../adr/ADR-0029-money-and-numeric-semantics.md) ratifies the already-implemented
-`Decimal`/`float` boundary **changing no production code**, and
-[ADR-0030](../adr/ADR-0030-risk-policy-declaration-boundary.md) sites the ceiling and the producer.
-**165 new tests**, 12/12 targeted mutants killed, policy non-regression byte-identical
-(`sha256 8b22e6c9…`, 72 `WAIT` / 9 `CANDIDATE`), and a full suite of **14,699 passed, 0 failed,
-0 skipped, 0 warnings** under `-W error`. Full record:
-[report 0046](../../reports/0046_2026-09-06_SWING_RISK_AND_TRADE_PLANNING_SLICE_4.md).
-
-**One operator action is outstanding**: the owner must declare his planning capital and per-trade
-risk fraction in `~/.fmits/risk_policy.json`. It was deliberately not chosen for him. Until then
-every planning section states the absence and prints the file to write.
-
-**Swing Product Slices 1–3 are not separately summarised in this file.** They shipped between
-2026-09-04 and 2026-09-05 and did not update this document; they are fully recorded in
-[report 0042](../../reports/0042_2026-09-04_SWING_SYMBOL_DECISION_SURFACE_SLICE_1.md),
-[report 0043](../../reports/0043_2026-09-04_SWING_OPERATOR_DECISION_LAYER_SLICE_2.md),
-[report 0044](../../reports/0044_2026-09-05_SWING_SCAN_MEMORY_SLICE_3.md),
-[report 0045](../../reports/0045_2026-09-06_DASHBOARD_SHUTDOWN_RELIABILITY_GATE.md) and
-[`FMITS_PRODUCT_BACKLOG.md`](../../FMITS_PRODUCT_BACKLOG.md) §8 (`DS`, `DT`, `DU`, `DV`). Recorded as
-a gap rather than reconstructed here, because this milestone did not perform that work.
-
-**The section below describes CD** — Paired-Effect Dependence Measurement (2026-09-03), the last
-milestone that did update this file, and the research state it left is unchanged by Slice 4: the
-milestone that measured what Milestone CC's estimator structurally could not, found the
-assumption underneath CC was wrong, and then had **two of its own central claims overturned by
-independent review**. CC concluded the universe was too small; CD shows the deeper problem is that
-**the experiment's own unit of evidence is not independent across assets**. `fmis.paired_dependence`
-first persists the **Milestone BZ capture that had never been written down** — the missing file
-behind CB-1, CB-2 and CC-1 — and with it **2,390 observation-level paired differences**. A fresh
-replay reproduces Milestone CA's counts **and its effects to four decimal places**
-(246/234 candidates; 155/91/234 matched; −0.2028/−0.3347/−0.5337). One estimator on two named axes:
-**within-asset `rho_w` = −0.0355 [−0.0774, −0.0064]**, bounded near zero, so clustering by symbol
-costs no information; **between-asset `r_b` = +0.1984 [−0.0491, +0.4181]**, positive in **all 15
-panels** and **all 16 sensitivity cells**. CC assumed a paired within-symbol difference removes the
-market factor; it does not — **not** because the controls are distant in time (CD's first
-explanation, which review refuted) but because `control_forward` averages 200 draws and retains
-under 3 % of the admission leg's variance, leaving `corr(D, admission) = +0.987`. Review also found
-the effective-cluster arithmetic overstated ~3×: corrected, CC's 38 eligible assets supply
-**8–23** effective clusters and its 106-asset ceiling **9–37**, against 467, and the design-relevant
-dependence is **+0.037** — still **17×** the `1/K*` = 0.002141 at which the requirement stops being
-finite. Verdict **`INCONCLUSIVE`** — 15 assets cannot separate "no penalty" from "unreachable at any
-size" — though 5 of 15 panels are **`UNREACHABLE`** outright. Full record:
-[report 0040](../../reports/0040_2026-09-03_PAIRED_EFFECT_DEPENDENCE_MEASUREMENT.md).
+> ## How to read this file
+>
+> **§0 below is the current state.** It is the only part of this file that is maintained as *now*.
+>
+> **Everything after §0 is a reverse-chronological milestone archive**, kept because the reasoning in
+> it is valuable. Sections in the archive were written at their own baseline and **are not updated** —
+> several are years of project-time out of date and say so where they begin.
+>
+> **If the archive disagrees with §0, §0 wins. If §0 disagrees with the code, the code wins** — fix
+> this file. Capability *status* lives in
+> [`CAPABILITY_REGISTRY.md`](CAPABILITY_REGISTRY.md), not here.
 
 ---
+
+# §0. CURRENT STATE
+
+| Field | Value |
+|---|---|
+| **Last verified** | **2026-09-16** |
+| **Verified by** | Project Memory & Documentation Gate — [report 0048](../../reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md) |
+| **Verification method** | live `git` inspection · live `src/` inspection · read-only process inspection. **The test suite was not re-run this session** (documentation-only change; see *Test baseline*) |
+
+## 0.1 Repository
+
+| Field | Value |
+|---|---|
+| **Branch** | `main` |
+| **`HEAD`** | `66bab7414e8c9a255dfbdde9fa9d3e8ef3c1f6e3` |
+| **`main`** | `66bab74` — level with `HEAD` |
+| **`origin/main`** | `66bab74` — level with local `main` |
+| **Remote `refs/heads/main`** | `66bab74` — verified with `git ls-remote` |
+| **Ahead / behind** | `0 / 0` |
+| **Stash** | empty |
+| **Active Git operation** | none |
+| **Tracked tree** | clean, apart from this milestone's own documentation changes |
+| **Untracked** | the **16 pre-existing research documents** under `docs/design/` and `docs/reviews/` (AP/AQ/BA/BB-era), deliberately left untracked and **not touched by this milestone** |
+
+## 0.2 Product surfaces
+
+**25 CLI commands** (`src/fmis/pipeline/cli.py`):
+
+```
+facts · mtf · regime · swing · setup · evidence · scan · backtest · daily · today · workspace
+pulse · macro · portfolio · approve · trade · simulate · statistics · performance · expectancy
+equity · trades · research · dashboard · archive
+```
+
+**Operator dashboard** — 10 fixed pages plus one dynamic route:
+
+```
+/ · /markets · /swing · /portfolio · /paper · /performance · /lab · /geometry · /validation · /system
+/swing/SYMBOL   (dynamic)
+```
+
+## 0.3 Latest completed milestones
+
+| Milestone | What it delivered | Report |
+|---|---|---|
+| **Swing Product Slice 4 — Risk & Trade-Planning Foundation** (2026-09-06) | The risk engine had **no first link and no reader**. `fmis.risk_policy` became the owner's declaration boundary and the only producer of a `RiskBudget`; `/swing/SYMBOL` gained a risk panel. [ADR-0029](../adr/ADR-0029-money-and-numeric-semantics.md), [ADR-0030](../adr/ADR-0030-risk-policy-declaration-boundary.md) | [0046](../../reports/0046_2026-09-06_SWING_RISK_AND_TRADE_PLANNING_SLICE_4.md) |
+| Dashboard Shutdown Reliability Gate (2026-09-06) | A `SIG_IGN` disposition inherited across `exec`. Fixed in the test harness; `src/` deliberately untouched | [0045](../../reports/0045_2026-09-06_DASHBOARD_SHUTDOWN_RELIABILITY_GATE.md) |
+| Swing Product Slice 3 — Scan Memory / "What Changed" (2026-09-05) | `fmis.scan_memory` | [0044](../../reports/0044_2026-09-05_SWING_SCAN_MEMORY_SLICE_3.md) |
+| Swing Product Slice 2 — Operator Decision Layer (2026-09-04) | The trading question above the audit question | [0043](../../reports/0043_2026-09-04_SWING_OPERATOR_DECISION_LAYER_SLICE_2.md) |
+| Swing Product Slice 1 — Symbol Decision Surface (2026-09-04) | `/swing/SYMBOL` per-symbol decision page | [0042](../../reports/0042_2026-09-04_SWING_SYMBOL_DECISION_SURFACE_SLICE_1.md) |
+| **TA Capability Audit & Architecture Gate** (2026-09-07) | **Read-only.** Found FMITS has an excellent price-structure spine and almost no TA body | [0047](../../reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) |
+| **Project Memory & Documentation Gate** (2026-09-16) | **This one.** Documentation only — durable project memory | [0048](../../reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md) |
+
+## 0.4 Test and policy baseline
+
+| Field | Value |
+|---|---|
+| **Full suite** | **14,699 passed · 0 failed · 0 skipped · 0 warnings** under `-W error` |
+| **Baseline commit** | `66bab74` |
+| **Last actually run** | 2026-09-07, by report 0047 (689.62 s). **Not re-run on 2026-09-16** — that session changed no `src/` or `tests/` byte, proved by an empty `git diff -- src tests` |
+| **Invocation** | `python -m pytest` — a bare `pytest` fails at collection on ~17 files that import fixtures as `from tests.test_x import …` |
+| **Policy non-regression digest** | `sha256 8b22e6c9c5e346cb8f62008325b9b0304ecae9af5e0fe46eec4a6c5aa428059c` |
+| **Policy fixtures** | **81 total — 72 `WAIT`, 9 `CANDIDATE`** |
+| **Reliability Gate** | **9/9** |
+| **Superseded digest** | The aggregate `096a575a…` quoted by reports 0042–0044 is **not reproducible** — its formula was never committed. Report 0045 §11.6 states a reproducible one. Do not re-quote `096a575a…` |
+
+## 0.5 Operator dashboard
+
+| Field | Value |
+|---|---|
+| **Live instance** | **PID 46403**, `127.0.0.1:8787`, running since 2026-09-07 |
+| **State on 2026-09-16** | confirmed `LISTEN`, **never stopped, signalled or requested** |
+| **Rule** | The owner uses this instance daily. **Develop on another port** (8799 by convention); restart only at handoff, only by exact PID, **never with `pkill`** |
+| **Known operational fact** | A backgrounded instance inherits `SIG_IGN` and **the kernel discards `SIGINT`** — `SIGTERM` ends it in under 2 s. Not a defect; correct POSIX for a background job |
+
+## 0.6 What the product can do today
+
+The owner can, for a watchlist of 20 symbols: read a deterministic multi-timeframe structural fact
+sheet per symbol; see the market regime per role with its evidence; get a swing setup decision with
+the **blocking condition named**; read the evidence by family **with correlation reported rather than
+assumed**; see **what changed since the previous comparable scan**; and — once capital is declared —
+see what a trade would risk. Plus: a system of record for his own trades, a paper-trading simulator, a
+valued portfolio, performance statistics, a global market pulse, macro context, a historical backtest
+harness, a research harness and a durable decision archive.
+
+## 0.7 Known product limitations
+
+- **The operator sees too many undifferentiated `WAIT`s.** The product cannot distinguish *nothing
+  interesting* from *a directional opportunity is developing but not yet confirmed*. **This is the
+  observation that triggered reports 0047 and 0048.**
+- **Roughly half of the technical information FMITS computes never reaches the operator.** See
+  [`CAPABILITY_REGISTRY.md`](CAPABILITY_REGISTRY.md) §2.2.
+- **No zones, phases, trendlines, divergence, breakout/retest vocabulary or chart patterns exist.**
+- **Indicators return the latest scalar only**, so slope, ROC and divergence are not derivable *in
+  principle* (review item **R5**, open since 2026-07-24).
+- **The six Tier-2 feature packages are placeholders** — 110 lines, zero math.
+- **No AI interpretation layer exists.** No score, probability or ranking exists anywhere.
+- **Backtesting models no fees, slippage, spread or execution delay** — printed on every run.
+- **Risk sizing is product-unavailable** until the owner declares capital (§0.9).
+
+## 0.8 Architecture state
+
+- **Layers L0–L5 plus the reached parts of L7 are built.** The deterministic structural chain is
+  complete end to end: `CandleSeries → Swings → Relationships → Labels → Sequence State → Structural
+  Trend → Series Context → Level Crossing → BOS → CHoCH → Structural Fact Sheet → Multi-Timeframe
+  Sheet → Regime → Workspace → Decision Context → Daily Run`. Every stage is pure, non-repainting,
+  exactly prefix-stable, identity-carrying and single-implementation.
+- **L6 and L8+ remain Planned.** The **Composite Feature Layer (Tier 2) is the conspicuous hole.**
+- **30 accepted ADRs.** Index: [`../adr/README.md`](../adr/README.md).
+- **Composition rule** ([ADR-0007](../adr/ADR-0007-application-layer-boundary.md)): a composition root
+  may import every engine below it; no engine may import a composition root. Each arrow is a strict
+  superset, never a new computation.
+- **Zero runtime dependencies.**
+
+## 0.9 Risk and capital
+
+| Field | Value |
+|---|---|
+| **Per-trade ceiling** | **2 % — a hard maximum, structural, never a default or target** |
+| **Capital declared?** | **No.** `~/.fmits/risk_policy.json` **does not exist** — verified 2026-09-16; `~/.fmits/` holds only `scan_memory/` |
+| **Who declares it** | **The owner, explicitly. An agent must never create this file or infer capital.** |
+| **A discussed figure is not a declaration** | ~500 USDT has been discussed as a possible Swing starting point. **It is not an active declaration and must never be written into configuration** |
+| **Book separation** | Swing capital is a **separate capital domain** from long-term investing and future day trading. Cross-book intelligence may later *observe* aggregate exposure; **one book must never size another** |
+| **Consequence** | Market analysis and opportunity detection **must function without configured capital** |
+
+## 0.10 Research conclusions that constrain development
+
+- **No two of the swing policy's three directional families are family-disjoint.**
+  `standing_family_note()` fires on **every** page; Milestone AW measured **75–79 % agreement**.
+  **Consequence: more indicators add no independence — a new *family* does.**
+- **Milestone CD verdict `INCONCLUSIVE`.** The paired-effect experiment's unit of evidence is **not
+  independent across assets**: within-asset `rho_w` ≈ −0.0355 (bounded near zero), between-asset
+  `r_b` ≈ +0.1984, positive in all 15 panels and all 16 sensitivity cells. 15 assets cannot separate
+  *no penalty* from *unreachable at any size*; 5 of 15 panels are `UNREACHABLE` outright.
+- **The measured swing backtest was close to a coin flip** — 47.4 % target-first / 52.6 % stop-first
+  over 151 evaluable setups, reported as measured and not reinterpreted.
+- **Higher displayed R:R was associated with a *worse* outcome** in the one measurement this
+  repository has published. This is why `fmits workspace` names risk/reward first among the
+  quantities that order nothing.
+
+## 0.11 Deferred decisions still open
+
+| ID | Decision | Blocks |
+|---|---|---|
+| **0047 D1** | Zone-width tolerance policy (a scoped weakening of [ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md) §4's no-tolerance rule) | TA Slice 5B |
+| **0047 D2** | May a zone carry a role, and what may it be called? | TA Slice 5B |
+| **0047 D3** | Where does opportunity state live, and may it name a side? ([ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md)) | Market Opportunity |
+| **0047 D5** | Do the three evidence-status vocabularies converge? *(recommendation: no)* | — |
+| **AP-D2** | The capture contract and migration guarantee | **must be accepted before the first irreplaceable trading record is written** |
+| **D-03** | Availability-time model ([ADR-0003](../adr/ADR-0003-availability-time-boundary.md)) | all macro / news / fundamental / vintage-data backtesting |
+| — | **The owner's capital declaration** (§0.9) | risk sizing as a product capability |
+
+Full reasoning: [`../reviews/REPORT_0047_REVIEW_DISPOSITION.md`](../reviews/REPORT_0047_REVIEW_DISPOSITION.md).
+
+## 0.12 Report 0047 status
+
+**Reviewed by Dovydas + ChatGPT. Disposition: APPROVED WITH REQUIRED ARCHITECTURAL MODIFICATIONS.**
+
+The audit and its findings are approved; **the implementation plan is not approved verbatim.** Twelve
+modifications are binding — including *Opportunity ≠ Strategy*, *MissingConfirmation ≠ Blocker*,
+*`compute_series()` before ATR-based zones*, *zone-evidence independence NOT established*, and
+explicit refusals to freeze the phase, trendline-anchor and divergence-alignment policies.
+
+**Read [`../reviews/REPORT_0047_REVIEW_DISPOSITION.md`](../reviews/REPORT_0047_REVIEW_DISPOSITION.md)
+whenever you read report 0047.** Report 0047 itself is unmodified historical evidence.
+
+## 0.13 NEXT MILESTONE
+
+> ### TA Slice 5A — Recover Technical Context
+>
+> **Status: approved as the next milestone, pending Dovydas + ChatGPT review of this Memory Gate.**
+
+**Purpose:** stop throwing away already-computed technical information, and establish the historical
+series access later engines need.
+
+**GO condition:** Dovydas + ChatGPT have reviewed this Memory Gate, **and** TA Slice 5A has its own
+implementation brief.
+
+**STOP condition:** the slice ends when already-computed facts reach a real operator surface and
+`compute_series()` exists additively. **It does not continue into Slice 5B.**
+
+| In scope | Explicitly out of scope |
+|---|---|
+| Widen the `build_setup_inputs` seam (`src/fmis/swing_setup/compose.py:225`) | Any Swing **policy** change |
+| Preserve relevant per-role structured facts | Invented TA thresholds |
+| Carry crossings / CHoCH / levels / nearest levels / regimes / `FeatureSet`s where architecture permits | Price zones |
+| Additive `compute_series()` protocol capability | `WATCH` / opportunity states |
+| A small **real product consumer** | Any risk/capital change |
+
+The full sequence after it — 5B → Phases → Opportunity → Indicator Context → Volume/Volatility →
+Divergence → Trend Geometry → *re-evaluate* → Patterns — is
+[`CAPABILITY_REGISTRY.md`](CAPABILITY_REGISTRY.md) §6.
+
+---
+
+---
+
+# ARCHIVE — milestone history
+
+> **Everything below this line is historical.** Each section was written at its own baseline and is
+> **not** maintained. Read it for reasoning, never for current state.
+>
+> **Known-stale sections, named so you do not trust them by accident:**
+>
+> | Section | Says | Actually |
+> |---|---|---|
+> | `## Current milestone` | milestone **AV** (August 2026) | superseded — see §0.3 |
+> | `## Test count` | **10,671 passing** | **14,699** — see §0.4 |
+> | `## Immediate next milestone` | *awaiting the owner's decision*; discusses AN/AO/AP | **TA Slice 5A** — see §0.13 |
+> | `## Repository status` | *Milestone AP is committed locally and NOT on the remote* | false — `main` = `origin/main` = `66bab74`; see §0.1 |
+> | `## Known future roadmap` | dashboards, paper trading, persistence are *Deferred* | all three **shipped** — see §0.2, §0.6 |
+> | `## Placeholder modules` | six `features/` packages are placeholders | **still true** — re-verified 2026-09-16 |
+
 
 ## Milestone CD — Paired-Effect Dependence Measurement
 
@@ -1771,6 +1933,8 @@ the owner's separate, explicit authorization.
 
 ## Current milestone
 
+> **HISTORICAL — this section names milestone `AV` (August 2026) and is five milestones out of date.** The current milestone is in §0.3 at the top of this file. Kept for its reasoning.
+
 - **AV — Swing Setup Historical Backtest Harness v1** (commit `2000ba2` — **committed locally, not
   pushed**; see the banner above). The first deterministic historical backtest for the existing
   Swing Setup Engine (`AR`). Answers exactly one question — *"what would the current Swing Setup v1
@@ -2880,6 +3044,8 @@ Reconstructed from git history (`git log --oneline`):
 
 ## Test count
 
+> **HISTORICAL — the figure below (10,671) is superseded.** The current baseline is **14,699 passed / 0 failed / 0 skipped / 0 warnings** at `66bab74` — §0.4.
+
 **10,671 passing** (`python -m pytest`, ~197 s including the network-touching backtest and research
 suites), identically with `-W error`. Measured at `BV` (2026-08-24, `0f31293`, base `1a73cf8`):
 `BU` measured 9,824 and `BV` added 847.
@@ -3151,6 +3317,8 @@ src/fmis/
 
 ## Placeholder modules (no calculation code)
 
+> **STILL TRUE — re-verified 2026-09-16.** All six packages remain placeholders: 110 lines total, zero math, `__all__ = []`. See [`CAPABILITY_REGISTRY.md`](CAPABILITY_REGISTRY.md) §2.3.
+
 Under `src/fmis/features/`: `trend/`, `momentum/`, `volatility/`, `market_structure/`,
 `support_resistance/`, `pattern_detection/` — each is a docstring + planned-features `TODO` list +
 `__all__ = []`. These are the intended homes for the **Planned** Composite Feature Layer.
@@ -3174,6 +3342,8 @@ Full detail in [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_202
 | R11 | The `float` numeric choice was scoped to market data only | Money/portfolio/risk types require their **own ADR** before those modules are built — not inherited by default |
 
 ## Immediate next milestone
+
+> **HISTORICAL — superseded.** This section discusses AN/AO/AP and says the next milestone awaits the owner's decision. **The next milestone is TA Slice 5A** — §0.13.
 
 The **deterministic structural chain is complete**, and so is the product surface above it:
 
@@ -3230,6 +3400,8 @@ accepted before any macroeconomic, fundamental-release, revised, or vintage-data
 
 ## Repository status
 
+> **HISTORICAL — factually superseded.** It states that Milestone AP is committed locally and not on the remote. **`HEAD` = `main` = `origin/main` = `66bab74`** — §0.1.
+
 - Working tree clean. **Milestone AN is pushed** (`74036a4`, `3a3df3d`), corrected pre-push (`644324c`),
   and followed by three documentation-only commits (`305f33c`, `2fbf403`, `36f5a30`) and the
   documentation-consistency audit (`b13c37e`, report 0008). **Milestone AO is pushed** (`b40663f`,
@@ -3247,6 +3419,8 @@ accepted before any macroeconomic, fundamental-release, revised, or vintage-data
 [../ARCHITECTURE_REVIEW_2026-07-24.md](../ARCHITECTURE_REVIEW_2026-07-24.md) §5.
 
 ## Known future roadmap (from the architecture document)
+
+> **HISTORICAL — superseded.** Dashboards, paper trading, persistence, APIs and shadow-mode groundwork listed below as *Deferred* have since **shipped** — §0.2 and §0.6.
 
 **Planned / near-term:** J v1b (deferred RVE metrics — ratio/spread/beta, then rolling/annualized, each
 gated per [ADR-0004](../adr/ADR-0004-rve-v1a-return-and-result-policy.md) §5) → M (Composite Feature

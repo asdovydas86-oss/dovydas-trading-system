@@ -7,7 +7,7 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | **TA Slice 5A** — see [report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) §24 for the exact commit |
+| **Last verified against** | **`HEAD` = `main` = `origin/main` = remote = `00c7723`** |
 | **Verified on** | **2026-09-17** (TA Slice 5A — Recover Technical Context & Feature Series) |
 | **Verification method** | live repository + `git` inspection + accepted ADRs + the full test suite + live dashboard verification |
 | **Latest capability entry** | **TA Slice 5A — the technical context panel** (2026-09-17). §3 below still opens *"As of Milestone `BS`"* and is superseded by §3.1 |
@@ -306,7 +306,8 @@ the automation ladder remains unstarted.
 
 ### 2026-09-17 · `DX` — FMITS stopped forgetting what it already knows
 
-**Status:** Released. **Adds a user-visible capability, and removes a blocker to practical use.**
+**Status:** Released at `00c7723`. **Adds a user-visible capability, and removes a blocker to
+practical use.**
 
 **What the owner can do that was impossible before: open `/swing/SYMBOL` and see
 what this system already knows about that market — per timeframe role, without

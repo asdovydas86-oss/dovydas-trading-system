@@ -30,14 +30,15 @@ routes you here.
 | Field | Value |
 |---|---|
 | **Branch** | `main` |
-| **`HEAD`** | `66bab7414e8c9a255dfbdde9fa9d3e8ef3c1f6e3` |
-| **`main`** | `66bab74` — level with `HEAD` |
-| **`origin/main`** | `66bab74` — level with local `main` |
-| **Remote `refs/heads/main`** | `66bab74` — verified with `git ls-remote` |
+| **`HEAD`** | `00c77239b243756ad83c51af2ab57580e0cece64` |
+| **`main`** | `00c7723` — level with `HEAD` |
+| **`origin/main`** | `00c7723` — level with local `main` |
+| **Remote `refs/heads/main`** | `00c7723` — verified with `git ls-remote` **after the push** |
 | **Ahead / behind** | `0 / 0` |
 | **Stash** | empty |
 | **Active Git operation** | none |
-| **Tracked tree** | clean, apart from this milestone's own documentation changes |
+| **Tracked tree** | **clean** |
+| **Previously** | `66bab74` (Memory Gate) → `4d77e4d` (its documentation commit) → **`00c7723`** (TA Slice 5A) |
 | **Untracked** | the **16 pre-existing research documents** under `docs/design/` and `docs/reviews/` (AP/AQ/BA/BB-era), deliberately left untracked and **not touched by this milestone** |
 
 > **The one operational lesson this session produced, recorded so it is not relearned.** A mutation
@@ -85,9 +86,10 @@ equity · trades · research · dashboard · archive
 
 | Field | Value |
 |---|---|
-| **Full suite** | **14,699 passed · 0 failed · 0 skipped · 0 warnings** under `-W error` |
-| **Baseline commit** | `66bab74` |
-| **Last actually run** | 2026-09-07, by report 0047 (689.62 s). **Not re-run on 2026-09-16** — that session changed no `src/` or `tests/` byte, proved by an empty `git diff -- src tests` |
+| **Full suite** | **15,092 passed · 0 failed · 0 skipped · 0 warnings** under `-W error` |
+| **Baseline commit** | `00c7723` |
+| **Last actually run** | **2026-09-17**, by [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) (708.10 s), on **cleared bytecode**. Previously 14,699 at `66bab74`, run 2026-09-07 — **+393**, every one new |
+| **Targeted adversarial probes** | **17/17 killed**, source restored byte-identically. See §19 of report 0049 — and the stale-bytecode hazard noted in §0.1 above |
 | **Invocation** | `python -m pytest` — a bare `pytest` fails at collection on ~17 files that import fixtures as `from tests.test_x import …` |
 | **Policy non-regression digest** | `sha256 8b22e6c9c5e346cb8f62008325b9b0304ecae9af5e0fe46eec4a6c5aa428059c` |
 | **Policy fixtures** | **81 total — 72 `WAIT`, 9 `CANDIDATE`** |

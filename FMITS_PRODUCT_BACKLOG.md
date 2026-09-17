@@ -11,7 +11,7 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | **TA Slice 5A** — see [report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) §24 for the exact commit |
+| **Last verified against** | **`HEAD` = `main` = `origin/main` = remote = `00c7723`**, tracked tree clean, `0/0` ahead/behind, remote verified with `git ls-remote` after the push |
 | **Verified on** | **2026-09-17** (TA Slice 5A — Recover Technical Context & Feature Series) |
 | **Verification method** | live repository + `git` inspection + live `src/` inspection + accepted ADRs + **the full test suite, re-established** + the policy non-regression digest recomputed outside the suite + a 17-probe adversarial campaign + live dashboard verification |
 | **Previously** | `HEAD` at `66bab74`, verified 2026-09-16 (Memory Gate), and at `dbc4765` before that. Those rows are superseded; §8's per-milestone entries remain point-in-time records and are not revised |

@@ -9,7 +9,7 @@
 | **Model** | Claude Opus 5 |
 | **Repository branch** | `main` |
 | **Baseline commit** | `4d77e4df20d1c97e146dff3d335a243371e8c4d8` (Project Memory & Documentation Gate) |
-| **Delivered at commit** | see §24 |
+| **Delivered at commit** | `00c77239b243756ad83c51af2ab57580e0cece64` |
 | **Status** | Final |
 
 ---
@@ -757,7 +757,42 @@ Registry §2.2 — *"the most important section in the file"* — is now a recor
 
 ## 24. Git, commit and push state
 
-<<GIT>>
+**Committed and pushed.**
+
+| Field | Value |
+|---|---|
+| **Commit** | **`00c77239b243756ad83c51af2ab57580e0cece64`** |
+| **Subject** | `feat(ta): FMITS stops forgetting what it already knows` |
+| **Parent** | `4d77e4df20d1c97e146dff3d335a243371e8c4d8` |
+| **Branch** | `main` — the only branch pushed |
+| **Range pushed** | `4d77e4d..00c7723` — **exactly one commit** |
+| **Fast-forward** | yes; `origin/main` was verified an ancestor of `HEAD` before the push |
+| **Files** | 43 changed · 6,825 insertions · 232 deletions |
+
+**Verified before the push:** branch · clean tracked tree · exactly the **16** pre-existing untracked
+research documents and nothing else · no stash · no active Git operation · `0` behind / `1` ahead ·
+fast-forward ancestry · the exact commit range · the full suite · the policy digest · every package's
+public exports importable with no duplicate in any `__all__` · no secret, no risk configuration and no
+generated artefact in the diff.
+
+**Verified after the push — all four references agree:**
+
+```
+HEAD                     00c77239b243756ad83c51af2ab57580e0cece64
+main                     00c77239b243756ad83c51af2ab57580e0cece64
+origin/main              00c77239b243756ad83c51af2ab57580e0cece64
+git ls-remote refs/heads/main
+                         00c77239b243756ad83c51af2ab57580e0cece64
+ahead / behind           0 / 0
+tracked tree             clean
+untracked                16  — the pre-existing research documents, untouched
+```
+
+**No force, no tags, no other branch, no history rewritten.** `--force`, `--force-with-lease`,
+`--all` and `--mirror` were not used, and no commit was amended, squashed or rebased.
+
+**The 16 untracked research documents were never read-modified and are still untracked**, exactly as
+they were at `4d77e4d`.
 
 ---
 

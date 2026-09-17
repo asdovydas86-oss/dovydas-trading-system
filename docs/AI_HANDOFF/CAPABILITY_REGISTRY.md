@@ -18,7 +18,7 @@ board at all — that is the point of the file.
 
 | Field | Value |
 |---|---|
-| **Last verified against** | TA Slice 5A — see [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
+| **Last verified against** | **`00c7723`** (`HEAD` = `main` = `origin/main` = remote, tracked tree clean) — TA Slice 5A, [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
 | **Verified on** | 2026-09-17 |
 | **Verification method** | live `src/` inspection + `grep` over the repository + accepted ADRs + the full test suite + a rendered `/swing/SYMBOL` page |
 | **Authority** | **Status index only.** This file is not an ADR, not a test, and not a specification. Where it disagrees with the live code, **the code is right and this file is stale** — fix this file |

@@ -442,6 +442,28 @@ class SymbolDecision:
     #: assessment; the assessment is never computed from the plan, and no field
     #: on this record changes because a size could or could not be produced.
     plan: Any | None = None
+    #: The per-role technical context the analysis already computed, projected by
+    #: `fmis.pipeline.technical_context` (ADR-0032). Carried **by reference** for
+    #: the reason `developing`, `blocker` and `plan` are: it is stated in the
+    #: crossing, regime and feature engines' own vocabularies, and this package's
+    #: import allowlist admits none of those packages — reproducing any of them
+    #: here would put a vocabulary in a second place. They are deliberately not
+    #: spelled in this file either: three engine-boundary guards scan for the
+    #: *text* of those package names outside their permitted consumers, and this
+    #: package is correctly not one.
+    #:
+    #: It exists because roughly half of what FMITS computes about a market used
+    #: to stop at `build_setup_inputs`: the context-role levels, every level
+    #: crossing, every change of character, the nearest-level pairs, the
+    #: setup-role breaks, the setup- and execution-role regimes and all three
+    #: `FeatureSet`s were produced on every scan and reached no surface at all.
+    #:
+    #: `None` on a decision assembled without one — a page with no technical
+    #: section, never a page that invents a market. **It changes nothing else on
+    #: this record**: no state, no group, no ordering and no evidence field is a
+    #: function of it, and a guard asserts the workspace is otherwise identical
+    #: with and without it.
+    technical: Any | None = None
 
     def __post_init__(self) -> None:
         for name in ("symbol", "state", "classification", "reason", "sufficiency"):

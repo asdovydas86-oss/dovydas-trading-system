@@ -12,6 +12,12 @@ Implemented:
     - MovingAverageConvergenceDivergence (MACD): fast/slow/signal EMAs, structured
       {macd_line, signal_line, histogram} value.
 
+All four additionally implement `fmis.features.series.SeriesFeature`: their whole
+aligned history is available through ``compute_series`` (ADR-0031), and each
+one's arithmetic lives in exactly one ``*_math`` helper module that both output
+paths read, so the latest value and the final point of the history are one
+number rather than two that agree.
+
 Planned features (NOT implemented yet):
     TODO: EMA slope / distance helpers
     TODO: RSI moving average

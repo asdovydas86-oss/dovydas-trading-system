@@ -54,7 +54,12 @@ from fmis.operator_dashboard.models import (
     SwingSnapshot,
     SwingView,
     SymbolChangeRow,
+    CrossingEventRow,
+    FeatureReadingRow,
+    StructuralLevelRow,
+    StructureEventRow,
     SymbolDecisionRow,
+    TechnicalContextRow,
     TradeRiskPlanRow,
     TimeframeRow,
     WarningRow,
@@ -1318,6 +1323,310 @@ def _plan_panel(row: SymbolDecisionRow, note: str) -> str:
     return _panel(f"{row.symbol} — risk and trade planning", body)
 
 
+#: The crossing classifications, worded for a reader. **Presentation only**, and
+#: the engine's own token is printed beside every label it replaces.
+#:
+#: Each phrase restates the comparison the crossing engine actually made and
+#: stops there. There is deliberately no *breakout*, *rejection*, *acceptance*,
+#: *reclaim* or *fakeout* here: those are readings of a crossing, this repository
+#: has defined none of them, and a label is exactly where an undefined concept
+#: would slip in unnoticed.
+_CROSSING_KIND_LABELS: dict[str, str] = {
+    "touch": "touched the level exactly",
+    "wick_breach": "traded beyond the level and closed back inside",
+    "close_breach": "closed beyond the level",
+}
+
+_CROSSING_MECHANISM_LABELS: dict[str, str] = {
+    "within_range": "the candle traded at the level",
+    "gapped_beyond": "the candle was wholly beyond it, and the one before was not",
+    "already_beyond": "the first candle read was already beyond it",
+}
+
+#: The structural swing labels, spelled out. Again presentation only.
+_SWING_LABELS: dict[str, str] = {
+    "higher_high": "higher high",
+    "lower_high": "lower high",
+    "equal_high": "equal high",
+    "higher_low": "higher low",
+    "lower_low": "lower low",
+    "equal_low": "equal low",
+}
+
+#: Why a feature has no value, worded for a reader. The keys are the metadata
+#: tokens the feature engine itself uses, carried across the seam unchanged.
+_UNAVAILABLE_LABELS: dict[str, str] = {
+    "insufficient_data": "not enough closed history yet",
+    "zero_average_volume": "the whole baseline window traded nothing, so the "
+    "ratio has no denominator",
+}
+
+
+def _price(value: float) -> str:
+    """A market price, spelled exactly as the engine holds it.
+
+    No rounding and no fixed decimal count. A watchlist spans prices five orders
+    of magnitude apart, so any fixed precision is wrong at one end of it, and a
+    rounded price beside a level is a price that no longer matches the level.
+    """
+    return repr(value)
+
+
+def _level_text(row: StructuralLevelRow | None, reason: str) -> str:
+    """One structural level, with the swing it came from. **Never a role.**
+
+    Deliberately never called support or resistance. The level below the last
+    close is the nearest structural level below it, which is the fact such a
+    reading would rest on; the reading itself needs interaction history this
+    repository does not yet derive.
+    """
+    if row is None:
+        return _absent(reason)
+    origin = (
+        _e(_label(row.origin_label, _SWING_LABELS))
+        if row.origin_label is not None
+        else "no recorded origin"
+    )
+    stamped = "" if row.origin_timestamp is None else f" · {_stamp(row.origin_timestamp)}"
+    return (
+        f"{_e(_price(row.price))}"
+        f'<br><span class="sub">from a {origin}{stamped}</span>'
+    )
+
+
+def _crossing_text(row: CrossingEventRow | None, reason: str) -> str:
+    """One level crossing, in the engine's own nine-way vocabulary.
+
+    A close beyond a level is reported as a close beyond a level. It is not
+    called a breakout, and nothing here says it confirmed, failed or will hold.
+    """
+    if row is None:
+        return _absent(reason)
+    return (
+        f"{_e(_label(row.kind, _CROSSING_KIND_LABELS))} "
+        f"at {_e(_price(row.level_price))} · {_stamp(row.as_of)}"
+        f'<br><span class="sub">{_e(_label(row.mechanism, _CROSSING_MECHANISM_LABELS))}'
+        f" · {_e(row.kind)} / {_e(row.mechanism)} · bar {_e(row.index)}</span>"
+    )
+
+
+def _structure_event_text(row: StructureEventRow | None, reason: str) -> str:
+    """One break of structure, or one change of character, as two closed bars.
+
+    A change of character prints the break it changed **from**, because the pair
+    is what makes the statement checkable. Neither is described as a reversal, a
+    trend call or a prediction.
+    """
+    if row is None:
+        return _absent(reason)
+    origin = (
+        f" from a {_e(_label(row.origin_label, _SWING_LABELS))}"
+        if row.origin_label is not None
+        else ""
+    )
+    changed = (
+        ""
+        if row.previous_side is None
+        else (
+            f'<br><span class="sub">changed from a {_e(row.previous_side)} break '
+            f"at {_stamp(row.previous_as_of)}</span>"
+        )
+    )
+    return (
+        f"{_e(row.side)} level at {_e(_price(row.level_price))} · "
+        f"{_stamp(row.as_of)}"
+        f'<br><span class="sub">bar {_e(row.index)}{origin}</span>'
+        f"{changed}"
+    )
+
+
+def _feature_table(rows: Sequence[FeatureReadingRow]) -> str:
+    """Every deterministic reading for one role, under the engine's own names.
+
+    **Values, and nothing else.** No lean, no state, no threshold, no comparison
+    against another reading and no slope: this milestone recovers the numbers and
+    deliberately interprets none of them. A structured reading prints its parts
+    in the producing mapping's own order.
+
+    An unavailable reading states which absence it is. *Not enough history yet*
+    and *enough history and still undefined* are different facts, and a blank
+    would report the first while meaning either.
+    """
+    if not rows:
+        return _empty("No feature readings were carried for this role.")
+    body: list[str] = []
+    for reading in rows:
+        if not reading.available:
+            value = _absent(
+                _label(reading.unavailable_reason, _UNAVAILABLE_LABELS)
+                if reading.unavailable_reason
+                else "the engine reported no value and no reason"
+            )
+        elif reading.components:
+            value = " · ".join(
+                f'<span class="sub">{_e(part)}</span> {_e(_plain(number))}'
+                for part, number in reading.components
+            )
+        else:
+            value = _e(_plain(reading.value))
+        body.append(
+            f'<tr><td class="sym">{_e(reading.name)}</td><td>{value}</td></tr>'
+        )
+    return _table([("Reading", "sym"), ("Value", "")], body)
+
+
+def _technical_detail(row: TechnicalContextRow) -> str:
+    """One role's structural events and readings, behind a disclosure.
+
+    The headline table above carries what an operator scans; this is what they
+    open when a row is worth a second look. **Nothing here is computed** — the
+    counts, the selections and the classifications were all produced by engines
+    and carried across the seam by `fmis.pipeline` (ADR-0032).
+    """
+    return _details(
+        f"{_label(row.role, _ROLE_LABELS)} ({row.interval}) — "
+        "structural events and readings",
+        _kv(
+            [
+                (
+                    "last closed price",
+                    _e(_price(row.last_close))
+                    if row.last_close is not None
+                    else _absent("no closed candle carried a price"),
+                ),
+                (
+                    "structural levels",
+                    f"{_e(row.level_count)}"
+                    f'<br><span class="sub">{_e(row.upper_level_count)} upper · '
+                    f"{_e(row.lower_level_count)} lower. A count of levels, never "
+                    "a strength.</span>",
+                ),
+                (
+                    "level crossings recorded",
+                    f"{_e(row.crossing_count)}"
+                    '<br><span class="sub">the full run is kept for later '
+                    "engines; two of them are shown below.</span>",
+                ),
+                (
+                    "latest crossing",
+                    _crossing_text(
+                        row.latest_crossing, "no crossing was recorded for this role"
+                    ),
+                ),
+                (
+                    "latest close beyond a level",
+                    _crossing_text(
+                        row.latest_close_breach,
+                        "no candle closed beyond a level on this role",
+                    ),
+                ),
+                (
+                    "latest break of structure",
+                    _structure_event_text(
+                        row.latest_break, "no break of structure on this role"
+                    ),
+                ),
+                (
+                    "latest change of character",
+                    _structure_event_text(
+                        row.latest_character_change,
+                        "no change of character on this role",
+                    ),
+                ),
+                (
+                    "changes of character recorded",
+                    _e(row.character_change_count),
+                ),
+                (
+                    "breaks of structure recorded",
+                    _e(row.break_count),
+                ),
+                (
+                    "closed bars read",
+                    _e(row.closed_count),
+                ),
+                (
+                    "still warming up",
+                    _text(
+                        ", ".join(row.warming_up),
+                        "every reading this role asked for had enough history",
+                    ),
+                ),
+            ]
+        )
+        + _feature_table(row.features),
+    )
+
+
+def _technical_context_panel(symbol: str, rows: Sequence[TechnicalContextRow]) -> str:
+    """**What FMITS already knows about this symbol, per timeframe role.**
+
+    The section TA Slice 5A exists to produce. Before it, the context-role
+    levels, every level crossing, every change of character, the nearest-level
+    pairs, the setup-role breaks, the setup- and execution-role regimes and all
+    three feature sets were computed on every scan and reached no operator
+    surface at all.
+
+    **Scannable first, deep second.** One row per role in the table — the
+    headline facts an operator reads in seconds — and everything else behind a
+    per-role disclosure, because the owner's own report was that dense technical
+    text is hard to scan. The raw crossing run is never rendered: it can hold
+    hundreds of events, and two bounded selections from it answer the question a
+    page can honestly ask.
+
+    **Nothing here is interpreted**, and the note at the foot says so in the
+    operator's own words rather than leaving it implied.
+    """
+    if not rows:
+        return _panel(
+            f"{symbol} — technical context",
+            _empty(
+                "No per-role technical context was carried for this symbol on "
+                "this refresh. The assessment states what it concluded; the "
+                "structural facts behind it are not on this result."
+            ),
+        )
+    table = _table(
+        [
+            ("Role", ""),
+            ("Interval", ""),
+            ("Structural trend", ""),
+            ("Regime", ""),
+            ("Nearest level above", ""),
+            ("Nearest level below", ""),
+        ],
+        [
+            "<tr>"
+            f"<td>{_e(_label(row.role, _ROLE_LABELS))}"
+            f'<br><span class="sub">{_e(row.role)}</span></td>'
+            f"<td>{_e(row.interval)}</td>"
+            f"<td>{_e(row.structural_trend)}</td>"
+            f"<td>{_e(row.regime_structure)}"
+            f'<br><span class="sub">{_e(row.regime_volatility)} · '
+            f"{_e(row.regime_participation)}</span></td>"
+            f"<td>{_level_text(row.nearest_above, 'no level lies above the last close')}</td>"
+            f"<td>{_level_text(row.nearest_below, 'no level lies below the last close')}</td>"
+            "</tr>"
+            for row in rows
+        ],
+    )
+    return _panel(
+        f"{symbol} — technical context",
+        table
+        + "".join(_technical_detail(row) for row in rows)
+        + '<p class="note">Deterministic facts this system already computed, '
+        "recovered per timeframe role and stated without interpretation. A "
+        "level is where a confirmed swing sat — <strong>it is not called "
+        "support or resistance</strong>, because a role would have to come from "
+        "what price has done at it and this system does not yet derive that. A "
+        "close beyond a level is a close beyond a level, not a breakout. A "
+        "change of character is two breaks on opposite sides, not a reversal. "
+        "The readings are values, not leans: no slope, rate of change or "
+        "divergence is computed anywhere here. Nothing in this section reached "
+        "the decision above it, and none of it is a reason to trade.</p>",
+    )
+
+
 def _decision_detail(row: SymbolDecisionRow, risk_note: str = "") -> str:
     """One symbol's decision, in full. Every value is an engine's own.
 
@@ -1406,6 +1715,12 @@ def _decision_detail(row: SymbolDecisionRow, risk_note: str = "") -> str:
             )
             + _timeframe_table(row.timeframes),
         ),
+        # Directly under the timeframe panel, deliberately. The question it
+        # answers — *what does this system already know about this market* — is
+        # the environment question the panel above opens, and it belongs beside
+        # it rather than below the audit. It sits **after** the decision layer,
+        # because a page that answered it first would be an audit page again.
+        _technical_context_panel(row.symbol, row.technical),
     ]
 
     factor_table = _table(

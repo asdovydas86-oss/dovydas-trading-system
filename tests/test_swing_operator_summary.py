@@ -518,12 +518,22 @@ def test_the_symbol_page_puts_the_summary_above_the_audit() -> None:
     invariant it exists to protect. The invariant is that the decision comes
     first and the audit comes last, and a milestone that adds a trading panel
     between them should not have to relitigate it.
+
+    **TA Slice 5A made the same point a second time**, inserting the technical
+    context panel between the timeframe panel and the families table, and the
+    last positional assertion — ``panels[2]`` — failed on it. It is now stated
+    as an order too, which is what the paragraph above already said this test
+    should be. The relation asserted is the whole hierarchy: decision, then the
+    environment, then the recovered facts about it, then the families, then
+    trade planning, then the audit.
     """
     html = render_page(snapshot_of(live(BTC_SHAPED, "AAAUSDT")), "/swing", symbol="AAAUSDT")
     panels = re.findall(r"<h2>([^<]+)", html)
     assert panels[0] == "AAAUSDT — decision"
     assert panels[1] == "AAAUSDT — timeframe context and data times"
-    assert panels[2] == "AAAUSDT — directional families"
+    assert panels.index("AAAUSDT — timeframe context and data times") < panels.index(
+        "AAAUSDT — technical context"
+    ) < panels.index("AAAUSDT — directional families")
     # Last of this symbol's panels. Anything after it belongs to another section
     # of the page (the scan-change block), not to the decision.
     audit = panels.index("AAAUSDT — evidence and independence audit")

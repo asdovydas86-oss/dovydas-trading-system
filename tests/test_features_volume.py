@@ -496,7 +496,27 @@ def test_volume_package_depends_on_no_higher_or_sibling_layer(forbidden: str) ->
 
 
 def test_volume_package_imports_only_feature_types_and_its_own_kernel() -> None:
+    """Named one by one: a fourth entry is a deliberate act, not a drift.
+
+    **Widened by TA Slice 5A, and the widening is downward.** `compute_series`
+    (ADR-0031) needs the historical vocabulary and the two canonical models it
+    is stated in:
+
+    * `fmis.features.series` — the sibling vocabulary module holding
+      `FeatureSeries`/`FeatureSeriesPoint`, the same tier as `fmis.features.types`
+      and, like it, holding no math;
+    * `fmis.data` — `Candle` and `SeriesIdentity`. Not a new dependency in
+      substance: `fmis.features.types` already imports `CandleSeries` from there,
+      so the volume package has always depended on it transitively. It is named
+      here because a transitive dependency becoming direct should be visible.
+
+    Every entry is still at or below this package's own tier. The assertions that
+    actually protect the layering — no `fmis.pipeline`, no `fmis.decision_support`,
+    no sibling engine — are unchanged above and still pass.
+    """
     assert _internal_imports() <= {
+        "fmis.data",
+        "fmis.features.series",
         "fmis.features.types",
         "fmis.features.volume.statistics",
         "fmis.features.volume.volume_math",

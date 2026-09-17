@@ -62,6 +62,10 @@ from fmis.pipeline.multi_timeframe import (
 )
 from fmis.pipeline.regime import REGIME_LIMITATIONS, regime_features, regime_for_sheet
 from fmis.pipeline.structural_facts import DetectionSettings, Limitation, StructuralFactSheet
+from fmis.pipeline.technical_context import (
+    MarketTechnicalContext,
+    technical_context_for_sheet,
+)
 from fmis.providers.binance import BinanceError, Transport
 from fmis.swing_setup.models import (
     ExecutionBreakEvent,
@@ -79,8 +83,10 @@ __all__ = [
     "context_input_from_sheet",
     "build_setup_inputs",
     "setup_readings_for",
+    "setup_analysis_for_symbol",
     "setup_reading_and_assessment_for_symbol",
     "setup_assessment_for_sheet",
+    "setup_composition_for_sheet",
     "setup_inputs_and_assessment_for_sheet",
     "setup_for_symbol",
     "SetupRunResult",
@@ -341,6 +347,55 @@ def setup_readings_for(
     )
 
 
+def setup_composition_for_sheet(
+    sheet: MultiTimeframeFactSheet,
+    *,
+    policy: RegimePolicy | None = None,
+    context_policy: ContextPolicy | None = None,
+    research_confirmation_max_age: int | None = None,
+    research_context_role: ContextRoleTreatment | None = None,
+) -> tuple[SetupInputs, MarketTechnicalContext, SetupAssessment]:
+    """**Everything one composition produces, with nothing discarded.** Pure.
+
+    The same sequence `setup_inputs_and_assessment_for_sheet` has always run —
+    one regime evaluation per role, one evidence report, one decision context,
+    one `build_setup_inputs`, one `evaluate_setup` — plus the per-role technical
+    context, which is a **projection over the sheet and the regimes this function
+    already has** (ADR-0032). Nothing is fetched, nothing is re-evaluated and no
+    market quantity is computed a second time.
+
+    **The technical context is not a policy input and the policy never reads
+    it.** `evaluate_setup` takes `SetupInputs` and nothing else, and `SetupInputs`
+    gained no field: the context is assembled *beside* the assessment from facts
+    the assessment was already reasoned from, on exactly the footing
+    `SetupReadings` has held since Slice 1. The eighty-one-fixture non-regression
+    matrix proves the conclusions did not move.
+
+    `setup_inputs_and_assessment_for_sheet` is now a thin wrapper over this
+    function that drops the middle element, so no existing caller changes and the
+    two compositions cannot diverge.
+    """
+    if not isinstance(sheet, MultiTimeframeFactSheet):
+        raise TypeError(
+            f"sheet must be a MultiTimeframeFactSheet, got {type(sheet).__name__}"
+        )
+    regimes: dict[TimeframeRole, MarketRegime] = {
+        view.role: regime_for_sheet(view.sheet, policy=policy) for view in sheet.views
+    }
+    evidence = _evidence_for(sheet.by_role[SETUP_ROLE].sheet)
+    context = evaluate_context(
+        context_input_from_sheet(sheet, regimes, evidence, primary_role=SETUP_ROLE),
+        context_policy,
+    )
+    inputs = build_setup_inputs(sheet, regimes, evidence, context)
+    assessment = evaluate_setup(
+        inputs,
+        research_confirmation_max_age=research_confirmation_max_age,
+        research_context_role=research_context_role,
+    )
+    return inputs, technical_context_for_sheet(sheet, regimes), assessment
+
+
 def setup_inputs_and_assessment_for_sheet(
     sheet: MultiTimeframeFactSheet,
     *,
@@ -367,25 +422,21 @@ def setup_inputs_and_assessment_for_sheet(
     do, none of them accepting or forwarding it — nothing about this function
     changes. See `evaluate_setup`'s docstring for why the override exists and
     why it is not a policy object.
+
+    Since TA Slice 5A this delegates to `setup_composition_for_sheet` and drops
+    the technical context between the two elements it returns — the identical
+    arrangement this function itself introduced over `setup_assessment_for_sheet`,
+    and for the identical reason: one composition, several readers, no second
+    provider read and no way for two paths to disagree.
     """
-    if not isinstance(sheet, MultiTimeframeFactSheet):
-        raise TypeError(
-            f"sheet must be a MultiTimeframeFactSheet, got {type(sheet).__name__}"
-        )
-    regimes: dict[TimeframeRole, MarketRegime] = {
-        view.role: regime_for_sheet(view.sheet, policy=policy) for view in sheet.views
-    }
-    evidence = _evidence_for(sheet.by_role[SETUP_ROLE].sheet)
-    context = evaluate_context(
-        context_input_from_sheet(sheet, regimes, evidence, primary_role=SETUP_ROLE),
-        context_policy,
-    )
-    inputs = build_setup_inputs(sheet, regimes, evidence, context)
-    return inputs, evaluate_setup(
-        inputs,
+    inputs, _technical, assessment = setup_composition_for_sheet(
+        sheet,
+        policy=policy,
+        context_policy=context_policy,
         research_confirmation_max_age=research_confirmation_max_age,
         research_context_role=research_context_role,
     )
+    return inputs, assessment
 
 
 def setup_assessment_for_sheet(
@@ -422,7 +473,7 @@ def setup_for_symbol(
     composition root in this repository: a result a reader cannot check against
     the facts beneath it is the opaque output this system exists to replace.
     """
-    sheet, _readings, assessment = setup_reading_and_assessment_for_symbol(
+    sheet, _readings, _technical, assessment = setup_analysis_for_symbol(
         symbol,
         timeframes=timeframes,
         limit=limit,
@@ -434,6 +485,53 @@ def setup_for_symbol(
         base_url=base_url,
     )
     return sheet, assessment
+
+
+def setup_analysis_for_symbol(
+    symbol: str,
+    *,
+    timeframes: Mapping[TimeframeRole, str] | None = None,
+    limit: int | None = None,
+    policy: RegimePolicy | None = None,
+    context_policy: ContextPolicy | None = None,
+    detection: DetectionSettings | None = None,
+    transport: Transport | None = None,
+    clock: Any = None,
+    base_url: str | None = None,
+) -> tuple[
+    MultiTimeframeFactSheet, SetupReadings, MarketTechnicalContext, SetupAssessment
+]:
+    """Fetch every timeframe once and keep **all four** artifacts it produced.
+
+    The widest of the three symbol-level entry points, and the one the scan runs
+    through. `setup_reading_and_assessment_for_symbol` drops the technical
+    context; `setup_for_symbol` drops the readings as well. Both delegate here,
+    so there is **one fetch, one regime evaluation per role, one evidence report,
+    one assessment and one technical context** however a caller enters.
+
+    The technical context exists because, between those discards, the per-role
+    `FeatureSet`s, the level runs, the crossing histories, the changes of
+    character, the nearest-level pairs and the setup- and execution-role regimes
+    stopped being reachable above this module although every one of them had
+    already been computed (report 0047 §7, ADR-0032).
+
+    Returns:
+        ``(sheet, readings, technical, assessment)``.
+    """
+    sheet = multi_timeframe_facts_for_symbol(
+        symbol,
+        timeframes=timeframes or DEFAULT_TIMEFRAMES,
+        limit=limit,
+        features=regime_features(),
+        detection=detection,
+        transport=transport,
+        clock=clock,
+        base_url=base_url,
+    )
+    inputs, technical, assessment = setup_composition_for_sheet(
+        sheet, policy=policy, context_policy=context_policy
+    )
+    return sheet, setup_readings_for(sheet, inputs), technical, assessment
 
 
 def setup_reading_and_assessment_for_symbol(
@@ -465,21 +563,23 @@ def setup_reading_and_assessment_for_symbol(
 
     `setup_for_symbol` keeps its exact signature and its exact result by
     delegating here and dropping the middle element — no existing caller changes.
+
+    Since TA Slice 5A this in turn delegates to `setup_analysis_for_symbol` and
+    drops the technical context, so its own signature and result are likewise
+    unchanged for every existing caller.
     """
-    sheet = multi_timeframe_facts_for_symbol(
+    sheet, readings, _technical, assessment = setup_analysis_for_symbol(
         symbol,
-        timeframes=timeframes or DEFAULT_TIMEFRAMES,
+        timeframes=timeframes,
         limit=limit,
-        features=regime_features(),
+        policy=policy,
+        context_policy=context_policy,
         detection=detection,
         transport=transport,
         clock=clock,
         base_url=base_url,
     )
-    inputs, assessment = setup_inputs_and_assessment_for_sheet(
-        sheet, policy=policy, context_policy=context_policy
-    )
-    return sheet, setup_readings_for(sheet, inputs), assessment
+    return sheet, readings, assessment
 
 
 @dataclass(frozen=True, slots=True)
@@ -502,6 +602,19 @@ class SetupRunResult:
     #: readings is a result whose surfaces state the per-role instants as
     #: unavailable; it is never one that invents them.
     readings: SetupReadings | None = None
+    #: This symbol's recovered per-role technical context, when one was composed.
+    #:
+    #: `None` for a failed result, and defaulted on the same footing `readings`
+    #: is, so every existing construction of this type — including the hand-built
+    #: ones in the test suite and the research harness — stays valid unchanged. A
+    #: result without a context is one whose surfaces state the absence; it is
+    #: never one that invents a market.
+    #:
+    #: **Nothing reads this to decide anything.** It is composed after the
+    #: assessment from facts the assessment was already reasoned from, and no
+    #: field on this result or on anything above it changes because it exists
+    #: (ADR-0032 §7).
+    technical: MarketTechnicalContext | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.requested_symbol, str) or not self.requested_symbol.strip():
@@ -522,6 +635,24 @@ class SetupRunResult:
                 "readings without an assessment is not representable: they are "
                 "the facts an assessment was reasoned from, and a failed symbol "
                 "reasoned from nothing"
+            )
+        if self.technical is not None and not isinstance(
+            self.technical, MarketTechnicalContext
+        ):
+            raise TypeError("technical must be a MarketTechnicalContext or None")
+        if self.technical is not None and self.assessment is None:
+            raise ValueError(
+                "a technical context without an assessment is not "
+                "representable: it is a view of the sheet an assessment was "
+                "composed from, and a failed symbol composed nothing"
+            )
+        if self.technical is not None and self.technical.symbol != (
+            self.assessment.symbol
+        ):
+            raise ValueError(
+                f"the technical context describes {self.technical.symbol!r} and "
+                f"the assessment describes {self.assessment.symbol!r}; one "
+                "result cannot be about two markets"
             )
 
 
@@ -559,7 +690,7 @@ def run_setup_for_symbols(
         if not isinstance(symbol, str) or not symbol.strip():
             raise ValueError(f"every symbol must be a non-empty str, got {symbol!r}")
         try:
-            _sheet, readings, assessment = setup_reading_and_assessment_for_symbol(
+            _sheet, readings, technical, assessment = setup_analysis_for_symbol(
                 symbol,
                 timeframes=timeframes,
                 limit=limit,
@@ -580,7 +711,10 @@ def run_setup_for_symbols(
             continue
         results.append(
             SetupRunResult(
-                requested_symbol=symbol, assessment=assessment, readings=readings
+                requested_symbol=symbol,
+                assessment=assessment,
+                readings=readings,
+                technical=technical,
             )
         )
     return tuple(results)

@@ -94,6 +94,13 @@ from fmis.pipeline.structural_facts import (
     build_structural_facts,
     structural_facts_for_symbol,
 )
+from fmis.pipeline.technical_context import (
+    TECHNICAL_CONTEXT_LIMITATIONS,
+    CrossingHistory,
+    MarketTechnicalContext,
+    TechnicalContextView,
+    technical_context_for_sheet,
+)
 
 __all__ = [
     "analyze_symbol",
@@ -121,6 +128,11 @@ __all__ = [
     "TimeframeRole",
     "DEFAULT_TIMEFRAMES",
     "MULTI_TIMEFRAME_LIMITATIONS",
+    "technical_context_for_sheet",
+    "MarketTechnicalContext",
+    "TechnicalContextView",
+    "CrossingHistory",
+    "TECHNICAL_CONTEXT_LIMITATIONS",
     "regime_for_symbol",
     "regime_for_sheet",
     "regime_input_from_sheet",

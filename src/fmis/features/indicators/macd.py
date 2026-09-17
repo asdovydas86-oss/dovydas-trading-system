@@ -39,8 +39,9 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
-from fmis.features.indicators.ema_math import ema_series
+from fmis.features.indicators.macd_math import macd_lines
 from fmis.features.indicators.sources import VALID_SOURCES
+from fmis.features.series import FeatureSeries, FeatureSeriesPoint
 from fmis.features.types import (
     BaseFeature,
     FeatureCategory,
@@ -107,23 +108,25 @@ class MovingAverageConvergenceDivergence(BaseFeature):
     def source(self) -> str:
         return self._source
 
-    def compute(self, context: FeatureContext) -> FeatureResult:
-        # Closed candles only — idempotent even if the engine already closed them.
-        candles = context.primary.closed().candles
-        available = len(candles)
-        prices = [getattr(candle, self._source) for candle in candles]
+    @property
+    def required_candles(self) -> int:
+        """Closed candles needed before the signal line can be seeded.
 
-        fast_ema = ema_series(prices, self._fast)
-        slow_ema = ema_series(prices, self._slow)
+        ``slow + signal - 1`` — 34 for the 12/26/9 default. A projection rather
+        than a stored number, so the metadata, the warm-up field and the series
+        alignment all quote one expression.
+        """
+        return self._slow + self._signal - 1
 
-        # Align on the overlap (both series end at the last candle); slow starts
-        # later, so trim the head of the fast series to match slow's indices.
-        fast_tail = fast_ema[self._slow - self._fast :]
-        macd_line = [f - s for f, s in zip(fast_tail, slow_ema)]
-        macd_values_available = len(macd_line)
-        required_candles = self._slow + self._signal - 1
+    def _base_metadata(
+        self, available: int, macd_values_available: int
+    ) -> dict[str, object]:
+        """The parameters and provenance both output paths report.
 
-        base_metadata = {
+        One dict builder rather than two literals, so `compute` and
+        `compute_series` cannot describe the same calculation differently.
+        """
+        return {
             "source": self._source,
             "fast_period": self._fast,
             "slow_period": self._slow,
@@ -131,9 +134,9 @@ class MovingAverageConvergenceDivergence(BaseFeature):
             "method": "ema",
             "ema_initialization": "sma_seed",
             "closed_candles_available": available,
-            "required_candles": required_candles,
+            "required_candles": self.required_candles,
             "macd_values_available": macd_values_available,
-            "warmup_candles": required_candles,
+            "warmup_candles": self.required_candles,
             "output_representation": (
                 "immutable mapping {macd_line, signal_line, histogram}"
             ),
@@ -141,6 +144,41 @@ class MovingAverageConvergenceDivergence(BaseFeature):
                 "fmis.features.indicators.macd.MovingAverageConvergenceDivergence"
             ),
         }
+
+    def _value_at(
+        self, macd_line: list[float], signal_line: list[float], offset: int
+    ) -> MappingProxyType:
+        """One timestamp's three MACD components, as the immutable value.
+
+        ``offset`` indexes ``signal_line``; the paired MACD-line element sits
+        ``signal - 1`` further along, because the signal EMA seeds that much
+        later than the line it smooths. Built here so the pairing exists once —
+        the latest value and every historical point read the same expression.
+        """
+        macd_value = macd_line[offset + self._signal - 1]
+        signal_value = signal_line[offset]
+        return MappingProxyType(
+            {
+                "macd_line": macd_value,
+                "signal_line": signal_value,
+                "histogram": macd_value - signal_value,
+            }
+        )
+
+    def compute(self, context: FeatureContext) -> FeatureResult:
+        # Closed candles only — idempotent even if the engine already closed them.
+        candles = context.primary.closed().candles
+        available = len(candles)
+        prices = [getattr(candle, self._source) for candle in candles]
+
+        # Both lines come from `macd_math`, which is the same arithmetic
+        # `compute_series` runs — so the latest value and the final point of the
+        # history are one mapping, not two that agree (ADR-0031 §6).
+        macd_line, signal_line = macd_lines(
+            prices, self._fast, self._slow, self._signal
+        )
+        macd_values_available = len(macd_line)
+        base_metadata = self._base_metadata(available, macd_values_available)
 
         if macd_values_available < self._signal:
             return FeatureResult(
@@ -150,20 +188,50 @@ class MovingAverageConvergenceDivergence(BaseFeature):
                 metadata={**base_metadata, "insufficient_data": True},
             )
 
-        signal_line = ema_series(macd_line, self._signal)[-1]
-        macd_value = macd_line[-1]
-        histogram = macd_value - signal_line
-
-        value = MappingProxyType(
-            {
-                "macd_line": macd_value,
-                "signal_line": signal_line,
-                "histogram": histogram,
-            }
-        )
         return FeatureResult(
             name=self.name,
             category=self.category,
-            value=value,
+            value=self._value_at(macd_line, signal_line, len(signal_line) - 1),
             metadata={**base_metadata, "insufficient_data": False},
+        )
+
+    def compute_series(self, context: FeatureContext) -> FeatureSeries:
+        """MACD at every closed candle where all three components exist.
+
+        **The protocol's proof that a feature value need not be a scalar.** Each
+        point carries the same immutable ``{macd_line, signal_line, histogram}``
+        mapping `compute` produces for the latest bar; a representation that
+        assumed one float per timestamp would have needed redesigning here
+        (ADR-0031 §5).
+
+        Alignment: element ``m`` of the signal series describes closed candle
+        ``m + slow + signal - 2``, so the first point sits at
+        ``required_candles - 1`` — the thirty-fourth bar for the 12/26/9 default.
+        """
+        closed = context.primary.closed()
+        candles = closed.candles
+        available = len(candles)
+        prices = [getattr(candle, self._source) for candle in candles]
+
+        macd_line, signal_line = macd_lines(
+            prices, self._fast, self._slow, self._signal
+        )
+        first = self.required_candles - 1
+        points = tuple(
+            FeatureSeriesPoint(
+                index=offset + first,
+                timestamp=candles[offset + first].timestamp,
+                value=self._value_at(macd_line, signal_line, offset),
+            )
+            for offset in range(len(signal_line))
+        )
+        return FeatureSeries(
+            name=self.name,
+            category=self.category,
+            identity=closed.identity,
+            as_of=candles[-1].timestamp if candles else None,
+            closed_candles=available,
+            warmup_candles=self.required_candles,
+            points=points,
+            metadata=self._base_metadata(available, len(macd_line)),
         )

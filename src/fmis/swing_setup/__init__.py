@@ -19,10 +19,12 @@ from fmis.swing_setup.compose import (
     SetupRunResult,
     build_setup_inputs,
     setup_readings_for,
+    setup_analysis_for_symbol,
     setup_reading_and_assessment_for_symbol,
     context_input_from_sheet,
     run_setup_for_symbols,
     setup_assessment_for_sheet,
+    setup_composition_for_sheet,
     setup_for_symbol,
     setup_inputs_and_assessment_for_sheet,
 )
@@ -143,6 +145,7 @@ __all__ = [
     "setup_for_symbol",
     "setup_assessment_for_sheet",
     "setup_inputs_and_assessment_for_sheet",
+    "setup_composition_for_sheet",
     "run_setup_for_symbols",
     "SetupRunResult",
     "evaluate_setup",
@@ -234,6 +237,7 @@ __all__ = [
     "build_setup_inputs",
     "setup_readings_for",
     "setup_reading_and_assessment_for_symbol",
+    "setup_analysis_for_symbol",
     # adapters and constants
     "context_input_from_sheet",
     "SETUP_ROLE",

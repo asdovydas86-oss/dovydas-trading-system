@@ -63,6 +63,11 @@ __all__ = [
     "EvidenceItemRow",
     "SymbolDecisionRow",
     "TimeframeRow",
+    "StructuralLevelRow",
+    "CrossingEventRow",
+    "StructureEventRow",
+    "FeatureReadingRow",
+    "TechnicalContextRow",
     "DevelopingEvidenceRow",
     "BlockerRow",
     "NoTradeRow",
@@ -501,6 +506,148 @@ class TimeframeRow:
 
 
 @dataclass(frozen=True, slots=True)
+class StructuralLevelRow:
+    """One price level, with where it came from. **Never a role.**
+
+    Deliberately not named support or resistance, and carrying no field one
+    could be stored in. A `PriceLevel` records where a confirmed swing sat;
+    calling the one below price *support* asserts that price is expected to hold
+    there, which is an interpretation ADR-0019 §I reserves and the report 0047
+    review disposition §E forbids deriving from position. What reaches a reader
+    is the price, the side the engine assigned it, and the swing it came from.
+
+    ``origin_label`` and ``origin_timestamp`` are `LevelOrigin`'s own values, or
+    `None` for a level carrying no provenance.
+    """
+
+    price: float
+    side: str
+    origin_label: str | None = None
+    origin_timestamp: datetime | None = None
+    origin_index: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CrossingEventRow:
+    """One candle standing against one level, already classified upstream.
+
+    ``kind`` and ``mechanism`` are the crossing engine's own nine-way
+    vocabulary, carried verbatim. **A close breach is a close beyond a price at
+    a bar** — it is not a breakout, not a confirmation and not a signal, and
+    this row holds no field that could say otherwise.
+
+    **The producing engine is deliberately not named in this file.** Four
+    engine-boundary guards scan every module outside their permitted consumers
+    for the *text* of those package names, and the presentation layer is not a
+    permitted consumer of any of them — correctly, since it imports none. The
+    same restraint `_state_cell` in the renderer already documents.
+    """
+
+    kind: str
+    mechanism: str
+    side: str
+    level_price: float
+    as_of: datetime
+    index: int
+
+
+@dataclass(frozen=True, slots=True)
+class StructureEventRow:
+    """One break of structure, or one change of character, already classified.
+
+    For a break, ``side`` is the level's side and ``previous_side`` is `None`.
+    For a change of character both are set and they differ, which is what the
+    producing engine requires of one: two breaks on opposite sides, the earlier
+    one strictly before. **Neither is a reversal, a trend call or a prediction**
+    — it is a statement about two closed bars.
+    """
+
+    side: str
+    level_price: float
+    as_of: datetime
+    index: int
+    origin_label: str | None = None
+    previous_side: str | None = None
+    previous_as_of: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureReadingRow:
+    """One deterministic feature's latest closed-candle reading.
+
+    ``name`` is the engine's own feature name, carried verbatim rather than
+    relabelled: a second name for one calculation is a second place to keep in
+    step, and the engine's name already states the period and source.
+
+    ``components`` holds a structured value's parts in the engine's own order —
+    the three a convergence/divergence feature produces, for instance. A scalar
+    feature leaves it empty and fills ``value``.
+
+    ``available`` is `False` when the engine returned no value, and
+    ``unavailable_reason`` says which of the two absences it is: still warming
+    up, or warmed up and undefined. Those are different facts and this row keeps
+    them apart.
+
+    **No interpretation, and no field for one.** No lean, no state, no label, no
+    threshold and no comparison against another reading. A value is a
+    measurement; what it means is a later milestone's question.
+    """
+
+    name: str
+    available: bool
+    value: float | None = None
+    components: tuple[tuple[str, float], ...] = ()
+    unavailable_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TechnicalContextRow:
+    """One timeframe role's recovered technical context, arranged for a reader.
+
+    Carries `fmis.pipeline.TechnicalContextView` field for field, flattened into
+    the primitives a surface prints. Everything here was computed by an engine on
+    every scan and, before TA Slice 5A, reached no operator surface at all.
+
+    **Nothing on this row is a conclusion.** Every state, trend, level, crossing,
+    break and character change is the value its own engine produced, carried
+    across the seam unchanged. No field ranks, scores, leans or recommends, and
+    none may be added that does. The producing packages are named in
+    `fmis.pipeline.technical_context`, which owns the projection; naming them
+    here would put the presentation layer inside four engine boundaries it is
+    correctly outside of.
+
+    ``crossing_count``, ``level_count`` and their kin are counts of facts the
+    engines produced — a size, never a strength. A level touched many times is
+    not thereby a strong level; that reading requires interaction semantics this
+    repository does not yet have.
+    """
+
+    role: str
+    interval: str
+    as_of: datetime
+    closed_count: int
+    structural_trend: str
+    regime_structure: str
+    regime_volatility: str
+    regime_participation: str
+    last_close: float | None = None
+    nearest_above: StructuralLevelRow | None = None
+    nearest_below: StructuralLevelRow | None = None
+    level_count: int = 0
+    upper_level_count: int = 0
+    lower_level_count: int = 0
+    crossing_count: int = 0
+    latest_crossing: CrossingEventRow | None = None
+    latest_close_breach: CrossingEventRow | None = None
+    break_count: int = 0
+    latest_break: StructureEventRow | None = None
+    character_change_count: int = 0
+    latest_character_change: StructureEventRow | None = None
+    features: tuple[FeatureReadingRow, ...] = ()
+    warming_up: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class DevelopingEvidenceRow:
     """Which way the readable families point. **Never what the policy decided.**
 
@@ -660,6 +807,10 @@ class SymbolDecisionRow:
     #: declared risk policy — a page with no planning section, never a page that
     #: invents one, and never a page that shows a zero where a size belongs.
     plan: TradeRiskPlanRow | None = None
+    #: One row per timeframe role whose technical context was recovered, in role
+    #: order: context, then setup, then execution. Empty when the decision
+    #: carried none, which the surface states rather than papers over.
+    technical: tuple[TechnicalContextRow, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

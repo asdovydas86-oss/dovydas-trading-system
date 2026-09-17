@@ -21,15 +21,22 @@ source of truth for a rule the canonical model owns.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
+from fmis.data import Candle, SeriesIdentity
+from fmis.features.series import FeatureSeries, FeatureSeriesPoint
 from fmis.features.types import (
     BaseFeature,
     FeatureCategory,
     FeatureContext,
     FeatureResult,
 )
-from fmis.features.volume.volume_math import required_values, trailing_mean
+from fmis.features.volume.volume_math import (
+    required_values,
+    trailing_mean,
+    trailing_mean_series,
+)
 
 __all__ = ["AverageVolume", "RelativeVolume"]
 
@@ -51,6 +58,47 @@ def _require_lookback(lookback: object) -> int:
     if lookback < 1:
         raise ValueError(f"lookback must be at least 1, got {lookback}")
     return lookback
+
+
+def _ratio(current: float, baseline: float) -> float:
+    """The one division in this module. **Every relative volume goes through it.**
+
+    Extracted for the reason `volume_math._mean_of` is: the latest-value path and
+    the historical one must be one expression evaluated over different inputs,
+    not two expressions that happen to agree — which is what makes the final
+    point of the series bit-identical to `compute`'s value rather than merely
+    close to it (ADR-0031 §6). A zero baseline never reaches here; it is refused
+    by the caller, because a ratio with no denominator is reported and never
+    repaired.
+    """
+    return current / baseline
+
+
+def _series_of(
+    feature: BaseFeature,
+    candles: Sequence[Candle],
+    *,
+    points: Sequence[FeatureSeriesPoint],
+    identity: SeriesIdentity,
+    lookback: int,
+    metadata: Mapping[str, Any],
+) -> FeatureSeries:
+    """Wrap already-built points as a `FeatureSeries`. **Assembly, no arithmetic.**
+
+    Shared by the two volume features because both warm up the same way and both
+    index the same timeline; the only thing that differs between them is what
+    each point's value means, and that is decided before this is called.
+    """
+    return FeatureSeries(
+        name=feature.name,
+        category=feature.category,
+        identity=identity,
+        as_of=candles[-1].timestamp if candles else None,
+        closed_candles=len(candles),
+        warmup_candles=required_values(lookback),
+        points=tuple(points),
+        metadata=metadata,
+    )
 
 
 def _base_metadata(lookback: int, available: int, *, provenance: str) -> dict[str, Any]:
@@ -110,6 +158,42 @@ class AverageVolume(BaseFeature):
             category=self.category,
             value=baseline,
             metadata={**metadata, "insufficient_data": False},
+        )
+
+    def compute_series(self, context: FeatureContext) -> FeatureSeries:
+        """This baseline at every closed candle where it is defined (ADR-0031).
+
+        Alignment: the pair at position ``t`` is the mean of the ``lookback``
+        candles **preceding** ``t``, so the first point sits at closed-candle
+        index ``lookback`` and ``warmup_candles`` is ``lookback + 1`` — the same
+        window convention `volume_math` documents and `compute` reports.
+
+        A baseline is never undefined: a window of entirely zero volume has a
+        perfectly good mean of zero. It is the *ratio* against it that has no
+        denominator, which is `RelativeVolume`'s problem and not this one.
+        """
+        closed = context.primary.closed()
+        candles = closed.candles
+        volumes = [candle.volume for candle in candles]
+
+        return _series_of(
+            self,
+            candles,
+            points=[
+                FeatureSeriesPoint(
+                    index=position,
+                    timestamp=candles[position].timestamp,
+                    value=baseline,
+                )
+                for position, baseline in trailing_mean_series(volumes, self._lookback)
+            ],
+            identity=closed.identity,
+            lookback=self._lookback,
+            metadata=_base_metadata(
+                self._lookback,
+                len(candles),
+                provenance="fmis.features.volume.statistics.AverageVolume",
+            ),
         )
 
 
@@ -193,6 +277,62 @@ class RelativeVolume(BaseFeature):
         return FeatureResult(
             name=self.name,
             category=self.category,
-            value=current / baseline,
+            value=_ratio(current, baseline),
             metadata=metadata,
+        )
+
+    def compute_series(self, context: FeatureContext) -> FeatureSeries:
+        """This ratio at every closed candle where it is defined (ADR-0031).
+
+        Alignment: the ratio at position ``t`` divides ``volumes[t]`` by the mean
+        of the ``lookback`` candles preceding it, so the first point sits at
+        closed-candle index ``lookback`` and ``warmup_candles`` is
+        ``lookback + 1``.
+
+        **This feature is why a point carries an ``undefined_reason``.** A
+        warmed-up position whose whole baseline window traded zero volume has no
+        denominator, and the repository's rule is to report that rather than
+        repair it — no infinity, no epsilon. Such a position stays in the series
+        as a point with no value and the reason stated, because dropping it would
+        shorten the history and shift nothing else, and padding it with a number
+        would turn *we cannot say* into a measurement.
+        """
+        closed = context.primary.closed()
+        candles = closed.candles
+        volumes = [candle.volume for candle in candles]
+
+        points: list[FeatureSeriesPoint] = []
+        for position, baseline in trailing_mean_series(volumes, self._lookback):
+            timestamp = candles[position].timestamp
+            if baseline == 0:
+                points.append(
+                    FeatureSeriesPoint(
+                        index=position,
+                        timestamp=timestamp,
+                        undefined_reason=ZERO_BASELINE,
+                    )
+                )
+                continue
+            points.append(
+                FeatureSeriesPoint(
+                    index=position,
+                    timestamp=timestamp,
+                    value=_ratio(volumes[position], baseline),
+                )
+            )
+
+        return _series_of(
+            self,
+            candles,
+            points=points,
+            identity=closed.identity,
+            lookback=self._lookback,
+            metadata={
+                **_base_metadata(
+                    self._lookback,
+                    len(candles),
+                    provenance="fmis.features.volume.statistics.RelativeVolume",
+                ),
+                "formula": "relative_volume = current_volume / average_volume",
+            },
         )

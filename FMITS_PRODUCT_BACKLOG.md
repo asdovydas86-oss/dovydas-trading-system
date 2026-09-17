@@ -11,10 +11,10 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | **`HEAD` = `main` = `origin/main` = `66bab74`**, tracked tree clean, `0/0` ahead/behind, remote verified with `git ls-remote` |
-| **Verified on** | **2026-09-16** (Project Memory & Documentation Gate, [report 0048](reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md)) |
-| **Verification method** | live repository + `git` inspection + live `src/` inspection + accepted ADRs. **The test suite was not re-run** — that session changed no `src/` or `tests/` byte |
-| **Previously** | `HEAD` at `dbc4765`, verified 2026-08-13. That row is superseded; §8's per-milestone entries remain point-in-time records and are not revised |
+| **Last verified against** | **TA Slice 5A** — see [report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) §24 for the exact commit |
+| **Verified on** | **2026-09-17** (TA Slice 5A — Recover Technical Context & Feature Series) |
+| **Verification method** | live repository + `git` inspection + live `src/` inspection + accepted ADRs + **the full test suite, re-established** + the policy non-regression digest recomputed outside the suite + a 17-probe adversarial campaign + live dashboard verification |
+| **Previously** | `HEAD` at `66bab74`, verified 2026-09-16 (Memory Gate), and at `dbc4765` before that. Those rows are superseded; §8's per-milestone entries remain point-in-time records and are not revised |
 
 > **Current state lives in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0,
 > and capability status in [`docs/AI_HANDOFF/CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md).**
@@ -82,7 +82,7 @@ before?"* An item that cannot answer it does not belong here.
 > | **Test baseline** | 14,699 passed / 0 failed / 0 skipped / 0 warnings under `-W error`; last actually run 2026-09-07 |
 > | **Policy baseline** | `sha256 8b22e6c9…`, 81 fixtures, 72 `WAIT` / 9 `CANDIDATE`; Reliability Gate 9/9 |
 > | **Product surface** | 25 CLI commands + a 10-page operator dashboard with a dynamic `/swing/SYMBOL` route |
-> | **NOW** | **TA Slice 5A — Recover Technical Context** (§5) — *named, not started* |
+> | **NOW** | **TA Slice 5B — Price Zones & Interactions** (§5) — ***BLOCKED on owner decision 0047 D1***. TA Slice 5A is **DONE** (§8) |
 >
 > Full detail: [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0.
 
@@ -227,21 +227,21 @@ close, and the inherited limitations — computed from live exchange data.
 
 **Exactly one item, by rule.**
 
-### `DX` — TA Slice 5A: Recover Technical Context · **NOW** *(named 2026-09-16; not started)*
+### `DY` — TA Slice 5B: Price Zones & Interactions · **NOW — BLOCKED** *(named 2026-09-17; not started)*
 
 | Field | Value |
 |---|---|
-| **What the owner gets** | The technical facts FMITS **already computes and currently throws away** reach a surface he can read. Today roughly half of what the engine derives about a market dies in one 75-line function before it reaches any page |
-| **The blocker it removes** | `build_setup_inputs` (`src/fmis/swing_setup/compose.py:225`) receives three complete `StructuralFactSheet`s and passes through trend, the context regime, evidence state, decision-context state and execution levels/breaks. **Context-role levels, every level crossing, every CHoCH, nearest levels, setup-role breaks and all three `FeatureSet`s stop there.** Verified live 2026-09-16 |
-| **Also in scope** | An **additive** `compute_series()` on the `Feature` protocol. Indicators return the latest scalar only, so slope, ROC and divergence are not derivable *in principle* — review item **R5**, open since 2026-07-24 — and it is the prerequisite for four later capabilities plus establishment-time ATR |
-| **Required** | A small **real product consumer**. A library no surface reads repeats the very defect this slice exists to fix |
-| **Explicitly NOT in scope** | Any Swing **policy** change · price zones · `WATCH`/opportunity states · invented TA thresholds · any risk/capital change |
-| **GO condition** | Dovydas + ChatGPT have reviewed the Memory Gate (`DW`), **and** this slice has its own implementation brief |
-| **STOP condition** | The slice ends when already-computed facts reach a real operator surface and `compute_series()` exists additively. **It does not continue into Slice 5B** |
+| **What the owner would get** | Areas rather than lines, and **what price has actually done at them**. The single largest remaining gap between what FMITS shows and how a trader reads a chart |
+| **Status** | **BLOCKED**, and the blocker is an **owner decision**, not engineering |
+| **The blocker** | **0047 D1 — the zone-width tolerance policy**, a scoped weakening of [ADR-0013](docs/adr/ADR-0013-swing-relationship-foundation.md) §4's no-tolerance rule. Only the owner can take it. A zone engine written against an un-decided width policy would bake an invented threshold into deterministic market truth |
+| **Second open decision** | **0047 D2 — may a zone carry a role, and what may it be called.** Partly settled: the *derivation* rule is fixed (**interaction history, never position relative to price**); the *naming* is open, and three guards currently forbid the words in output |
+| **What is no longer a blocker** | Establishment-time ATR. `compute_series()` landed in `DX` ([ADR-0031](docs/adr/ADR-0031-feature-series-contract.md)), which is what [the 0047 disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md) §C required to happen first. **The prerequisite existing is not a recommendation to use it** |
+| **Also required before code** | Deterministic interaction semantics · a non-repainting design · a product consumer |
+| **Explicitly NOT in scope** | Zone evidence claimed as independent — it is **NOT ESTABLISHED** and must be described as *"a new / potentially more orthogonal evidence family"* until research says otherwise |
 | **Authority** | [report 0047](reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) as modified by [its review disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md) · [`CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md) §6 |
 
-> **The exactly-one-NOW rule is satisfied again as of 2026-09-16, for the first time since `AP`
-> shipped on 2026-08-06.** For those six weeks the board recorded the rule as *temporarily
+> **The exactly-one-NOW rule remains satisfied**, as it has been since 2026-09-16 — the first time
+> since `AP` shipped on 2026-08-06. For those six weeks the board recorded the rule as *temporarily
 > unsatisfied* while `AT`–`AV`, `BH`–`BN`, the `BG-D1` line, `BR`–`BV`, `CC`, `CD` and `DR`–`DW` were
 > delivered as explicitly-scoped, owner-directed implementation tasks rather than NOW selections. That
 > history is left in place below and in §8 rather than tidied away — it is the honest record, and it
@@ -716,13 +716,13 @@ expected to be revised when live implementation reveals new facts.
 
 | # | Step | Purpose | Gated by |
 |---|---|---|---|
-| **0** | **TA Slice 5A — Recover Technical Context** | Stop discarding computed facts; establish historical series access | — *(this is **NOW**, §5)* |
-| 1 | **TA Slice 5B — Price Zones & Interactions** | Let FMITS understand *areas* and what price has done at them | 0 · owner decision **D1** (zone-width policy) · **D2** (zone role/naming) · `compute_series()` if width uses establishment-time ATR |
+| **0** | **TA Slice 5A — Recover Technical Context** | Stop discarding computed facts; establish historical series access | **DONE 2026-09-17** — [report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
+| 1 | **TA Slice 5B — Price Zones & Interactions** | Let FMITS understand *areas* and what price has done at them | **This is NOW (§5) and it is BLOCKED.** Owner decision **D1** (zone-width policy) · **D2** (zone role/naming). `compute_series()` is **no longer a gate** — it exists |
 | 2 | **Price Phases** | Impulse / retracement / consolidation / range / compression–expansion primitives **with explicit scale semantics** | 1 |
 | 3 | **Market Opportunity** | Distinguish *nothing interesting* from *a developing directional opportunity* **without weakening strategy policy** | 2 · owner decision **D3** (may an opportunity state name a side — [ADR-0028](docs/adr/ADR-0028-directional-interpretation-boundary.md)) |
-| 4 | **Indicator Context** | EMA geometry, MACD dynamics, RSI dynamics | `compute_series()` |
+| 4 | **Indicator Context** | EMA geometry, MACD dynamics, RSI dynamics | ~~`compute_series()`~~ — **satisfied**. Constrained by the measured family-independence result: more indicators add no independence |
 | 5 | **Volume & volatility at events** | Volume and volatility read *at* a structural event | 1, 4 |
-| 6 | **Divergence** | Price vs oscillator — approved scope, entirely absent today | `compute_series()` |
+| 6 | **Divergence** | Price vs oscillator — approved scope, entirely absent today | ~~`compute_series()`~~ — **satisfied**. Alignment policy still open (disposition §H) |
 | 7 | **Trend Geometry** | Trendlines and channels — approved scope, entirely absent today | 2 *(anchor scoping)* |
 | — | ***re-evaluate here, with real usage*** | Whether steps 8+ earn their place is decided **after the owner has used 0–7** | — |
 | 8 | **Simple Patterns** | Bull/bear flag, then double top/bottom — built from primitives, not as a framework | 7 |
@@ -846,6 +846,56 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `DX` — TA Slice 5A: Recover Technical Context & Feature Series · **DONE** *(2026-09-17)*
+
+**A product milestone, and the first since Slice 4.** Full record: [report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md).
+
+**What the owner can do now that they could not before.** Open `/swing/SYMBOL` and see **what this
+system already knows about that market**, per timeframe role, without opening a chart: the weekly,
+daily and four-hour structural trend and market regime side by side; the nearest structural level
+above and below the last close on every role, each with the confirmed swing it came from; whether a
+**change of character** has occurred, when, and from which break; the latest level crossing and the
+latest close beyond a level in the engine's own nine-way classification; the latest break of
+structure on all three roles; and **every indicator value the system computes on every timeframe** —
+EMA 20/50/200, RSI, ATR, MACD's three components, relative volume — none of which reached any
+operator surface at all before this milestone. Readings still warming up say so rather than showing a
+blank.
+
+**Two ADRs.** [ADR-0031](docs/adr/ADR-0031-feature-series-contract.md) — the **additive** feature-series
+contract, closing review item **R5 open since 2026-07-24**: `compute_series()` on six features, with
+explicit alignment to the closed-candle index space, warm-up stated and never backfilled,
+*undefined here* distinguished from *not warmed up yet*, structured multi-component values
+first-class, prefix stability and no-lookahead tested, and **one mathematical implementation per
+indicator** so the latest value equals the final point bit for bit. `compute()` is untouched.
+[ADR-0032](docs/adr/ADR-0032-market-technical-context-carriage.md) — the carriage boundary:
+**`SetupInputs` gained no field**, and the recovered facts are a **sibling** `MarketTechnicalContext`
+composed beside the assessment, owned by `fmis.pipeline`, carried by reference, never blended across
+roles, and never read by any policy.
+
+**No policy change.** The 81-fixture non-regression digest is **byte-identical**
+(`8b22e6c9c5e346cb8f62008325b9b0304ecae9af5e0fe46eec4a6c5aa428059c`, 72 `WAIT` / 9 `CANDIDATE`),
+recomputed three times outside the test suite. `evaluate_setup` was not modified. Scan Memory's
+comparison surface is unchanged and existing history stays readable. No capital or risk configuration
+was touched, and `~/.fmits/risk_policy.json` was **not** created.
+
+**Verification.** Full suite re-established under `-W error` on cleared bytecode (§18 of the report);
+policy digest recomputed independently; **17/17 targeted adversarial probes killed** with byte-exact
+source restore; the projection measured at **~1 % of per-symbol compute and 0.9 KiB per symbol**, with
+the series capability measured **linear** across 200 / 500 / 1,000 / 2,000 candles; live dashboard
+verified on port **8799**, with the operator's instance on 8787 never stopped or signalled.
+
+**Four architecture guards fired and were obeyed rather than widened**, and one existing test's
+positional assertion became the ordering relation its own docstring already specified. Two existing
+tests were changed in total, both recorded in report 0049 §9.
+
+**It stopped where it was told to.** No zones, no phases, no patterns, no divergence, no opportunity
+state, no `WATCH`, and **not one** of the indicator interpretations `compute_series()` now makes easy.
+A rendered-output scan across three markets refuses *support*, *resistance*, *breakout*, *retest*,
+*divergence*, *momentum* and thirteen other words the system has not earned, with the page's single
+denial sentence carved out and asserted separately.
+
+---
 
 ### `DW` — Project Memory & Documentation Gate · **DONE** *(2026-09-16)*
 

@@ -7,10 +7,10 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | **`HEAD` = `main` = `origin/main` = `66bab74`** |
-| **Verified on** | **2026-09-16** (Project Memory & Documentation Gate, [report 0048](reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md)) |
-| **Verification method** | live repository + `git` inspection + accepted ADRs |
-| **Latest capability entry** | **Swing Product Slice 4 — Risk & Trade-Planning Foundation** (2026-09-06). §3 below still opens *"As of Milestone `BS`"* and is superseded by §3.1 |
+| **Last verified against** | **TA Slice 5A** — see [report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) §24 for the exact commit |
+| **Verified on** | **2026-09-17** (TA Slice 5A — Recover Technical Context & Feature Series) |
+| **Verification method** | live repository + `git` inspection + accepted ADRs + the full test suite + live dashboard verification |
+| **Latest capability entry** | **TA Slice 5A — the technical context panel** (2026-09-17). §3 below still opens *"As of Milestone `BS`"* and is superseded by §3.1 |
 | **Previously** | Verified 2026-08-18 against Milestone BP's production commit `e1cfad0`, on top of `3a2bd3a`. Milestone BO's `e4195fc` sits on top of `51814b1`; Milestone BN's entry was verified against its product-docs commit on top of `b66a88f`. Milestones `BJ`–`BM`, recorded here as pending commit, are in fact in `origin/main` at `4519d0a`. Those entries are point-in-time records and are not revised |
 
 > **The Project Memory & Documentation Gate (2026-09-16) has no entry in this changelog, deliberately.**
@@ -75,7 +75,7 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-### 3.1 Current — verified 2026-09-16 at `66bab74`
+### 3.1 Current — verified 2026-09-17 at TA Slice 5A
 
 **25 CLI commands**, plus an operator dashboard of **10 fixed pages** and one dynamic route:
 
@@ -88,18 +88,26 @@ dashboard:  / · /markets · /swing · /swing/SYMBOL · /portfolio · /paper
             /performance · /lab · /geometry · /validation · /system
 ```
 
-**Since `BS`, the Swing product gained four slices**, each recorded in §4 below: the per-symbol
+**Since `BS`, the Swing product gained five slices**, each recorded in §4 below: the per-symbol
 decision page (`/swing/SYMBOL`), the operator decision layer that puts the trading question above the
-audit question, scan memory and *"what changed since the previous comparable scan"*, and the risk &
-trade-planning panel.
+audit question, scan memory and *"what changed since the previous comparable scan"*, the risk &
+trade-planning panel, and — newest — the **technical context panel**, which is where roughly half of
+everything FMITS computes about a market became visible for the first time.
 
 **Risk sizing is product-unavailable until the owner declares his planning capital** in
-`~/.fmits/risk_policy.json` — verified absent on 2026-09-16. Every planning panel states the absence
+`~/.fmits/risk_policy.json` — verified absent again on 2026-09-17. Every planning panel states the absence
 and prints the file to write. **2 % per-trade risk is a hard ceiling, never a default.**
 
-**The standing limitation:** the operator still sees too many undifferentiated `WAIT`s, and the
-product cannot yet distinguish *nothing interesting* from *a directional opportunity is developing but
-unconfirmed*. See [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0.7.
+**The standing limitation, narrowed but not removed:** the operator still sees too many
+undifferentiated `WAIT`s, and the product **still cannot** distinguish *nothing interesting* from *a
+directional opportunity is developing but unconfirmed* — that is the Market Opportunity milestone, and
+nothing in TA Slice 5A moved it. What did change is that a `WAIT` is now a `WAIT` the owner can read
+the market behind. See [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0.7.
+
+**What FMITS still cannot claim**, however visible the data now is: support/resistance zones,
+breakout, acceptance, rejection, retest, consolidation, bull/bear flags, divergence, trendlines,
+channels, Fibonacci, Elliott, `WATCH LONG`/`WATCH SHORT`. See
+[report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) §22.
 
 ### 3.2 Historical snapshot — as of Milestone `BS`
 
@@ -295,6 +303,75 @@ the automation ladder remains unstarted.
 > work and cannot verify its commit state, and inventing six entries would be worse than recording
 > the gap. They are fully recorded in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md),
 > the [backlog](FMITS_PRODUCT_BACKLOG.md) §8 and reports 0034–0039.
+
+### 2026-09-17 · `DX` — FMITS stopped forgetting what it already knows
+
+**Status:** Released. **Adds a user-visible capability, and removes a blocker to practical use.**
+
+**What the owner can do that was impossible before: open `/swing/SYMBOL` and see
+what this system already knows about that market — per timeframe role, without
+opening a chart, and without the system recomputing anything.**
+
+Roughly half of everything FMITS derives about a market was computed on every
+scan and then thrown away in one 75-line function before it reached any page.
+Not missing. **Computed correctly, and discarded.** The weekly price levels
+reached nothing at all. Every level crossing — a nine-way classification, per
+candle, per level, thousands per role — reached the operator as a single integer.
+Change of character had been computed since Milestone AH and had never once been
+visible as an event. The setup and execution market regimes, three dimensions
+each, arrived as one number counting how many of them were insufficient. And all
+three indicator sets — EMA 20/50/200, RSI, ATR, MACD, relative volume, for 1W, 1D
+and 4H — reached **no operator surface whatsoever**.
+
+**`/swing/SYMBOL` now carries a *technical context* panel**, under the decision
+layer and above the evidence audit. One table row per timeframe role carries the
+six facts an operator reads in seconds — trend, regime in three dimensions, and
+the nearest structural level above and below the last close. Behind a disclosure
+per role sits everything else: the level counts each side, the crossing count,
+the latest crossing and the latest close beyond a level in the engine's own
+vocabulary, the latest break of structure, the latest change of character **with
+the break it changed from**, and every indicator reading under the name the
+engine gave it — with anything still warming up saying so rather than showing a
+blank.
+
+**It shows facts and refuses to interpret them, and that refusal is enforced
+rather than promised.** A level is where a confirmed swing sat: the page calls it
+*the nearest structural level above* and **never** support or resistance, because
+a role would have to come from what price has done at that level and this system
+does not yet derive that. A close beyond a level is a close beyond a level, not a
+breakout. A change of character is two breaks on opposite sides, not a reversal.
+The indicator readings are values, not leans — no slope, no rate of change, no
+crossover and no divergence is computed anywhere. A test scans the rendered page
+across three markets and fails if any of nineteen unearned words appears, with
+the page's own denial sentence carved out and asserted separately so that
+deleting it breaks a test rather than opening a hole.
+
+**The scanner page is untouched.** `/swing` exists for fast attention allocation
+and nothing was added to it. The raw crossing history is never rendered either:
+a role holds thousands of events, the page shows two of them and a truthful
+count, and the full run stays available to the engines that will need it.
+
+**Nothing about the decision changed.** The strategy policy was not modified, its
+input gained no field, and the 81-fixture non-regression digest is byte-identical.
+A `WAIT` is still a `WAIT` — it is now a `WAIT` the owner can read the market
+behind. *"What changed since the previous scan"* is untouched too: none of the
+recovered context reaches it, deliberately, because an EMA value that moves every
+refresh would turn that panel into noise.
+
+**Underneath, and invisible today: the system can now be asked what a measurement
+*has been*, not only what it is.** Every indicator computed its whole history
+internally and kept the last number; that history is now publishable, aligned to
+the candle that produced it, with warm-up stated and never filled in. It closes a
+gap recorded in July and left open since. **Nothing uses it yet** — slope,
+momentum dynamics, divergence and volatility compression all become possible and
+none of them was built, because the data arriving is not authorisation for the
+vocabulary.
+
+Full record: [report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md).
+Contracts: [ADR-0031](docs/adr/ADR-0031-feature-series-contract.md),
+[ADR-0032](docs/adr/ADR-0032-market-technical-context-carriage.md).
+
+---
 
 ### 2026-09-06 · `DV` — FMITS can tell you what a trade would risk
 

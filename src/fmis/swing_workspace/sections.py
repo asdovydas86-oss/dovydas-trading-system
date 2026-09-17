@@ -642,6 +642,12 @@ def symbol_decisions(
             plan=None if plans is None else plans.get(assessment.symbol),
             developing=summary.developing,
             blocker=summary.blocker,
+            # Read off the result the same way `readings` is, and carried
+            # through untouched. `getattr` rather than attribute access for the
+            # reason `readings` uses it: a hand-built result from before the
+            # field existed is still a valid result, and its decision states the
+            # absence rather than failing to assemble.
+            technical=getattr(result, "technical", None),
             timeframes=_timeframe_lines(readings, reference_time),
             state=assessment.state.value,
             classification=_classification_of(assessment),

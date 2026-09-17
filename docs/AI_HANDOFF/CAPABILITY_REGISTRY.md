@@ -18,9 +18,9 @@ board at all — that is the point of the file.
 
 | Field | Value |
 |---|---|
-| **Last verified against** | `66bab74` (`HEAD` = `main` = `origin/main`, tracked tree clean) |
-| **Verified on** | 2026-09-16 |
-| **Verification method** | live `src/` inspection + `grep` over the repository + accepted ADRs + report 0047 |
+| **Last verified against** | TA Slice 5A — see [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
+| **Verified on** | 2026-09-17 |
+| **Verification method** | live `src/` inspection + `grep` over the repository + accepted ADRs + the full test suite + a rendered `/swing/SYMBOL` page |
 | **Authority** | **Status index only.** This file is not an ADR, not a test, and not a specification. Where it disagrees with the live code, **the code is right and this file is stale** — fix this file |
 
 ---
@@ -54,11 +54,11 @@ Everything in this table is computed, tested, non-repainting and reaches at leas
 
 | Capability | Owner package | Status | Reaches | ADR |
 |---|---|---|---|---|
-| EMA (20/50/200) | `fmis.features.indicators` | `IMPLEMENTED` (latest scalar only — see §2.3 `compute_series()`) | `fmits facts` | — |
-| RSI (14) | `fmis.features.indicators` | `IMPLEMENTED` (latest scalar only) | `fmits facts` | — |
-| MACD (12/26/9) | `fmis.features.indicators` | `IMPLEMENTED` (latest scalar only) | `fmits facts` | — |
-| ATR (14) | `fmis.features.indicators` | `IMPLEMENTED` (latest scalar only) | `fmits facts` | — |
-| Relative volume (20) | `fmis.features.volume` | `IMPLEMENTED` | `fmits facts` | [ADR-0010](../adr/ADR-0010-volume-foundation.md) |
+| EMA (20/50/200) | `fmis.features.indicators` | `IMPLEMENTED` — **latest value and full aligned history** | `fmits facts`, `/swing/SYMBOL` technical context | [ADR-0031](../adr/ADR-0031-feature-series-contract.md) |
+| RSI (14) | `fmis.features.indicators` | `IMPLEMENTED` — latest value and full aligned history | `fmits facts`, `/swing/SYMBOL` technical context | [ADR-0031](../adr/ADR-0031-feature-series-contract.md) |
+| MACD (12/26/9) | `fmis.features.indicators` | `IMPLEMENTED` — latest value and full aligned history, **structured three-component points** | `fmits facts`, `/swing/SYMBOL` technical context | [ADR-0031](../adr/ADR-0031-feature-series-contract.md) |
+| ATR (14) | `fmis.features.indicators` | `IMPLEMENTED` — latest value and full aligned history | `fmits facts`, `/swing/SYMBOL` technical context | [ADR-0031](../adr/ADR-0031-feature-series-contract.md) |
+| Relative volume (20) | `fmis.features.volume` | `IMPLEMENTED` — latest value and full aligned history | `fmits facts`, `/swing/SYMBOL` technical context | [ADR-0010](../adr/ADR-0010-volume-foundation.md), [ADR-0031](../adr/ADR-0031-feature-series-contract.md) |
 | Swing pivots | `fmis.market_structure` (1,775 lines) | `IMPLEMENTED` | `fmits facts` | [ADR-0012](../adr/ADR-0012-market-structure-foundation.md) |
 | Swing relationships | `fmis.market_structure` | `IMPLEMENTED` | `fmits facts` | [ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md) |
 | HH / HL / LH / LL labels | `fmis.market_structure.labels` | `IMPLEMENTED` | `fmits facts` | [ADR-0014](../adr/ADR-0014-structural-swing-label-foundation.md) |
@@ -66,13 +66,13 @@ Everything in this table is computed, tested, non-repainting and reaches at leas
 | Structural trend | `fmis.structural_trend` (688 lines) | `IMPLEMENTED` | every surface — **gates the swing policy** | [ADR-0017](../adr/ADR-0017-structural-trend-foundation.md) |
 | Series identity / context | `fmis.series_context` (515 lines) | `IMPLEMENTED` | internal contract | [ADR-0018](../adr/ADR-0018-series-identity-and-context-contract.md) |
 | Price levels | `fmis.market_structure` | `IMPLEMENTED` | `fmits facts`, swing policy | [ADR-0019](../adr/ADR-0019-level-crossing-foundation-v1.md) |
-| Level crossings (nine-way) | `fmis.level_crossing` (1,365 lines) | **`PRODUCT_UNREACHABLE`** — see §2.2 | one integer count on `fmits facts` | [ADR-0019](../adr/ADR-0019-level-crossing-foundation-v1.md) |
-| Break of structure (BOS) | `fmis.structure_break` (832 lines) | `IMPLEMENTED` (execution role only above `facts`) | swing policy, execution role | [ADR-0020](../adr/ADR-0020-break-of-structure-foundation-v1.md) |
-| Change of character (CHoCH) | `fmis.change_of_character` (650 lines) | **`PRODUCT_UNREACHABLE`** — see §2.2 | a `TRANSITIONING` regime state only | [ADR-0021](../adr/ADR-0021-change-of-character-foundation-v1.md) |
+| Level crossings (nine-way) | `fmis.level_crossing` (1,365 lines) | `IMPLEMENTED` — full run carried per role; latest event and latest close breach rendered | `fmits facts`, **`/swing/SYMBOL` technical context** | [ADR-0019](../adr/ADR-0019-level-crossing-foundation-v1.md), [ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) |
+| Break of structure (BOS) | `fmis.structure_break` (832 lines) | `IMPLEMENTED` — **all three roles** above `facts` since TA Slice 5A | swing policy, **`/swing/SYMBOL` technical context** | [ADR-0020](../adr/ADR-0020-break-of-structure-foundation-v1.md), [ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) |
+| Change of character (CHoCH) | `fmis.change_of_character` (650 lines) | `IMPLEMENTED` — full run per role; latest change rendered with the break it changed from | **`/swing/SYMBOL` technical context** | [ADR-0021](../adr/ADR-0021-change-of-character-foundation-v1.md), [ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) |
 | Structural fact sheet | `fmis.pipeline.structural_facts` | `IMPLEMENTED` | `fmits facts` | [ADR-0022](../adr/ADR-0022-structural-fact-sheet-composition-root.md) |
 | Multi-timeframe composition (1W/1D/4H) | `fmis.pipeline.multi_timeframe` | `IMPLEMENTED` | `fmits mtf`, swing policy | [ADR-0023](../adr/ADR-0023-multi-timeframe-composition.md) |
 | Confirmation-delay provenance | `fmis.provenance` | `IMPLEMENTED` | fact sheets | [ADR-0024](../adr/ADR-0024-confirmation-delay-provenance.md) |
-| Market regime (3 dimensions) | `fmis.market_regime` (1,091 lines) | `IMPLEMENTED` (context role; setup/execution roles are `PRODUCT_UNREACHABLE`) | `fmits regime`, swing policy | [ADR-0025](../adr/ADR-0025-market-regime-engine-v1.md) |
+| Market regime (3 dimensions) | `fmis.market_regime` (1,091 lines) | `IMPLEMENTED` — **all three roles reach the product** since TA Slice 5A | `fmits regime`, swing policy, **`/swing/SYMBOL` technical context** | [ADR-0025](../adr/ADR-0025-market-regime-engine-v1.md), [ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) |
 | Decision context | `fmis.decision_context` | `IMPLEMENTED` | swing policy | [ADR-0026](../adr/ADR-0026-decision-context-boundary.md) |
 | Evidence aggregation + families | `fmis.evidence`, `fmis.setup_evidence` | `PARTIAL` — built for the **SETUP role only**; 1W and 4H indicators are never classified | `fmits evidence`, `/swing/SYMBOL` | [ADR-0008](../adr/ADR-0008-decision-support-evidence-boundary.md), [ADR-0011](../adr/ADR-0011-evidence-taxonomy.md) |
 | Swing setup policy | `fmis.swing_setup` | `IMPLEMENTED` | `fmits setup`/`scan`, `/swing` | [ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md) |
@@ -80,39 +80,53 @@ Everything in this table is computed, tested, non-repainting and reaches at leas
 | Scan Memory / "What Changed" | `fmis.scan_memory` | `IMPLEMENTED` | `/swing` | [ADR-0027](../adr/ADR-0027-memory-and-decision-archive-persistence-schema.md) |
 | Risk & trade-planning foundation | `fmis.risk_policy` → `fmis.position_sizing` | `IMPLEMENTED`, **product-unavailable until capital is declared** — see §5 | `/swing/SYMBOL` risk panel | [ADR-0029](../adr/ADR-0029-money-and-numeric-semantics.md), [ADR-0030](../adr/ADR-0030-risk-policy-declaration-boundary.md) |
 
-### 2.2 Computed and thrown away — `PRODUCT_UNREACHABLE`
+### 2.2 What was computed and thrown away — **recovered by TA Slice 5A**
 
-**This is the most important section in the file.** These are not missing computations. FMITS
-calculates all of them correctly and then discards them one layer before the operator. Report 0047
-traced every one; the table below was re-verified against live code on 2026-09-16.
+**This was the most important section in the file, and it is now a record of a closed gap.** None of
+these was ever a missing computation: FMITS calculated all of them correctly and then discarded them
+one layer before the operator. Report 0047 traced every one; the table was re-verified against live
+code on 2026-09-16 and **re-verified again on 2026-09-17, after the carriage was built.**
 
-**Where they die: `build_setup_inputs` in `src/fmis/swing_setup/compose.py:225`** — 75 lines that
+**Where they used to die: `build_setup_inputs` in `src/fmis/swing_setup/compose.py`** — 75 lines that
 receive three complete `StructuralFactSheet`s and pass through trend, the context regime's three
 dimensions, evidence state, decision-context state, and execution close/levels/breaks. Everything
-else in those three sheets stops there.
+else in those three sheets stopped there.
 
-| Fact | Computed at | Survives as | Verified 2026-09-16 |
-|---|---|---|---|
-| `FeatureSet` × 3 roles (ema_20/50/200, rsi, atr, macd, relative_volume) | `pipeline/structural_facts.py` | **nothing** on the swing path | `grep FeatureSet` in `operator_dashboard`, `swing_workspace`, `swing_setup`, `setup_evidence` → **no match** |
-| `structure.crossings` × 3 roles (nine-way classification) | `fmis.level_crossing` | one integer count on `fmits facts` | confirmed absent from `build_setup_inputs` |
-| `structure.changes` (CHoCH) × 3 roles | `fmis.change_of_character` | a `TRANSITIONING` regime state | confirmed absent from `build_setup_inputs` |
-| `swings` / `labelled` / `state_history` × 3 roles | `pipeline/structural_facts.py` | counts on `fmits facts` | confirmed absent |
-| `nearest_levels` × 3 roles | `pipeline/structural_facts.py` | two rows on `fmits facts` | confirmed absent |
-| **context-role `levels`** | `pipeline/structural_facts.py` | **nothing** | only `setup_levels` and `execution_levels` are passed |
-| **setup-role `breaks`** | `pipeline/structural_facts.py` | **nothing** | only `execution_breaks` is passed |
-| setup- and execution-role `MarketRegime` | `swing_setup/compose.py` | one integer: `dimensions_insufficient` | confirmed |
-| `warming_up` per role | `pipeline/structural_facts.py` | one integer in `ViewAdequacy` | confirmed |
-| `window` (fetched/closed/excluded/first/last) per role | `pipeline/structural_facts.py` | `closed_count` only | confirmed |
+**`build_setup_inputs` still passes exactly what it always passed, and `SetupInputs` gained no
+field.** The repair was not to widen the strategy's input — [ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md)
+records why that was refused — but to compose a **sibling** `MarketTechnicalContext` beside the
+assessment, from the objects the composition had already built.
 
-**Why deferred:** never deferred deliberately. `SetupInputs` was a correct, narrow policy boundary
-when the policy read three things; the product then grew past it and nothing widened the seam.
-**Revisit trigger: TA Slice 5A is exactly this work** (§6).
+| Fact | Computed at | Survived as, before 5A | Status now | Reaches |
+|---|---|---|---|---|
+| `FeatureSet` × 3 roles (ema_20/50/200, rsi, atr, macd, relative_volume) | `pipeline/structural_facts.py` | **nothing** on the swing path | `IMPLEMENTED` | `/swing/SYMBOL` technical context, per role, with warm-up stated |
+| `structure.crossings` × 3 roles (nine-way classification) | `fmis.level_crossing` | one integer count on `fmits facts` | `IMPLEMENTED` | full run carried per role; the count, the latest event and the latest close breach rendered |
+| `structure.changes` (CHoCH) × 3 roles | `fmis.change_of_character` | a `TRANSITIONING` regime state | `IMPLEMENTED` | full run per role; the latest change rendered **with the break it changed from** |
+| `nearest_levels` × 3 roles | `pipeline/structural_facts.py` | two rows on `fmits facts` | `IMPLEMENTED` | both sides per role, with each level's price, side and originating swing |
+| **context-role `levels`** | `pipeline/structural_facts.py` | **nothing** | `IMPLEMENTED` | carried in full; the count and both nearest levels rendered |
+| **setup-role `breaks`** | `pipeline/structural_facts.py` | **nothing** | `IMPLEMENTED` | carried in full for all three roles; the latest rendered |
+| setup- and execution-role `MarketRegime` | `swing_setup/compose.py` | one integer: `dimensions_insufficient` | `IMPLEMENTED` | all three dimensions, for all three roles |
+| `warming_up` per role | `pipeline/structural_facts.py` | one integer in `ViewAdequacy` | `IMPLEMENTED` | named per role, and each unavailable reading states *which* absence it is |
+| `window.last_close` per role | `pipeline/structural_facts.py` | `closed_count` only | `IMPLEMENTED` | the last closed price and the closed-bar count, per role |
+| `swings` / `labelled` / `state_history` × 3 roles | `pipeline/structural_facts.py` | counts on `fmits facts` | **`PRODUCT_UNREACHABLE`** — deliberately not recovered | — |
+
+**The one row deliberately left behind.** `swings`, `labelled` and `state_history` are the *inputs*
+to facts already carried: the levels are derived from the labelled swings, and the structural trend
+is derived from the state history. Carrying them too would have widened the contract for no current
+or named future consumer, which is the rule
+[ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) applies — *recover information with
+a clear consumer*. Revisit trigger: **a deterministic engine that needs pivot-level detail**, which
+Price Phases plausibly will.
+
+**Verified 2026-09-17** by `tests/test_technical_context_carriage.py`, which asserts each fact's
+survival by **identity, classification, timing and referenced level** rather than by count — a count
+is satisfied by a layer that carried the wrong four hundred events.
 
 ### 2.3 Dormant and placeholder
 
 | Capability | Status | Evidence | Why | Revisit trigger |
 |---|---|---|---|---|
-| `AverageVolume` | **`DORMANT`** | Defined at `features/volume/statistics.py:69`, exported in `__all__`; **`grep "AverageVolume("` over `src/` returns only its own class statement** — nothing constructs it | Never registered by default; `market_analysis.py:189` says it is "registerable on request" and no caller requests it | Volume-at-event work (§6 step 5) |
+| `AverageVolume` | **`DORMANT`** — and deliberately still so after TA Slice 5A | Exported in `__all__`; nothing in `src/` constructs it. It **gained `compute_series()`** ([ADR-0031](../adr/ADR-0031-feature-series-contract.md)) because it shares `volume_math` with `RelativeVolume` and leaving one class in one module series-capable and its sibling not would have been an arbitrary asymmetry | Never registered by default; `market_analysis.py` says it is "registerable on request" and no caller requests it. **A history is not a promotion** — a test asserts `default_features()` did not grow | Volume-at-event work (§6 step 5) |
 | `features/trend/` | **`PLACEHOLDER`** | 18 lines, no math, `__all__ = []` | Tier-2 feature layer designed, never filled | Indicator Context (§6 step 4) |
 | `features/momentum/` | **`PLACEHOLDER`** | 17 lines, no math, `__all__ = []` | as above; its `TODO` names "momentum divergence flags (price vs. RSI/MACD)" | Indicator Context / Divergence |
 | `features/volatility/` | **`PLACEHOLDER`** | 16 lines, no math, `__all__ = []` | as above | Volatility compression/expansion |
@@ -125,16 +139,17 @@ advertises. It is an honest documented skeleton, not rot — every package names
 Whether a new capability belongs in `fmis.features.*` or in a new top-level `fmis.*` package is an
 open design question, not settled by the placeholder's existence.
 
-### 2.4 `compute_series()` — the prerequisite that unblocks four capabilities
+### 2.4 `compute_series()` — **IMPLEMENTED**, and what it unblocked
 
 | Field | Value |
 |---|---|
-| **Status** | **`MISSING`** — `Feature.compute()` returns the latest scalar only. `ema_series()` computes the whole series and keeps `[-1]` |
-| **Why it matters** | Slope, acceleration, ROC and divergence are **not derivable in principle** from a scalar. `PROJECT_SPECIFICATION_V1.md` §4.1 requires *direction, momentum, acceleration or deceleration, slope, divergences* — none of which the current contract can express |
-| **History** | Recorded as review item **R5, open since 2026-07-24** ([`ARCHITECTURE_REVIEW_2026-07-24.md`](../ARCHITECTURE_REVIEW_2026-07-24.md)). Recorded intent has always been an **additive** `compute_series()` path |
-| **Blocks** | EMA dynamics · MACD dynamics · RSI dynamics · divergence · volatility compression/expansion · **production ATR-based zone width** (a zone's width may need the ATR at its *establishment* point, which is historical) |
-| **Decision** | **`compute_series()` precedes any production zone engine that uses establishment-time ATR.** Recorded in the [0047 review disposition](../reviews/REPORT_0047_REVIEW_DISPOSITION.md) §C |
-| **Revisit trigger** | **TA Slice 5A** (§6) — it is in scope there |
+| **Status** | **`IMPLEMENTED`** — `SeriesFeature.compute_series()` returns an aligned `FeatureSeries` for EMA, ATR, RSI, MACD, `RelativeVolume` and `AverageVolume`. `Feature.compute()` is **unchanged**, and a test asserts the latest value equals the final point of the history exactly, per feature |
+| **Why it mattered** | Slope, acceleration, ROC and divergence are **not derivable in principle** from a scalar. `PROJECT_SPECIFICATION_V1.md` §4.1 requires *direction, momentum, acceleration or deceleration, slope, divergences* — none of which the previous contract could express |
+| **History** | Review item **R5, open since 2026-07-24** ([`ARCHITECTURE_REVIEW_2026-07-24.md`](../ARCHITECTURE_REVIEW_2026-07-24.md)). Closed by TA Slice 5A, **additively**, exactly as the recorded intent always was |
+| **Contract** | [ADR-0031](../adr/ADR-0031-feature-series-contract.md). Explicit alignment to the closed-candle index space · warm-up stated and **never backfilled** · *undefined here* distinguished from *not warmed up yet* · provenance and `SeriesIdentity` carried · structured (multi-component) values first-class · prefix stability and no-lookahead tested · one mathematical implementation per indicator |
+| **What is now unblocked, and is NOT built** | EMA dynamics · MACD dynamics · RSI dynamics · divergence · volatility compression/expansion · establishment-time ATR for zone width. **Every one of these is still `MISSING`** — the brief for TA Slice 5A explicitly defers all of them, and the existence of the data is not authorisation for the interpretation |
+| **Measured cost** | O(n) for the recursive indicators, O(n · lookback) for the volume baseline with lookback a parameter. 2,000 closed candles × seven series-capable features: ~8.5 ms. Linear across 200 / 500 / 1,000 / 2,000 — see `tests/test_feature_series_performance.py` |
+| **Not built, deliberately** | An engine-level `compute_series`. `FeatureEngine.compute` threads each feature's **latest** result into the next feature's context, and threading latest values into a historical computation is lookahead produced by the orchestration. No feature declares a dependency today. [ADR-0031](../adr/ADR-0031-feature-series-contract.md) §8 |
 
 ### 2.5 Approved TA scope that is not built
 
@@ -144,19 +159,19 @@ bolded three are not.
 
 | Capability | Status | In approved scope? | What is missing | Prerequisite | Revisit trigger |
 |---|---|---|---|---|---|
-| **Support/resistance zones** | `MISSING` | **Yes** — vision addendum | `grep -ri price_zones\|PriceZone src/` → **0 files**. No zone, clustering, touch count, width policy or lifecycle exists anywhere | Zone-width policy decision (0047 D1); establishment-time ATR needs `compute_series()` | **TA Slice 5B** |
+| **Support/resistance zones** | `MISSING` | **Yes** — vision addendum | `grep -ri price_zones\|PriceZone src/` → **0 files** (re-verified 2026-09-17). No zone, clustering, touch count, width policy or lifecycle exists anywhere | Zone-width policy decision (**0047 D1, still open**). Its other prerequisite — establishment-time ATR via `compute_series()` — is now **satisfied** (§2.4) | **TA Slice 5B** |
 | Zone interactions (touch/hold/break/reclaim/retest) | `MISSING` | Yes (implied) | no interaction vocabulary exists | zones | TA Slice 5B |
 | Zone role (`HELD_FROM_ABOVE`, `BROKEN_UPWARD`, `ROLE_FLIPPED`, …) | `MISSING` | Yes | Role must derive from **interaction history, never from position relative to price**. See §7 | zone interactions | TA Slice 5B |
 | **Trendlines** | `MISSING` | **Yes** — vision addendum | `grep -ri trendline src/` → **0 files** | Phases first (anchor scoping: 10,153 unconstrained candidates per side per view at 500 bars). **Anchor policy is an open research question — see §7** | Trend Geometry (§6 step 8) |
 | Channels | `MISSING` | Yes (implied) | none | trendlines | Trend Geometry |
-| **Divergences** | `MISSING` | **Yes** — vision addendum and `SPEC` §4.1 | `grep -ri divergence src/` returns 12 files, **every one an unrelated sense** (`exit_divergence` on trade plans, "a divergence would be visible", and one `TODO` in the momentum placeholder). No price/oscillator divergence engine exists | `compute_series()` | Divergence (§6 step 6) |
-| Volatility compression / expansion | `MISSING` | Yes | none | `compute_series()` | §6 step 5 |
+| **Divergences** | `MISSING` | **Yes** — vision addendum and `SPEC` §4.1 | No price/oscillator divergence engine exists. The `divergence` hits under `src/` remain unrelated senses (`exit_divergence` on trade plans, one `TODO`, and the technical-context panel's own sentence **denying** that any is computed) | `compute_series()` — **satisfied** (§2.4). Alignment policy is still open: disposition §H | Divergence (§6 step 6) |
+| Volatility compression / expansion | `MISSING` | Yes | none | `compute_series()` — **satisfied** (§2.4) | §6 step 5 |
 | Breakout / acceptance / rejection / retest | `MISSING` | Yes (implied by S/R) | no vocabulary exists. `close > level` is explicitly **not** an acceptable definition | zones | TA Slice 5B |
 | Impulse / retracement / range / consolidation phases | `MISSING` | Yes | `grep -ri consolidation src/` returns 5 files, all docstrings **denying** the sense (*"`CONTRACTED` is not consolidation"*) plus one `TODO`. Deliberately not built | zones | **Price Phases** (§6 step 3) |
-| EMA dynamics (slope, separation, stack) | `MISSING` | Yes — `SPEC` §4.1 | `compute()` returns a scalar | `compute_series()` | Indicator Context |
-| MACD dynamics (histogram direction, ROC) | `MISSING` | Yes — `SPEC` §4.2 names this explicitly | as above | `compute_series()` | Indicator Context |
-| RSI dynamics (slope, location in context) | `MISSING` | Yes — `SPEC` §4.1 | as above | `compute_series()` | Indicator Context |
-| Volume at event | `MISSING` | Yes | `RelativeVolume` exists but is never evaluated *at* a structural event | zones/phases | §6 step 5 |
+| EMA dynamics (slope, separation, stack) | `MISSING` | Yes — `SPEC` §4.1 | Derivable now and **deliberately not derived**: TA Slice 5A's brief defers every indicator interpretation | `compute_series()` — **satisfied** (§2.4) | Indicator Context |
+| MACD dynamics (histogram direction, ROC) | `MISSING` | Yes — `SPEC` §4.2 names this explicitly | as above. The three components are now available **per bar**, and none is compared with its predecessor anywhere | `compute_series()` — **satisfied** (§2.4) | Indicator Context |
+| RSI dynamics (slope, location in context) | `MISSING` | Yes — `SPEC` §4.1 | as above | `compute_series()` — **satisfied** (§2.4) | Indicator Context |
+| Volume at event | `MISSING` | Yes | `RelativeVolume` now has a history and structural events now carry their bar index, so the join is **expressible** — and is not made anywhere | zones/phases | §6 step 5 |
 | Chart patterns (generic) | `DEFERRED` | Partly | **No generic pattern framework before a second real pattern demonstrates shared abstraction.** Build primitives first | phases + geometry | after §6 step 9 |
 | Bull / bear flag | `DEFERRED` | Yes (pattern detection) | decomposes into impulse + consolidation + break — build the primitives, not the pattern | phases | §6 step 9 |
 | Double top / bottom | `DEFERRED` | Yes | decomposes into two zone interactions + a structural break | zones | §6 step 10 |
@@ -287,12 +302,12 @@ scope rather than a drift.
 deliberately product-first and may be revised when live implementation reveals new facts.
 
 ```
-MEMORY GATE (this milestone)
+MEMORY GATE                                      ← DONE (report 0048)
     ↓
 ChatGPT + Dovydas review
     ↓
-0.  TA Slice 5A — Recover Technical Context      ← next approved milestone
-1.  TA Slice 5B — Price Zones & Interactions
+0.  TA Slice 5A — Recover Technical Context      ← DONE (report 0049)
+1.  TA Slice 5B — Price Zones & Interactions     ← next approved milestone
 2.  Price Phases
 3.  Market Opportunity
 4.  Indicator Context
@@ -309,27 +324,36 @@ ChatGPT + Dovydas review
 **The re-evaluation point is deliberate.** Whether steps 8+ are worth building should be decided
 **after the owner has used steps 0–7**, not now.
 
-### TA Slice 5A — Recover Technical Context *(the next approved milestone)*
+### TA Slice 5A — Recover Technical Context *(**DONE**, 2026-09-17 — [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md))*
 
 **Purpose:** stop throwing away already-computed technical information, and establish the historical
-series access later engines need.
+series access later engines need. Both delivered.
 
-| In scope | Out of scope |
+| In scope | Delivered as |
 |---|---|
-| Widen the `build_setup_inputs` information-loss seam | Any Swing **policy** change |
-| Preserve relevant per-role structured facts | Invented TA thresholds |
-| Carry crossings / CHoCH / levels / nearest levels / regimes / `FeatureSet`s where architecture permits | Zones |
-| Additive `compute_series()` protocol capability | `WATCH` / opportunity states |
-| A small **real product consumer** (not a library with no reader) | Any risk/capital change |
+| Widen the `build_setup_inputs` information-loss seam | **Not widened — sidestepped.** `SetupInputs` gained no field; a sibling `MarketTechnicalContext` is composed beside the assessment ([ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md)) |
+| Preserve relevant per-role structured facts | Three complete per-role views, canonical objects carried by reference |
+| Carry crossings / CHoCH / levels / nearest levels / regimes / `FeatureSet`s | All six, all three roles — §2.2 |
+| Additive `compute_series()` protocol capability | [ADR-0031](../adr/ADR-0031-feature-series-contract.md), six features — §2.4 |
+| A small **real product consumer** | The **technical context panel** on `/swing/SYMBOL` |
 
-**Stop condition:** the slice ends when already-computed facts reach a real operator surface and
-`compute_series()` exists additively. It does **not** continue into 5B.
+| Explicitly out of scope, and stayed out |
+|---|
+| Any Swing **policy** change — the 81-fixture digest is byte-identical |
+| Invented TA thresholds — none exists anywhere in the slice |
+| Zones · `WATCH` / opportunity states · any risk or capital change |
+| Every indicator interpretation `compute_series()` now makes easy (§2.5) |
+
+**Stop condition met**, and the slice stopped there. It did **not** continue into 5B.
 
 ### The slices after it, in one line each
 
-- **TA Slice 5B — Price Zones & Interactions.** Areas, and what price has actually done at them.
-  Requires an approved zone-width policy, historical ATR access if ATR-based width is used,
-  deterministic interaction semantics, non-repainting design, and a product consumer.
+- **TA Slice 5B — Price Zones & Interactions** *(the next approved milestone)*. Areas, and what
+  price has actually done at them. Requires an approved zone-width policy (**owner decision 0047 D1,
+  still open and still blocking**), deterministic interaction semantics, non-repainting design, and a
+  product consumer. **Historical ATR access is no longer a blocker** — §2.4 delivered it, which is
+  what [the 0047 disposition](../reviews/REPORT_0047_REVIEW_DISPOSITION.md) §C required to happen
+  first.
 - **Price Phases.** Impulse / retracement / consolidation / range / compression–expansion primitives
   **with explicit scale semantics**.
 - **Market Opportunity.** Distinguish *nothing interesting* from *a developing directional
@@ -350,7 +374,7 @@ architecture into a choice nobody made. Full reasoning: the
 |---|---|---|---|
 | **A** | Opportunity vs Strategy | They are **conceptually separate**. `Opportunity: WATCH LONG` + `Strategy: WAIT` must remain logically possible, as must `WATCH LONG` + `CANDIDATE`, and `NONE` + `WAIT` | Internal vocabulary; package ownership; whether opportunity may name a side (ADR-0028) |
 | **B** | `MissingConfirmation` vs policy `Blocker` | They are **different questions** and must not be conflated. *"What market event has not happened yet"* ≠ *"why did the strategy stop"* | The type, where it lives, how it renders |
-| **C** | `compute_series()` vs ATR-based zone width | `compute_series()` **precedes** any production zone engine depending on establishment-time ATR | The zone-width policy itself (owner decision D1) |
+| **C** | `compute_series()` vs ATR-based zone width | **Satisfied.** `compute_series()` landed in TA Slice 5A ([ADR-0031](../adr/ADR-0031-feature-series-contract.md)), before any zone engine | The zone-width policy itself (**owner decision D1, still open**). Whether zone width should use establishment-time ATR **at all** is also still open — the prerequisite existing is not a recommendation to use it |
 | **D** | Zone evidence independence | **NOT ESTABLISHED.** Describe as *"new / potentially more orthogonal"* | Whether it is actually independent — needs empirical research |
 | **E** | Support / resistance terminology | Role is derived from **interaction history, never from position relative to price**. `below price = support` is **forbidden** | Whether user-facing labels may say "Support"/"Resistance" once interaction history justifies it — needs explicit architecture/test reconciliation, since three guards currently forbid the words in output |
 | **F** | Price phase segmentation | Phases before trendlines | **Not decided:** whether one exhaustive non-overlapping phase per candle is the model. Markets may contain nested / scale-dependent structure. Segmentation scale, overlap/nesting, and timeframe identity are all open |

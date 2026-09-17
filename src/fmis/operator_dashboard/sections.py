@@ -26,6 +26,7 @@ four engines below it deliberately refused to make.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -79,6 +80,11 @@ from fmis.operator_dashboard.models import (
     SwingView,
     SymbolChangeRow,
     SymbolDecisionRow,
+    CrossingEventRow,
+    FeatureReadingRow,
+    StructuralLevelRow,
+    StructureEventRow,
+    TechnicalContextRow,
     TradeRiskPlanRow,
     TransitionRow,
     TimeframeRow,
@@ -102,6 +108,7 @@ __all__ = [
     "macro_view",
     "swing_view",
     "symbol_decision_rows",
+    "technical_context_rows",
     "swing_snapshot",
     "scan_change_view",
     "portfolio_view",
@@ -645,6 +652,174 @@ def _trade_plan_row(plan: Any) -> TradeRiskPlanRow | None:
     )
 
 
+#: The engine's own metadata key for *not enough history yet*. Carried as the
+#: reason token rather than reworded here, on the `PlanningStatus` pattern: the
+#: model holds the producer's word and `render` supplies a reader's.
+WARMING_UP_REASON = "insufficient_data"
+
+#: The engine's own metadata key for *warmed up and still undefined*, whose value
+#: names which undefined case it was.
+UNDEFINED_REASON = "undefined_reason"
+
+
+def _level_row(level: Any) -> StructuralLevelRow | None:
+    """One `PriceLevel`, translated field for field. `None` stays `None`.
+
+    The side is the engine's own, and no role is derived from it. A level above
+    the last close is a level above the last close.
+    """
+    if level is None:
+        return None
+    origin = level.origin
+    return StructuralLevelRow(
+        price=level.price,
+        side=level.side.value,
+        origin_label=None if origin is None else origin.label.value,
+        origin_timestamp=None if origin is None else origin.timestamp,
+        origin_index=None if origin is None else origin.index,
+    )
+
+
+def _crossing_row(event: Any) -> CrossingEventRow | None:
+    """One `LevelCrossingEvent`, translated field for field. `None` stays `None`.
+
+    ``kind`` and ``mechanism`` are the engine's nine-way classification, carried
+    verbatim and never collapsed into a word this repository has not defined.
+    """
+    if event is None:
+        return None
+    return CrossingEventRow(
+        kind=event.kind.value,
+        mechanism=event.mechanism.value,
+        side=event.level.side.value,
+        level_price=event.level.price,
+        as_of=event.timestamp,
+        index=event.index,
+    )
+
+
+def _break_row(event: Any) -> StructureEventRow | None:
+    """One `StructureBreak`, translated field for field. `None` stays `None`."""
+    if event is None:
+        return None
+    return StructureEventRow(
+        side=event.side.value,
+        level_price=event.level.price,
+        as_of=event.timestamp,
+        index=event.index,
+        origin_label=event.label.value,
+    )
+
+
+def _character_change_row(change: Any) -> StructureEventRow | None:
+    """One `ChangeOfCharacter`, as its subject break plus the one it changed from.
+
+    Both sides are carried because the pair is what makes the statement
+    auditable — a reader sees that character did change, and from what. Neither
+    side is named a direction and neither is called a reversal.
+    """
+    if change is None:
+        return None
+    return StructureEventRow(
+        side=change.subject.side.value,
+        level_price=change.subject.level.price,
+        as_of=change.subject.timestamp,
+        index=change.subject.index,
+        origin_label=change.subject.label.value,
+        previous_side=change.previous.side.value,
+        previous_as_of=change.previous.timestamp,
+    )
+
+
+def _feature_rows(features: Any) -> tuple[FeatureReadingRow, ...]:
+    """A `FeatureSet`'s results, in the engine's own order and under its own names.
+
+    Three outcomes, kept apart because they are three different facts: a value;
+    *not enough history yet*; and *enough history and still undefined*. The last
+    one is real — a baseline window that traded nothing has no denominator — and
+    a surface that showed it as a blank would be saying the first thing.
+
+    A structured value's parts are carried in the producing mapping's own order.
+    Nothing here is compared, combined or labelled.
+    """
+    rows: list[FeatureReadingRow] = []
+    for name, result in features.features.items():
+        value = result.value
+        metadata = result.metadata
+        if value is None:
+            reason = metadata.get(UNDEFINED_REASON)
+            if reason is None and metadata.get(WARMING_UP_REASON):
+                reason = WARMING_UP_REASON
+            rows.append(
+                FeatureReadingRow(name=name, available=False, unavailable_reason=reason)
+            )
+            continue
+        if isinstance(value, Mapping):
+            rows.append(
+                FeatureReadingRow(
+                    name=name,
+                    available=True,
+                    components=tuple(value.items()),
+                )
+            )
+            continue
+        rows.append(FeatureReadingRow(name=name, available=True, value=value))
+    return tuple(rows)
+
+
+def technical_context_rows(technical: Any) -> tuple[TechnicalContextRow, ...]:
+    """The recovered per-role technical context, translated field for field.
+
+    **In the order the roles arrive**, which `fmis.pipeline` fixes as context,
+    setup, execution — the gating role first, and the order the policy applies
+    them in. This function does not reorder, merge or compare the roles, and
+    derives nothing from their combination.
+
+    Every value read here was produced by an engine and carried across the seam
+    by `fmis.pipeline.technical_context` (ADR-0032). **The bounded selections —
+    which crossing, which break, which character change a page prints — were
+    made there, beside the full histories they were selected from.** Making one
+    here would be this layer choosing which market event matters, which is the
+    line between a window and an engine.
+
+    `None` — a decision assembled without a context — yields an empty tuple, and
+    the surface states the absence.
+    """
+    if technical is None:
+        return ()
+    rows: list[TechnicalContextRow] = []
+    for view in technical.views:
+        crossings = view.crossings
+        rows.append(
+            TechnicalContextRow(
+                role=view.role,
+                interval=view.interval,
+                as_of=view.as_of,
+                closed_count=view.closed_count,
+                last_close=view.last_close,
+                structural_trend=view.structural_trend.value,
+                regime_structure=view.regime_structure.value,
+                regime_volatility=view.regime_volatility.value,
+                regime_participation=view.regime_participation.value,
+                nearest_above=_level_row(view.nearest_above),
+                nearest_below=_level_row(view.nearest_below),
+                level_count=len(view.levels),
+                upper_level_count=view.upper_level_count,
+                lower_level_count=view.lower_level_count,
+                crossing_count=crossings.count,
+                latest_crossing=_crossing_row(crossings.latest),
+                latest_close_breach=_crossing_row(crossings.latest_close_breach),
+                break_count=len(view.breaks),
+                latest_break=_break_row(view.latest_break),
+                character_change_count=len(view.changes),
+                latest_character_change=_character_change_row(view.latest_change),
+                features=_feature_rows(view.features),
+                warming_up=tuple(view.warming_up),
+            )
+        )
+    return tuple(rows)
+
+
 def symbol_decision_rows(decisions: Any) -> tuple[SymbolDecisionRow, ...]:
     """The workspace's per-symbol decisions, translated field for field.
 
@@ -701,6 +876,7 @@ def symbol_decision_rows(decisions: Any) -> tuple[SymbolDecisionRow, ...]:
                 for line in decision.timeframes
             ),
             plan=_trade_plan_row(decision.plan),
+            technical=technical_context_rows(getattr(decision, "technical", None)),
         )
         for decision in decisions
     )

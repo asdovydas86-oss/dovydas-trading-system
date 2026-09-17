@@ -21,9 +21,9 @@ routes you here.
 
 | Field | Value |
 |---|---|
-| **Last verified** | **2026-09-16** |
-| **Verified by** | Project Memory & Documentation Gate — [report 0048](../../reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md) |
-| **Verification method** | live `git` inspection · live `src/` inspection · read-only process inspection. **The test suite was not re-run this session** (documentation-only change; see *Test baseline*) |
+| **Last verified** | **2026-09-17** |
+| **Verified by** | TA Slice 5A — Recover Technical Context & Feature Series — [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
+| **Verification method** | live `git` inspection · live `src/` inspection · **the full test suite, re-run and re-established** · the policy non-regression digest, recomputed outside the suite · a 17-probe targeted adversarial campaign with byte-exact source restore · a live development dashboard on port 8799 · read-only inspection of the operator instance |
 
 ## 0.1 Repository
 
@@ -40,6 +40,16 @@ routes you here.
 | **Tracked tree** | clean, apart from this milestone's own documentation changes |
 | **Untracked** | the **16 pre-existing research documents** under `docs/design/` and `docs/reviews/` (AP/AQ/BA/BB-era), deliberately left untracked and **not touched by this milestone** |
 
+> **The one operational lesson this session produced, recorded so it is not relearned.** A mutation
+> probe that replaces a substring with one of the **same length** leaves the restored file the same
+> size, and CPython invalidates `.pyc` on `(mtime, size)` at **one-second** resolution — so a
+> mutate → test → restore cycle completing inside one second leaves a **stale mutated `.pyc`** sitting
+> behind a correct source file. `inspect.getsource` shows the restored source while the interpreter
+> runs the mutation. It produced one false survivor and would have produced false *kills* for every
+> later probe. **Always run a mutation campaign with `PYTHONDONTWRITEBYTECODE=1` and clear every
+> `__pycache__` between probes, and never trust a digest of `src/` alone to prove a campaign is
+> over.** Full account: report 0049 §19.
+
 ## 0.2 Product surfaces
 
 **25 CLI commands** (`src/fmis/pipeline/cli.py`):
@@ -50,7 +60,8 @@ pulse · macro · portfolio · approve · trade · simulate · statistics · per
 equity · trades · research · dashboard · archive
 ```
 
-**Operator dashboard** — 10 fixed pages plus one dynamic route:
+**Operator dashboard** — 10 fixed pages plus one dynamic route. `/swing/SYMBOL` gained a
+**technical context** panel in TA Slice 5A:
 
 ```
 / · /markets · /swing · /portfolio · /paper · /performance · /lab · /geometry · /validation · /system
@@ -67,7 +78,8 @@ equity · trades · research · dashboard · archive
 | Swing Product Slice 2 — Operator Decision Layer (2026-09-04) | The trading question above the audit question | [0043](../../reports/0043_2026-09-04_SWING_OPERATOR_DECISION_LAYER_SLICE_2.md) |
 | Swing Product Slice 1 — Symbol Decision Surface (2026-09-04) | `/swing/SYMBOL` per-symbol decision page | [0042](../../reports/0042_2026-09-04_SWING_SYMBOL_DECISION_SURFACE_SLICE_1.md) |
 | **TA Capability Audit & Architecture Gate** (2026-09-07) | **Read-only.** Found FMITS has an excellent price-structure spine and almost no TA body | [0047](../../reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) |
-| **Project Memory & Documentation Gate** (2026-09-16) | **This one.** Documentation only — durable project memory | [0048](../../reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md) |
+| **Project Memory & Documentation Gate** (2026-09-16) | Documentation only — durable project memory | [0048](../../reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md) |
+| **TA Slice 5A — Recover Technical Context & Feature Series** (2026-09-17) | **This one.** FMITS stopped forgetting what it already knows. Roughly half the technical information it computes reached no operator surface at all; it now reaches `/swing/SYMBOL` per timeframe role. The Feature Engine gained an **additive** historical-series capability, closing review item R5 open since 2026-07-24. **No policy change** — the 81-fixture digest is byte-identical. [ADR-0031](../adr/ADR-0031-feature-series-contract.md), [ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) | [0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
 
 ## 0.4 Test and policy baseline
 

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from fmis.features.indicators.ema_math import ema_series
 from fmis.features.indicators.sources import VALID_SOURCES
+from fmis.features.series import FeatureSeries, FeatureSeriesPoint
 from fmis.features.types import (
     BaseFeature,
     FeatureCategory,
@@ -67,23 +68,29 @@ class ExponentialMovingAverage(BaseFeature):
     def source(self) -> str:
         return self._source
 
-    def compute(self, context: FeatureContext) -> FeatureResult:
-        # Closed candles only — idempotent even if the engine already closed them.
-        closed = context.primary.closed()
-        prices = [getattr(candle, self._source) for candle in closed.candles]
-        available = len(prices)
-        multiplier = 2.0 / (self._period + 1)
+    def _base_metadata(self, available: int) -> dict[str, object]:
+        """The parameters and provenance both output paths report.
 
-        base_metadata = {
+        One dict builder rather than two literals, so `compute` and
+        `compute_series` cannot describe the same calculation differently.
+        """
+        return {
             "period": self._period,
             "source": self._source,
-            "multiplier": multiplier,
+            "multiplier": 2.0 / (self._period + 1),
             "closed_candles_available": available,
             "warmup_bars": self._period,
             "formula": "EMA_t = (P_t - EMA_{t-1}) * (2 / (period + 1)) + EMA_{t-1}",
             "initialization": "seed EMA_0 = SMA of the first `period` source values",
             "provenance": "fmis.features.indicators.ema.ExponentialMovingAverage",
         }
+
+    def compute(self, context: FeatureContext) -> FeatureResult:
+        # Closed candles only — idempotent even if the engine already closed them.
+        closed = context.primary.closed()
+        prices = [getattr(candle, self._source) for candle in closed.candles]
+        available = len(prices)
+        base_metadata = self._base_metadata(available)
 
         if available < self._period:
             return FeatureResult(
@@ -98,7 +105,9 @@ class ExponentialMovingAverage(BaseFeature):
             )
 
         # Seed with the SMA of the first `period` values, then smooth the rest.
-        # Delegates to the shared ema_series helper (single source of EMA math).
+        # Delegates to the shared ema_series helper (single source of EMA math),
+        # which is the same call `compute_series` makes — so the latest value and
+        # the final point of the history are one number, not two that agree.
         ema = ema_series(prices, self._period)[-1]
 
         return FeatureResult(
@@ -106,4 +115,40 @@ class ExponentialMovingAverage(BaseFeature):
             category=self.category,
             value=ema,
             metadata={**base_metadata, "insufficient_data": False},
+        )
+
+    def compute_series(self, context: FeatureContext) -> FeatureSeries:
+        """This EMA at every closed candle where it is defined (ADR-0031).
+
+        ``ema_series`` has always computed the whole history; before this method
+        existed, `compute` kept ``[-1]`` and the rest was discarded. Nothing new
+        is calculated here — the same call is made and all of it is published.
+
+        Alignment: element ``k`` of the shared series describes closed candle
+        ``k + period - 1``, so the first point sits at index ``period - 1`` and
+        ``warmup_candles`` is ``period``.
+        """
+        closed = context.primary.closed()
+        candles = closed.candles
+        prices = [getattr(candle, self._source) for candle in candles]
+        available = len(prices)
+
+        values = ema_series(prices, self._period)
+        points = tuple(
+            FeatureSeriesPoint(
+                index=offset + self._period - 1,
+                timestamp=candles[offset + self._period - 1].timestamp,
+                value=value,
+            )
+            for offset, value in enumerate(values)
+        )
+        return FeatureSeries(
+            name=self.name,
+            category=self.category,
+            identity=closed.identity,
+            as_of=candles[-1].timestamp if candles else None,
+            closed_candles=available,
+            warmup_candles=self._period,
+            points=points,
+            metadata=self._base_metadata(available),
         )

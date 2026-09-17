@@ -11,6 +11,8 @@ Layout (single responsibility per package):
 
     types.py            core vocabulary: Feature protocol, FeatureResult,
                         FeatureContext, FeatureSet, category/regime enums
+    series.py           the additive historical vocabulary (ADR-0031):
+                        SeriesFeature, FeatureSeries, FeatureSeriesPoint
     registry.py         FeatureRegistry — discovery / open-closed extension
     feature_engine/     the orchestrator (FeatureEngine)
 
@@ -37,6 +39,12 @@ FeatureSet. Everything produced here is deterministic and reproducible.
 from __future__ import annotations
 
 from fmis.features.registry import FeatureRegistry
+from fmis.features.series import (
+    FeatureSeries,
+    FeatureSeriesPoint,
+    SeriesFeature,
+    supports_series,
+)
 from fmis.features.types import (
     BaseFeature,
     Feature,
@@ -57,6 +65,10 @@ __all__ = [
     "FeatureContext",
     "FeatureResult",
     "FeatureSet",
+    "FeatureSeries",
+    "FeatureSeriesPoint",
+    "SeriesFeature",
+    "supports_series",
     "MomentumRegime",
     "TrendDirection",
     "VolatilityRegime",

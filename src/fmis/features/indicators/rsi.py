@@ -28,7 +28,9 @@ Only closed candles are used (reproducibility); pure arithmetic (deterministic).
 
 from __future__ import annotations
 
+from fmis.features.indicators.rsi_math import gains_and_losses, rsi_series
 from fmis.features.indicators.sources import VALID_SOURCES
+from fmis.features.series import FeatureSeries, FeatureSeriesPoint
 from fmis.features.types import (
     BaseFeature,
     FeatureCategory,
@@ -70,21 +72,15 @@ class RelativeStrengthIndex(BaseFeature):
     def source(self) -> str:
         return self._source
 
-    def compute(self, context: FeatureContext) -> FeatureResult:
-        # Closed candles only — idempotent even if the engine already closed them.
-        candles = context.primary.closed().candles
-        available = len(candles)
-        prices = [getattr(candle, self._source) for candle in candles]
+    def _base_metadata(
+        self, available: int, changes_available: int
+    ) -> dict[str, object]:
+        """The parameters and provenance both output paths report.
 
-        gains: list[float] = []
-        losses: list[float] = []
-        for i in range(1, available):
-            change = prices[i] - prices[i - 1]
-            gains.append(max(change, 0.0))
-            losses.append(max(-change, 0.0))
-        changes_available = len(gains)
-
-        base_metadata = {
+        One dict builder rather than two literals, so `compute` and
+        `compute_series` cannot describe the same calculation differently.
+        """
+        return {
             "period": self._period,
             "source": self._source,
             "method": "wilder",
@@ -102,6 +98,20 @@ class RelativeStrengthIndex(BaseFeature):
             "provenance": "fmis.features.indicators.rsi.RelativeStrengthIndex",
         }
 
+    def compute(self, context: FeatureContext) -> FeatureResult:
+        # Closed candles only — idempotent even if the engine already closed them.
+        candles = context.primary.closed().candles
+        available = len(candles)
+        prices = [getattr(candle, self._source) for candle in candles]
+
+        # The changes, the Wilder smoothing and the zero-gain/zero-loss policy
+        # all come from `rsi_math`, which is the same arithmetic
+        # `compute_series` runs — so the latest value and the final point of the
+        # history are one number, not two that agree (ADR-0031 §6).
+        gains, _losses = gains_and_losses(prices)
+        changes_available = len(gains)
+        base_metadata = self._base_metadata(available, changes_available)
+
         if changes_available < self._period:
             return FeatureResult(
                 name=self.name,
@@ -114,26 +124,43 @@ class RelativeStrengthIndex(BaseFeature):
                 },
             )
 
-        # Wilder seed = SMA of the first `period` gains/losses, then smooth the rest.
-        avg_gain = sum(gains[: self._period]) / self._period
-        avg_loss = sum(losses[: self._period]) / self._period
-        for i in range(self._period, changes_available):
-            avg_gain = (avg_gain * (self._period - 1) + gains[i]) / self._period
-            avg_loss = (avg_loss * (self._period - 1) + losses[i]) / self._period
-
-        if avg_loss == 0.0 and avg_gain > 0.0:
-            rsi = 100.0
-        elif avg_gain == 0.0 and avg_loss > 0.0:
-            rsi = 0.0
-        elif avg_gain == 0.0 and avg_loss == 0.0:
-            rsi = 50.0
-        else:
-            rs = avg_gain / avg_loss
-            rsi = 100.0 - (100.0 / (1.0 + rs))
-
         return FeatureResult(
             name=self.name,
             category=self.category,
-            value=rsi,
+            value=rsi_series(prices, self._period)[-1],
             metadata={**base_metadata, "insufficient_data": False},
+        )
+
+    def compute_series(self, context: FeatureContext) -> FeatureSeries:
+        """This RSI at every closed candle where it is defined (ADR-0031).
+
+        Alignment: a change needs a predecessor, so element ``k`` of the shared
+        series describes closed candle ``k + period`` — the fifteenth bar for the
+        default period of 14, matching the ``warmup_candles`` of ``period + 1``
+        this feature has always reported.
+        """
+        closed = context.primary.closed()
+        candles = closed.candles
+        available = len(candles)
+        prices = [getattr(candle, self._source) for candle in candles]
+
+        gains, _losses = gains_and_losses(prices)
+        values = rsi_series(prices, self._period)
+        points = tuple(
+            FeatureSeriesPoint(
+                index=offset + self._period,
+                timestamp=candles[offset + self._period].timestamp,
+                value=value,
+            )
+            for offset, value in enumerate(values)
+        )
+        return FeatureSeries(
+            name=self.name,
+            category=self.category,
+            identity=closed.identity,
+            as_of=candles[-1].timestamp if candles else None,
+            closed_candles=available,
+            warmup_candles=self._period + 1,
+            points=points,
+            metadata=self._base_metadata(available, len(gains)),
         )

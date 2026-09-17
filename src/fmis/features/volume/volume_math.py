@@ -16,7 +16,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-__all__ = ["trailing_mean", "required_values"]
+__all__ = ["trailing_mean", "trailing_mean_series", "required_values"]
+
+
+def _mean_of(window: Sequence[float], lookback: int) -> float:
+    """The one arithmetic in this module. **Every mean here goes through it.**
+
+    Extracted so that the latest-value mean and the historical one are not two
+    expressions that happen to agree: they are one expression, evaluated over
+    different windows, which is what makes the final point of a trailing-mean
+    series **bit-identical** to `trailing_mean` over the same values rather than
+    merely close to it (ADR-0031 §6).
+    """
+    return sum(window) / lookback
 
 
 def required_values(lookback: int) -> int:
@@ -49,4 +61,37 @@ def trailing_mean(values: Sequence[float], lookback: int) -> float | None:
     if len(values) < required_values(lookback):
         return None
     window = values[-required_values(lookback) : -1]
-    return sum(window) / lookback
+    return _mean_of(window, lookback)
+
+
+def trailing_mean_series(
+    values: Sequence[float], lookback: int
+) -> list[tuple[int, float]]:
+    """Every trailing mean this window convention defines, with its position.
+
+    Returns ``(position, mean)`` pairs, where ``position`` is the index of the
+    value the mean is a baseline **for** — so the pair at position ``t`` holds
+    the mean of ``values[t - lookback : t]``, the same window `trailing_mean`
+    takes over the values up to and including ``t``, with ``values[t]`` excluded
+    from its own comparison exactly as that function documents.
+
+    The first pair is at position ``lookback``; earlier positions have no
+    baseline and are **absent rather than padded**, because a padded zero and a
+    real zero baseline are different facts and only one of them is undefined.
+
+    The position is returned rather than left implicit because a caller placing
+    these values on a candle timeline must not have to re-derive the offset —
+    re-deriving it is exactly the off-by-one this shape exists to prevent.
+
+    Equal by construction to `trailing_mean` at the last position: both means go
+    through `_mean_of`, over the same slice, in the same order.
+
+    Raises ``ValueError`` for a non-positive lookback, matching `trailing_mean`:
+    that is a caller error, not a data condition.
+    """
+    if lookback < 1:
+        raise ValueError(f"lookback must be at least 1, got {lookback}")
+    return [
+        (position, _mean_of(values[position - lookback : position], lookback))
+        for position in range(lookback, len(values))
+    ]

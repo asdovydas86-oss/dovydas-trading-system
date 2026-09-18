@@ -159,9 +159,9 @@ bolded three are not.
 
 | Capability | Status | In approved scope? | What is missing | Prerequisite | Revisit trigger |
 |---|---|---|---|---|---|
-| **Support/resistance zones** | `MISSING` | **Yes** — vision addendum | `grep -ri price_zones\|PriceZone src/` → **0 files** (re-verified 2026-09-17). No zone, clustering, touch count, width policy or lifecycle exists anywhere | Zone-width policy decision (**0047 D1, still open**). Its other prerequisite — establishment-time ATR via `compute_series()` — is now **satisfied** (§2.4) | **TA Slice 5B** |
-| Zone interactions (touch/hold/break/reclaim/retest) | `MISSING` | Yes (implied) | no interaction vocabulary exists | zones | TA Slice 5B |
-| Zone role (`HELD_FROM_ABOVE`, `BROKEN_UPWARD`, `ROLE_FLIPPED`, …) | `MISSING` | Yes | Role must derive from **interaction history, never from position relative to price**. See §7 | zone interactions | TA Slice 5B |
+| **Support/resistance zones** | **`PLANNED`** | **Yes** — vision addendum | `grep -ri price_zones\|PriceZone src/` → **0 files** (re-verified 2026-09-18). No implementation exists; what now exists is a **decided contract**: [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) (`Proposed`) and [`PRICE_ZONE_ENGINE_V1.md`](../design/PRICE_ZONE_ENGINE_V1.md) | **0047 D1 is RESOLVED WITH LIMITATIONS** ([report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md)) — construction, band and temporal reference are settled on measurement; **`k` is declared, not measured**, inside `k ∈ [0.10, 1.00]`. Remaining prerequisite is the **owner accepting ADR-0033** | **TA Slice 5B** |
+| Zone interactions (touch/hold/break/reclaim/retest) | **`BLOCKED`** | Yes (implied) | no interaction vocabulary exists, and **V1 deliberately does not add one** — `ACCEPTANCE`, `RECLAIM`, `RETURN_INSIDE` and retest each need a parameter **R3**/**R4** have not answered. **A `CLOSE_BREACH` is not a breakout** | zones · R3 · R4 | after Slice 5B |
+| Zone role (`HELD_FROM_ABOVE`, `BROKEN_UPWARD`, `ROLE_FLIPPED`, …) | **`BLOCKED`** | Yes | **0047 D2 is RESOLVED** (report 0050). Vocabulary fixed — `UNTESTED` · `HELD_FROM_ABOVE` · `HELD_FROM_BELOW` · `BROKEN_UPWARD` · `BROKEN_DOWNWARD` · `ROLE_FLIPPED` · `INDETERMINATE` — with `position` a **separate** field. Derivation still needs the interaction engine. **Measured**: 22 % of zones above the close on 1W have *no interaction history at all*; **39 % (1W) / 50 % (1D)** have had price close on **both** sides, so the position rule is **not well-defined over time** | zone interactions | after Slice 5B |
 | **Trendlines** | `MISSING` | **Yes** — vision addendum | `grep -ri trendline src/` → **0 files** | Phases first (anchor scoping: 10,153 unconstrained candidates per side per view at 500 bars). **Anchor policy is an open research question — see §7** | Trend Geometry (§6 step 8) |
 | Channels | `MISSING` | Yes (implied) | none | trendlines | Trend Geometry |
 | **Divergences** | `MISSING` | **Yes** — vision addendum and `SPEC` §4.1 | No price/oscillator divergence engine exists. The `divergence` hits under `src/` remain unrelated senses (`exit_divergence` on trade plans, one `TODO`, and the technical-context panel's own sentence **denying** that any is computed) | `compute_series()` — **satisfied** (§2.4). Alignment policy is still open: disposition §H | Divergence (§6 step 6) |
@@ -349,9 +349,14 @@ series access later engines need. Both delivered.
 ### The slices after it, in one line each
 
 - **TA Slice 5B — Price Zones & Interactions** *(the next approved milestone)*. Areas, and what
-  price has actually done at them. Requires an approved zone-width policy (**owner decision 0047 D1,
-  still open and still blocking**), deterministic interaction semantics, non-repainting design, and a
-  product consumer. **Historical ATR access is no longer a blocker** — §2.4 delivered it, which is
+  price has actually done at them. **The zone-width policy is no longer an open invention**:
+  [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) resolved
+  **0047 D1 and D2**, and [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md)
+  plus [`PRICE_ZONE_ENGINE_V1.md`](../design/PRICE_ZONE_ENGINE_V1.md) are what the slice implements.
+  It is blocked only on the **owner accepting ADR-0033**, which includes accepting that **`k` is
+  declared rather than measured**. **Do not cluster levels** — single-linkage chains catastrophically
+  and every clustering formulation tested rewrote history; construction is anchored, and the band is
+  frozen at its anchor. **Historical ATR access is no longer a blocker** — §2.4 delivered it, which is
   what [the 0047 disposition](../reviews/REPORT_0047_REVIEW_DISPOSITION.md) §C required to happen
   first.
 - **Price Phases.** Impulse / retracement / consolidation / range / compression–expansion primitives
@@ -376,7 +381,7 @@ architecture into a choice nobody made. Full reasoning: the
 | **B** | `MissingConfirmation` vs policy `Blocker` | They are **different questions** and must not be conflated. *"What market event has not happened yet"* ≠ *"why did the strategy stop"* | The type, where it lives, how it renders |
 | **C** | `compute_series()` vs ATR-based zone width | **Satisfied.** `compute_series()` landed in TA Slice 5A ([ADR-0031](../adr/ADR-0031-feature-series-contract.md)), before any zone engine | The zone-width policy itself (**owner decision D1, still open**). Whether zone width should use establishment-time ATR **at all** is also still open — the prerequisite existing is not a recommendation to use it |
 | **D** | Zone evidence independence | **NOT ESTABLISHED.** Describe as *"new / potentially more orthogonal"* | Whether it is actually independent — needs empirical research |
-| **E** | Support / resistance terminology | Role is derived from **interaction history, never from position relative to price**. `below price = support` is **forbidden** | Whether user-facing labels may say "Support"/"Resistance" once interaction history justifies it — needs explicit architecture/test reconciliation, since three guards currently forbid the words in output |
+| **E** | Support / resistance terminology | Role is derived from **interaction history, never from position relative to price**. `below price = support` is **forbidden** — and [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) §25 measured the cost: **39 % (1W) / 50 % (1D)** of zones have had price close on **both** sides since establishment, so the position rule is **not well-defined over time**, not merely sometimes wrong | **Settled by ADR-0033**: user-facing *"Support zone"* / *"Resistance zone"* is permitted **only** as a label over a derived role (`HELD_FROM_ABOVE` / `HELD_FROM_BELOW`), only once the interaction engine exists, and **never for an `UNTESTED` zone**. The three guards stay in force until then |
 | **F** | Price phase segmentation | Phases before trendlines | **Not decided:** whether one exhaustive non-overlapping phase per candle is the model. Markets may contain nested / scale-dependent structure. Segmentation scale, overlap/nesting, and timeframe identity are all open |
 | **G** | Trendline anchors | Phases before trendlines (anchor scoping) | **Not decided, and explicitly NOT approved:** *"anchors must always lie inside exactly one phase"*. Trendlines may legitimately connect structurally meaningful pivots **across** phases |
 | **H** | Divergence alignment | Exact price-pivot indexing is a safe v1. Arbitrary ±N-bar cherry-picking is **never** acceptable | A later, explicitly researched oscillator-pivot alignment policy is **not** ruled out |

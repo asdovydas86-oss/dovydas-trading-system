@@ -21,8 +21,8 @@ routes you here.
 
 | Field | Value |
 |---|---|
-| **Last verified** | **2026-09-17** |
-| **Verified by** | TA Slice 5A — Recover Technical Context & Feature Series — [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
+| **Last verified** | **2026-09-18** |
+| **Verified by** | Price Zone Semantics & Parameter Research Gate — [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) |
 | **Verification method** | live `git` inspection · live `src/` inspection · **the full test suite, re-run and re-established** · the policy non-regression digest, recomputed outside the suite · a 17-probe targeted adversarial campaign with byte-exact source restore · a live development dashboard on port 8799 · read-only inspection of the operator instance |
 
 ## 0.1 Repository
@@ -30,15 +30,15 @@ routes you here.
 | Field | Value |
 |---|---|
 | **Branch** | `main` |
-| **`HEAD`** | `00c77239b243756ad83c51af2ab57580e0cece64` |
-| **`main`** | `00c7723` — level with `HEAD` |
-| **`origin/main`** | `00c7723` — level with local `main` |
-| **Remote `refs/heads/main`** | `00c7723` — verified with `git ls-remote` **after the push** |
+| **`HEAD`** | see the milestone handoff — `96b56ea` was this milestone's **baseline**; its own commits follow |
+| **`main`** | level with `HEAD` |
+| **`origin/main`** | level with local `main` |
+| **Remote `refs/heads/main`** | verified with `git ls-remote` **after the push** |
 | **Ahead / behind** | `0 / 0` |
 | **Stash** | empty |
 | **Active Git operation** | none |
 | **Tracked tree** | **clean** |
-| **Previously** | `66bab74` (Memory Gate) → `4d77e4d` (its documentation commit) → **`00c7723`** (TA Slice 5A) |
+| **Previously** | `66bab74` (Memory Gate) → `4d77e4d` → `00c7723` (TA Slice 5A) → `96b56ea` (its documentation commit) → **`c05e870`** (the sealed zone preregistration) → this milestone |
 | **Untracked** | the **16 pre-existing research documents** under `docs/design/` and `docs/reviews/` (AP/AQ/BA/BB-era), deliberately left untracked and **not touched by this milestone** |
 
 > **The one operational lesson this session produced, recorded so it is not relearned.** A mutation
@@ -80,7 +80,8 @@ equity · trades · research · dashboard · archive
 | Swing Product Slice 1 — Symbol Decision Surface (2026-09-04) | `/swing/SYMBOL` per-symbol decision page | [0042](../../reports/0042_2026-09-04_SWING_SYMBOL_DECISION_SURFACE_SLICE_1.md) |
 | **TA Capability Audit & Architecture Gate** (2026-09-07) | **Read-only.** Found FMITS has an excellent price-structure spine and almost no TA body | [0047](../../reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) |
 | **Project Memory & Documentation Gate** (2026-09-16) | Documentation only — durable project memory | [0048](../../reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md) |
-| **TA Slice 5A — Recover Technical Context & Feature Series** (2026-09-17) | **This one.** FMITS stopped forgetting what it already knows. Roughly half the technical information it computes reached no operator surface at all; it now reaches `/swing/SYMBOL` per timeframe role. The Feature Engine gained an **additive** historical-series capability, closing review item R5 open since 2026-07-24. **No policy change** — the 81-fixture digest is byte-identical. [ADR-0031](../adr/ADR-0031-feature-series-contract.md), [ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) | [0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
+| **Price Zone Semantics & Parameter Research Gate** (2026-09-18) | **This one. Research and design only — no production code changed.** Closes **0047 D1** (`RESOLVED WITH LIMITATIONS`) and **0047 D2** (`RESOLVED`). The finding: **D1 reads as one decision and is three**, and the one report 0047 never discusses — the **grouping geometry** — decides everything. Single-linkage clustering, the natural reading of §15.2's *"clustered"*, put **247 of 339 levels into one zone** on BTC 1D. Construction is **anchored, not clustered**; the band is **frozen at its anchor**; **`k` is declared, not measured**, inside `[0.10, 1.00]`. [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) `Proposed` | [0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) |
+| **TA Slice 5A — Recover Technical Context & Feature Series** (2026-09-17) | FMITS stopped forgetting what it already knows. Roughly half the technical information it computes reached no operator surface at all; it now reaches `/swing/SYMBOL` per timeframe role. The Feature Engine gained an **additive** historical-series capability, closing review item R5 open since 2026-07-24. **No policy change** — the 81-fixture digest is byte-identical. [ADR-0031](../adr/ADR-0031-feature-series-contract.md), [ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) | [0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
 
 ## 0.4 Test and policy baseline
 
@@ -88,7 +89,7 @@ equity · trades · research · dashboard · archive
 |---|---|
 | **Full suite** | **15,092 passed · 0 failed · 0 skipped · 0 warnings** under `-W error` |
 | **Baseline commit** | `00c7723` |
-| **Last actually run** | **2026-09-17**, by [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) (708.10 s), on **cleared bytecode**. Previously 14,699 at `66bab74`, run 2026-09-07 — **+393**, every one new |
+| **Last actually run** | **2026-09-17**, by [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) (708.10 s), on **cleared bytecode**. Previously 14,699 at `66bab74`, run 2026-09-07 — **+393**, every one new. **Report 0050 did not re-run it and does not quote a fresh result**: `src/` and `tests/` are byte-unchanged, so a re-run would measure the same code at the same commit |
 | **Targeted adversarial probes** | **17/17 killed**, source restored byte-identically. See §19 of report 0049 — and the stale-bytecode hazard noted in §0.1 above |
 | **Invocation** | `python -m pytest` — a bare `pytest` fails at collection on ~17 files that import fixtures as `from tests.test_x import …` |
 | **Policy non-regression digest** | `sha256 8b22e6c9c5e346cb8f62008325b9b0304ecae9af5e0fe46eec4a6c5aa428059c` |
@@ -123,6 +124,9 @@ harness, a research harness and a durable decision archive.
 - **Roughly half of the technical information FMITS computes never reaches the operator.** See
   [`CAPABILITY_REGISTRY.md`](CAPABILITY_REGISTRY.md) §2.2.
 - **No zones, phases, trendlines, divergence, breakout/retest vocabulary or chart patterns exist.**
+  Zones are now **specified but not built** — [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md)
+  and [`PRICE_ZONE_ENGINE_V1.md`](../design/PRICE_ZONE_ENGINE_V1.md). **FMITS does not understand
+  support and resistance**, and report 0050 says so in those words.
 - **Indicators return the latest scalar only**, so slope, ROC and divergence are not derivable *in
   principle* (review item **R5**, open since 2026-07-24).
 - **The six Tier-2 feature packages are placeholders** — 110 lines, zero math.
@@ -174,8 +178,8 @@ harness, a research harness and a durable decision archive.
 
 | ID | Decision | Blocks |
 |---|---|---|
-| **0047 D1** | Zone-width tolerance policy (a scoped weakening of [ADR-0013](../adr/ADR-0013-swing-relationship-foundation.md) §4's no-tolerance rule) | TA Slice 5B |
-| **0047 D2** | May a zone carry a role, and what may it be called? | TA Slice 5B |
+| ~~**0047 D1**~~ | **RESOLVED WITH LIMITATIONS** by [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md). Construction, band and temporal reference settled on measurement; **`k` is declared, not measured**, inside `[0.10, 1.00]`. Now blocks only on the owner accepting [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) | TA Slice 5B |
+| ~~**0047 D2**~~ | **RESOLVED** by report 0050. Role from interaction history, vocabulary fixed, *"Support zone"* permitted later only as a label over a derived role and never for `UNTESTED` | TA Slice 5B |
 | **0047 D3** | Where does opportunity state live, and may it name a side? ([ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md)) | Market Opportunity |
 | **0047 D5** | Do the three evidence-status vocabularies converge? *(recommendation: no)* | — |
 | **AP-D2** | The capture contract and migration guarantee | **must be accepted before the first irreplaceable trading record is written** |
@@ -197,6 +201,38 @@ explicit refusals to freeze the phase, trendline-anchor and divergence-alignment
 whenever you read report 0047.** Report 0047 itself is unmodified historical evidence.
 
 ## 0.13 NEXT MILESTONE
+
+> ### TA Slice 5B — Price Zones & Interactions
+>
+> **Status: approved as the next milestone. Blocked only on the owner accepting
+> [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md).**
+
+**Purpose:** areas instead of lines — the single largest gap between what FMITS shows and how the
+owner reads a chart.
+
+**What changed on 2026-09-18.** 0047 **D1** and **D2** were the blockers and both are now resolved
+by [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md). The slice
+implements a **decided** contract — [`PRICE_ZONE_ENGINE_V1.md`](../design/PRICE_ZONE_ENGINE_V1.md)
+— rather than deciding one while coding.
+
+**GO condition:** the owner accepts ADR-0033, **including that `k` is declared rather than
+measured** and choosing a value inside `[0.10, 1.00]`.
+
+**STOP condition:** the slice ends when zones reach a real operator surface. **It does not build the
+interaction engine** — `ACCEPTANCE`, `RECLAIM`, retest and false-breakout each need a parameter
+**R3**/**R4** have not answered.
+
+| In scope | Explicitly out of scope |
+|---|---|
+| `fmis.price_zones` implementing the design document exactly | Clustering of any kind — construction is **anchored** |
+| Anchored construction, bands **frozen at the anchor** | Recomputing width from current ATR (**983,916** illegal prefix events) |
+| A versioned `ZoneWidthPolicy` **stamped on every zone** | Letting a joining member widen a band (**34,192**) |
+| A real product consumer on `/swing/SYMBOL` | Breakout / retest / acceptance vocabulary — **a `CLOSE_BREACH` is not a breakout** |
+| Zones overlapping, exposed rather than hidden (70 % of adjacent pairs at `k = 0.50`) | Any zone reaching evidence voting, the 1W gate, Scan Memory or risk |
+| | Any claim of evidence independence — **`NOT ESTABLISHED`** until **R15** |
+
+<details>
+<summary><strong>Historical: the previous next-milestone entry, TA Slice 5A (completed 2026-09-17)</strong></summary>
 
 > ### TA Slice 5A — Recover Technical Context
 >
@@ -222,6 +258,8 @@ implementation brief.
 The full sequence after it — 5B → Phases → Opportunity → Indicator Context → Volume/Volatility →
 Divergence → Trend Geometry → *re-evaluate* → Patterns — is
 [`CAPABILITY_REGISTRY.md`](CAPABILITY_REGISTRY.md) §6.
+
+</details>
 
 ---
 

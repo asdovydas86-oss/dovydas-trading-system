@@ -227,18 +227,19 @@ close, and the inherited limitations — computed from live exchange data.
 
 **Exactly one item, by rule.**
 
-### `DY` — TA Slice 5B: Price Zones & Interactions · **NOW — BLOCKED** *(named 2026-09-17; not started)*
+### `DY` — TA Slice 5B: Price Zones & Interactions · **NOW — READY, pending one owner decision** *(named 2026-09-17; unblocked 2026-09-18; not started)*
 
 | Field | Value |
 |---|---|
 | **What the owner would get** | Areas rather than lines, and **what price has actually done at them**. The single largest remaining gap between what FMITS shows and how a trader reads a chart |
-| **Status** | **BLOCKED**, and the blocker is an **owner decision**, not engineering |
-| **The blocker** | **0047 D1 — the zone-width tolerance policy**, a scoped weakening of [ADR-0013](docs/adr/ADR-0013-swing-relationship-foundation.md) §4's no-tolerance rule. Only the owner can take it. A zone engine written against an un-decided width policy would bake an invented threshold into deterministic market truth |
-| **Second open decision** | **0047 D2 — may a zone carry a role, and what may it be called.** Partly settled: the *derivation* rule is fixed (**interaction history, never position relative to price**); the *naming* is open, and three guards currently forbid the words in output |
+| **Status** | **READY.** Both original blockers are resolved by [report 0050](reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md). What remains is one owner **acceptance**, not an open question |
+| **~~The blocker~~ — 0047 D1** | **RESOLVED WITH LIMITATIONS.** 55,728 measured cells over 36 symbols × 3 roles established that **D1 is three decisions, not one**, and that the one report 0047 never discusses — the **grouping geometry** — decides everything: single-linkage clustering, the natural reading of §15.2's *"clustered"*, put **247 of 339 levels into one zone** on BTC 1D. Settled on measurement: construction is **anchored**, the band is **frozen at its anchor**, width is `k × atr_14` read at the anchor's own establishment bar. **`k` is declared, not measured** — every metric is monotone in it, so no optimum exists — and the evidence bounds it to `[0.10, 1.00]`. See [ADR-0033](docs/adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) |
+| **What now remains** | **The owner accepting ADR-0033**, knowingly including that `k` is a declaration, and choosing a value inside `[0.10, 1.00]`. This is an acceptance, not a research question |
+| **~~Second open decision~~ — 0047 D2** | **RESOLVED.** Role from interaction history, never position — now **measured**, not only asserted: **39 % (1W) / 50 % (1D)** of zones have had price close on **both** sides since establishment, so the position rule is **not well-defined over time**. Internal vocabulary fixed; *"Support zone"* permitted later **only** as a label over a derived role and **never** for an `UNTESTED` zone. The three guards stay in force until the interaction engine exists |
 | **What is no longer a blocker** | Establishment-time ATR. `compute_series()` landed in `DX` ([ADR-0031](docs/adr/ADR-0031-feature-series-contract.md)), which is what [the 0047 disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md) §C required to happen first. **The prerequisite existing is not a recommendation to use it** |
-| **Also required before code** | Deterministic interaction semantics · a non-repainting design · a product consumer |
+| **Also required before code** | A product consumer. **The non-repainting design exists** ([`PRICE_ZONE_ENGINE_V1.md`](docs/design/PRICE_ZONE_ENGINE_V1.md)) and measured **0** illegal prefix events. **Interaction semantics are deliberately NOT in this slice** — `ACCEPTANCE`, `RECLAIM`, retest and false-breakout each need a parameter **R3**/**R4** have not answered, and **a `CLOSE_BREACH` is not a breakout** |
 | **Explicitly NOT in scope** | Zone evidence claimed as independent — it is **NOT ESTABLISHED** and must be described as *"a new / potentially more orthogonal evidence family"* until research says otherwise |
-| **Authority** | [report 0047](reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) as modified by [its review disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md) · [`CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md) §6 |
+| **Authority** | [ADR-0033](docs/adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) and [`PRICE_ZONE_ENGINE_V1.md`](docs/design/PRICE_ZONE_ENGINE_V1.md) are what the slice implements · [report 0050](reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) is the evidence · [report 0047](reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) as modified by [its review disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md), **superseded in three places** named in the design document §2 · [`CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md) §6 |
 
 > **The exactly-one-NOW rule remains satisfied**, as it has been since 2026-09-16 — the first time
 > since `AP` shipped on 2026-08-06. For those six weeks the board recorded the rule as *temporarily

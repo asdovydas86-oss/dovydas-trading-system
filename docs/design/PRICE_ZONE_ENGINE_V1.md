@@ -4,11 +4,21 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **DESIGNED — not implemented.** No `src/fmis/price_zones` exists |
+| **Status** | **IMPLEMENTED** — `src/fmis/price_zones/` exists and satisfies §§4, 5, 8 and 9. §4.4 (`ZoneInteraction`, `ZoneReading`) and §7's *derivation* remain **not built**, by design |
+| **Implemented by** | TA Slice 5B — [report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md), 2026-09-18 |
+| **`k`** | **Declared `0.50`** by the owner on 2026-09-18 (ADR-0033 acceptance record, decision B), one value shared by 1W / 1D / 4H (decision C) |
 | **Evidence** | [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) |
 | **Preregistration** | [`ZONE_PARAMETER_RESEARCH_QUESTIONS_V1.md`](ZONE_PARAMETER_RESEARCH_QUESTIONS_V1.md), sealed at `c05e870` |
-| **Binds** | ADR-0033 |
+| **Binds** | ADR-0033 (**Accepted** 2026-09-18) |
 | **Supersedes** | report 0047 §15.2's sketch, in the three places §2 below records |
+
+> **One place the implementation is stricter than this document, and why.** §6 says V1 must declare
+> `k` inside `[0.10, 1.00]`. `ZoneWidthPolicy` **enforces** that region rather than documenting it:
+> a multiple outside it raises. The region is the one thing about `k` that was measured, and a bound
+> written down but not enforced is a bound a later caller steps over without noticing. §7.2's role
+> vocabulary is deliberately **not** declared in code — a vocabulary present in the source is a
+> vocabulary something will populate — so it lives in ADR-0033 §8 and here until the interaction
+> engine exists.
 
 ---
 
@@ -17,7 +27,9 @@
 It specifies the types, the rules and the contracts a `fmis.price_zones` engine must satisfy, so
 that TA Slice 5B implements a **decided** design rather than deciding one while coding.
 
-**It is not an implementation and does not authorise one.** It contains no Python.
+**It is not an implementation and does not authorise one.** It contains no Python. It was written
+before the package existed and is kept as the specification the package is checked against, not as a
+description of it; where the two differ the header names the difference.
 
 **Every rule below that differs from report 0047 §15.2 differs because a measurement refuted 0047's
 version.** Those are marked ⚠ and each one names the measurement.

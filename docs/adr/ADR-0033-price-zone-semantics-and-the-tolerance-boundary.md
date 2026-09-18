@@ -1,16 +1,35 @@
 # ADR-0033: Price zone semantics and the tolerance boundary
 
-**Status:** Proposed — awaiting Dovydas + ChatGPT review
-**Date:** 2026-09-18
-**Milestone:** Price Zone Semantics & Parameter Research Gate (report 0050)
+**Status:** **Accepted** — 2026-09-18, by Dovydas after review with ChatGPT
+**Date:** 2026-09-18 · **Accepted:** 2026-09-18
+**Milestone:** Price Zone Semantics & Parameter Research Gate (report 0050); **implemented by**
+TA Slice 5B — Price Zone Foundation & Product Surface ([report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md))
 **Closes:** report 0047 **D1** and **D2**
 **Evidence:** [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) ·
 [preregistration](../design/ZONE_PARAMETER_RESEARCH_QUESTIONS_V1.md) (sealed `c05e870`) ·
 [design](../design/PRICE_ZONE_ENGINE_V1.md)
+**Binds:** `fmis.price_zones`
 
-> **Status note.** This ADR is written as `Proposed`, not `Accepted`. It binds no code today —
-> `fmis.price_zones` does not exist — and the one number it contains is **declared rather than
-> measured** (§6). It should be accepted only if the owner accepts that declaration knowingly.
+> **Acceptance record — what was accepted, and in knowledge of what.**
+>
+> This ADR was written as `Proposed` because it bound no code and because the one number it
+> contains is **declared rather than measured** (§6). It said it should be accepted only if the
+> owner accepted that declaration knowingly. **He did, on 2026-09-18**, and the declaration is
+> recorded here rather than inferred from the fact that code now exists:
+>
+> | Decision | What the owner declared |
+> |---|---|
+> | **A** | ADR-0033 is **accepted** as written. Its research claims below are unmodified; this block is added, nothing is rewritten. |
+> | **B** | **`k = 0.50`** — a **declared V1 product/representation parameter**. Explicitly *not* an empirically discovered optimum, *not* a calibrated trading threshold, *not* a prediction threshold, *not* an edge claim and *not* a confidence value. §6 bounded the admissible region and identified no value inside it, and code, documentation and rendered output must all preserve that distinction. |
+> | **C** | **One shared `k` for every role** — 1W, 1D and 4H. **No per-timeframe hidden constant.** If evidence later shows one shared `k` produces materially bad product behaviour, that is a new explicit research and product decision, never a quiet second default. |
+> | **D** | The product **may** eventually render *"Support zone"* / *"Resistance zone"* — but **only** as UI labels over a role derived from actual interaction history, and **never** for `UNTESTED`. Role is never derived from position. **This approval is not permission to build the interaction engine**: R3 and R4 remain unresolved, and the implementing milestone was explicitly forbidden to fabricate those labels merely because their future use is approved. |
+>
+> **What the accepting milestone shipped and did not.** TA Slice 5B implemented §§1–5, §9's
+> prohibitions and §8's `position`/`role` separation — and shipped **no** `ZoneInteraction`, **no**
+> `ZoneReading`, **no** derived role and **no** role vocabulary in code at all, because a
+> vocabulary present in the source is a vocabulary something will populate. §8's approved
+> vocabulary therefore still lives only in this document. The 81-fixture policy digest
+> `8b22e6c9…` is byte-identical across the implementation.
 
 ## Context
 
@@ -127,6 +146,13 @@ every zone so a historical zone is reproducible from its own record. **This ADR 
 number was discovered.** Report 0047 §15.3 anticipated this exactly: the multiple is *"a stated
 hypothesis requiring research"*. The research has now bounded it and refused to invent it.
 
+**The declared value, recorded 2026-09-18: `k = 0.50`**, shipped as
+`ZoneWidthPolicy(policy_id="atr14-anchor-0_50", …)` and stamped by value onto every zone. The
+admissible region is **enforced** by that type rather than documented beside it — a multiple
+outside `[0.10, 1.00]` raises — because the region is the one thing about `k` that *was* measured,
+and a bound that is written down but not enforced is a bound a later caller steps over without
+noticing.
+
 ### 7. `W-PCT`, `W-TICK` and `W-STRUCT` are rejected, each for a stated reason
 
 | Candidate | Rejected because |
@@ -184,7 +210,9 @@ orthogonal evidence family"*, status **`INDEPENDENCE NOT ESTABLISHED`**, until r
 
 ## Consequences
 
-- TA Slice 5B is **unblocked on D1 and D2** and blocked only on the owner accepting §6's declaration.
+- TA Slice 5B was **unblocked on D1 and D2** and blocked only on the owner accepting §6's
+  declaration. He accepted it on 2026-09-18 and the slice shipped `fmis.price_zones` plus a
+  `/swing/SYMBOL` product surface ([report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md)).
 - A zone is publishable the moment it is created, because nothing later can rewrite it.
 - Consumers must handle overlapping zones; a price inside three zones is normal.
 - `ZoneInteraction` and `ZoneReading` are **not** in V1: each needs a parameter (**R3**, **R4**) this

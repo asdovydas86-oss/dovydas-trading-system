@@ -7,10 +7,10 @@ additions, documentation, or architecture work. It records only changes to what 
 
 | Field | Value |
 |---|---|
-| **Last verified against** | **`HEAD` = `main` = `origin/main` = remote = `00c7723`** |
-| **Verified on** | **2026-09-17** (TA Slice 5A — Recover Technical Context & Feature Series) |
-| **Verification method** | live repository + `git` inspection + accepted ADRs + the full test suite + live dashboard verification |
-| **Latest capability entry** | **TA Slice 5A — the technical context panel** (2026-09-17). §3 below still opens *"As of Milestone `BS`"* and is superseded by §3.1 |
+| **Last verified against** | **`3739d42`** (TA Slice 5B production) plus its documentation commit, on a verified baseline of `HEAD` = `main` = `origin/main` = remote = `693e162` |
+| **Verified on** | **2026-09-18** (TA Slice 5B — Price Zone Foundation & Product Surface) |
+| **Verification method** | live repository + `git` inspection + accepted ADRs + the full test suite under `-W error` + the policy digest recomputed outside the suite + **live `/swing/SYMBOL` pages for four real markets** |
+| **Latest capability entry** | **TA Slice 5B — the price zones panel** (2026-09-18). §3 below still opens *"As of Milestone `BS`"* and is superseded by §3.1 |
 | **Previously** | Verified 2026-08-18 against Milestone BP's production commit `e1cfad0`, on top of `3a2bd3a`. Milestone BO's `e4195fc` sits on top of `51814b1`; Milestone BN's entry was verified against its product-docs commit on top of `b66a88f`. Milestones `BJ`–`BM`, recorded here as pending commit, are in fact in `origin/main` at `4519d0a`. Those entries are point-in-time records and are not revised |
 
 > **The Project Memory & Documentation Gate (2026-09-16) has no entry in this changelog, deliberately.**
@@ -75,7 +75,7 @@ is a Python package version and has never tracked product capability.
 
 ## 3. Current product capability
 
-### 3.1 Current — verified 2026-09-17 at TA Slice 5A
+### 3.1 Current — verified 2026-09-18 at TA Slice 5B
 
 **25 CLI commands**, plus an operator dashboard of **10 fixed pages** and one dynamic route:
 
@@ -88,25 +88,28 @@ dashboard:  / · /markets · /swing · /swing/SYMBOL · /portfolio · /paper
             /performance · /lab · /geometry · /validation · /system
 ```
 
-**Since `BS`, the Swing product gained five slices**, each recorded in §4 below: the per-symbol
+**Since `BS`, the Swing product gained six slices**, each recorded in §4 below: the per-symbol
 decision page (`/swing/SYMBOL`), the operator decision layer that puts the trading question above the
 audit question, scan memory and *"what changed since the previous comparable scan"*, the risk &
-trade-planning panel, and — newest — the **technical context panel**, which is where roughly half of
-everything FMITS computes about a market became visible for the first time.
+trade-planning panel, the **technical context panel** — where roughly half of everything FMITS
+computes about a market became visible for the first time — and, newest, the **price zones panel**,
+the first time FMITS describes a structural *area* rather than a line.
 
 **Risk sizing is product-unavailable until the owner declares his planning capital** in
-`~/.fmits/risk_policy.json` — verified absent again on 2026-09-17. Every planning panel states the absence
+`~/.fmits/risk_policy.json` — verified absent again on 2026-09-18. Every planning panel states the absence
 and prints the file to write. **2 % per-trade risk is a hard ceiling, never a default.**
 
 **The standing limitation, narrowed but not removed:** the operator still sees too many
 undifferentiated `WAIT`s, and the product **still cannot** distinguish *nothing interesting* from *a
 directional opportunity is developing but unconfirmed* — that is the Market Opportunity milestone, and
-nothing in TA Slice 5A moved it. What did change is that a `WAIT` is now a `WAIT` the owner can read
-the market behind. See [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0.7.
+neither TA Slice 5A nor 5B moved it. What did change is that a `WAIT` is now a `WAIT` the owner can
+read the market behind. See [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0.7.
 
-**What FMITS still cannot claim**, however visible the data now is: support/resistance zones,
-breakout, acceptance, rejection, retest, consolidation, bull/bear flags, divergence, trendlines,
-channels, Fibonacci, Elliott, `WATCH LONG`/`WATCH SHORT`. See
+**What FMITS still cannot claim**, however visible the data now is: **support and resistance** —
+Slice 5B shipped the *areas* and deliberately not the *roles*, which need an interaction engine —
+breakout, acceptance, rejection, retest, false breakout, zone strength, consolidation, bull/bear
+flags, divergence, trendlines, channels, Fibonacci, Elliott, `WATCH LONG`/`WATCH SHORT`. See
+[report 0051](reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md) §8 and
 [report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) §22.
 
 ### 3.2 Historical snapshot — as of Milestone `BS`
@@ -303,6 +306,60 @@ the automation ladder remains unstarted.
 > work and cannot verify its commit state, and inventing six entries would be worse than recording
 > the gap. They are fully recorded in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md),
 > the [backlog](FMITS_PRODUCT_BACKLOG.md) §8 and reports 0034–0039.
+
+### 2026-09-18 · `DY` — FMITS sees an area where it used to see three unrelated lines
+
+**Status:** Released at `3739d42`. **Adds a user-visible capability.**
+
+**What the owner can do that was impossible before: open `/swing/SYMBOL` and see
+where the structural price areas around the current price actually are — per
+timeframe role, with their exact boundaries and what formed them.**
+
+FMITS has always had `PriceLevel`: an exact price, the side its swing implies,
+and where it came from. It had no concept of an **area**. A trader reading a
+chart sees one important region; FMITS saw three unrelated exact lines, and that
+gap was the largest one between what FMITS computes and how the owner reads a
+market.
+
+**`/swing/SYMBOL` now carries a *price zones* panel**, directly under the
+technical context it groups. One table row per timeframe role carries the three
+bands an operator scans — the nearest area above the last close, the nearest
+below, and the area price is inside if it is inside one — each with its two
+boundaries and how many confirmed structural levels formed it. Behind a
+disclosure per role sit the bands nearest the close on both sides, how many areas
+exist on that role and how they divide above/below/containing, how many levels
+formed no area at all and why, how many bands overlap, the width policy in force,
+and — per band — its anchor level with the swing that made it, the bar it was
+written at, the most recent member's bar, and the contributing levels in join
+order.
+
+**A band never moves once written, and that is the whole design.** It is drawn
+around the confirmed level that opened it, half a stated multiple of *that bar's*
+ATR either side, and later levels join it without moving its edges. This was not
+a taste: the research gate measured the alternatives, and recomputing width from
+the latest ATR moved **983,916** historical band boundaries, while letting a
+joining member widen the band moved **34,192**. What the owner reads today is
+what the page would have said at the time.
+
+**It shows geometry and refuses to interpret it.** A band the price sits above is
+**not support**; one it sits below is **not resistance**; being inside one is not
+a retest and leaving one is not a breakout. Whether price has *held* at an area is
+a function of what price has done there, and FMITS does not yet derive that — so
+the page says *price is above* and stops. The measured case for that refusal is
+blunt: **39 % (1W) and 50 % (1D)** of areas have had price close on **both** sides
+since they were established, so a role read from position would have called one
+unchanged area support on some days and resistance on others. The level count is a
+**size, not a strength**, and nothing on the page carries a score, rank,
+confidence or direction.
+
+**The width multiple is declared, not measured, and the page says so.** `k = 0.50`
+is the owner's V1 choice inside a measured admissible range, and the research
+deliberately identified no best value inside it. The panel prints the policy that
+produced every band beside the bands, so a reader can reproduce them.
+
+**Nothing here reached the decision above it.** The 81-fixture policy digest is
+byte-identical, no zone enters evidence voting, the regime gate, Scan Memory or
+risk, and a repeated page load is byte-identical with no stored value changed.
 
 ### 2026-09-17 · `DX` — FMITS stopped forgetting what it already knows
 

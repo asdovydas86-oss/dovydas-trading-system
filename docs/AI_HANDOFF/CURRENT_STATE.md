@@ -22,15 +22,15 @@ routes you here.
 | Field | Value |
 |---|---|
 | **Last verified** | **2026-09-18** |
-| **Verified by** | Price Zone Semantics & Parameter Research Gate — [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) |
-| **Verification method** | live `git` inspection · live `src/` inspection · **the full test suite, re-run and re-established** · the policy non-regression digest, recomputed outside the suite · a 17-probe targeted adversarial campaign with byte-exact source restore · a live development dashboard on port 8799 · read-only inspection of the operator instance |
+| **Verified by** | **TA Slice 5B — Price Zone Foundation & Product Surface** — [report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md) |
+| **Verification method** | live `git` inspection · live `src/` inspection · the full test suite under `-W error` on cleared bytecode · the policy non-regression digest recomputed outside the suite, before and after · determinism re-checked across processes and `PYTHONHASHSEED` values · zone cost measured against the sheet build it rides in · **rendered `/swing/SYMBOL` pages for four live markets** on a development dashboard on port 8799 · read-only inspection of the operator instance |
 
 ## 0.1 Repository
 
 | Field | Value |
 |---|---|
 | **Branch** | `main` |
-| **`HEAD`** | see the milestone handoff — `96b56ea` was this milestone's **baseline**; its own commits follow |
+| **`HEAD`** | **`3739d42`** (production code + tests) followed by this milestone's documentation commit; `693e162` was its **baseline** |
 | **`main`** | level with `HEAD` |
 | **`origin/main`** | level with local `main` |
 | **Remote `refs/heads/main`** | verified with `git ls-remote` **after the push** |
@@ -38,7 +38,7 @@ routes you here.
 | **Stash** | empty |
 | **Active Git operation** | none |
 | **Tracked tree** | **clean** |
-| **Previously** | `66bab74` (Memory Gate) → `4d77e4d` → `00c7723` (TA Slice 5A) → `96b56ea` (its documentation commit) → **`c05e870`** (the sealed zone preregistration) → this milestone |
+| **Previously** | `66bab74` (Memory Gate) → `4d77e4d` → `00c7723` (TA Slice 5A) → `96b56ea` → **`c05e870`** (the sealed zone preregistration) → `48f297b` → `693e162` (the zone research gate's last commit) → this milestone |
 | **Untracked** | the **16 pre-existing research documents** under `docs/design/` and `docs/reviews/` (AP/AQ/BA/BB-era), deliberately left untracked and **not touched by this milestone** |
 
 > **The one operational lesson this session produced, recorded so it is not relearned.** A mutation
@@ -62,7 +62,7 @@ equity · trades · research · dashboard · archive
 ```
 
 **Operator dashboard** — 10 fixed pages plus one dynamic route. `/swing/SYMBOL` gained a
-**technical context** panel in TA Slice 5A:
+**technical context** panel in TA Slice 5A and a **price zones** panel in TA Slice 5B:
 
 ```
 / · /markets · /swing · /portfolio · /paper · /performance · /lab · /geometry · /validation · /system
@@ -73,6 +73,7 @@ equity · trades · research · dashboard · archive
 
 | Milestone | What it delivered | Report |
 |---|---|---|
+| **TA Slice 5B — Price Zone Foundation & Product Surface** (2026-09-18) | **FMITS understands a structural *area*, not only a line.** `fmis.price_zones` groups confirmed `PriceLevel`s into **anchored, frozen, causal** bands — `anchor.price ± k×ATR14/2` read at the anchor's own establishment bar and never moved again — and `/swing/SYMBOL` gained a **price zones** panel showing the nearest area each side of the last close per role, with provenance behind a disclosure. `k = 0.50` is **declared, not measured**, one policy for 1W/1D/4H, stamped on every zone. **No role, no strength, no breakout**: `position` is geometry and the role vocabulary is deliberately absent from the code. **No policy change** — the 81-fixture digest is byte-identical. [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) **Accepted** | [0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md) |
 | **Swing Product Slice 4 — Risk & Trade-Planning Foundation** (2026-09-06) | The risk engine had **no first link and no reader**. `fmis.risk_policy` became the owner's declaration boundary and the only producer of a `RiskBudget`; `/swing/SYMBOL` gained a risk panel. [ADR-0029](../adr/ADR-0029-money-and-numeric-semantics.md), [ADR-0030](../adr/ADR-0030-risk-policy-declaration-boundary.md) | [0046](../../reports/0046_2026-09-06_SWING_RISK_AND_TRADE_PLANNING_SLICE_4.md) |
 | Dashboard Shutdown Reliability Gate (2026-09-06) | A `SIG_IGN` disposition inherited across `exec`. Fixed in the test harness; `src/` deliberately untouched | [0045](../../reports/0045_2026-09-06_DASHBOARD_SHUTDOWN_RELIABILITY_GATE.md) |
 | Swing Product Slice 3 — Scan Memory / "What Changed" (2026-09-05) | `fmis.scan_memory` | [0044](../../reports/0044_2026-09-05_SWING_SCAN_MEMORY_SLICE_3.md) |
@@ -80,16 +81,16 @@ equity · trades · research · dashboard · archive
 | Swing Product Slice 1 — Symbol Decision Surface (2026-09-04) | `/swing/SYMBOL` per-symbol decision page | [0042](../../reports/0042_2026-09-04_SWING_SYMBOL_DECISION_SURFACE_SLICE_1.md) |
 | **TA Capability Audit & Architecture Gate** (2026-09-07) | **Read-only.** Found FMITS has an excellent price-structure spine and almost no TA body | [0047](../../reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) |
 | **Project Memory & Documentation Gate** (2026-09-16) | Documentation only — durable project memory | [0048](../../reports/0048_2026-09-16_PROJECT_MEMORY_AND_DOCUMENTATION_GATE.md) |
-| **Price Zone Semantics & Parameter Research Gate** (2026-09-18) | **This one. Research and design only — no production code changed.** Closes **0047 D1** (`RESOLVED WITH LIMITATIONS`) and **0047 D2** (`RESOLVED`). The finding: **D1 reads as one decision and is three**, and the one report 0047 never discusses — the **grouping geometry** — decides everything. Single-linkage clustering, the natural reading of §15.2's *"clustered"*, put **247 of 339 levels into one zone** on BTC 1D. Construction is **anchored, not clustered**; the band is **frozen at its anchor**; **`k` is declared, not measured**, inside `[0.10, 1.00]`. [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) `Proposed` | [0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) |
+| **Price Zone Semantics & Parameter Research Gate** (2026-09-18) | **Research and design only — no production code changed.** Closes **0047 D1** (`RESOLVED WITH LIMITATIONS`) and **0047 D2** (`RESOLVED`). The finding: **D1 reads as one decision and is three**, and the one report 0047 never discusses — the **grouping geometry** — decides everything. Single-linkage clustering, the natural reading of §15.2's *"clustered"*, put **247 of 339 levels into one zone** on BTC 1D. Construction is **anchored, not clustered**; the band is **frozen at its anchor**; **`k` is declared, not measured**, inside `[0.10, 1.00]`. [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md), **accepted the same day and implemented by Slice 5B** | [0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) |
 | **TA Slice 5A — Recover Technical Context & Feature Series** (2026-09-17) | FMITS stopped forgetting what it already knows. Roughly half the technical information it computes reached no operator surface at all; it now reaches `/swing/SYMBOL` per timeframe role. The Feature Engine gained an **additive** historical-series capability, closing review item R5 open since 2026-07-24. **No policy change** — the 81-fixture digest is byte-identical. [ADR-0031](../adr/ADR-0031-feature-series-contract.md), [ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) | [0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
 
 ## 0.4 Test and policy baseline
 
 | Field | Value |
 |---|---|
-| **Full suite** | **15,092 passed · 0 failed · 0 skipped · 0 warnings** under `-W error` |
-| **Baseline commit** | `00c7723` |
-| **Last actually run** | **2026-09-17**, by [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) (708.10 s), on **cleared bytecode**. Previously 14,699 at `66bab74`, run 2026-09-07 — **+393**, every one new. **Re-run by [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) on 2026-09-18** (717.54 s, cleared bytecode): **15,092 / 0 / 0 / 0**, identical to the baseline — `src/` and `tests/` were byte-unchanged and the measurement confirms it |
+| **Full suite** | **15,416 passed · 0 failed · 0 skipped · 0 warnings** under `-W error` (764.45 s) — **+324 on 15,092**, every one new to TA Slice 5B |
+| **Baseline commit** | **`3739d42`**, TA Slice 5B's production commit; previously `00c7723` at 15,092 |
+| **Last actually run** | **2026-09-18**, by [report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md), on **cleared bytecode**. Previously 15,092 at `00c7723` (run 2026-09-17 by report 0049, 708.10 s, and re-established unchanged by report 0050 on 2026-09-18). TA Slice 5B's own additions are the difference |
 | **Targeted adversarial probes** | **17/17 killed**, source restored byte-identically. See §19 of report 0049 — and the stale-bytecode hazard noted in §0.1 above |
 | **Invocation** | `python -m pytest` — a bare `pytest` fails at collection on ~17 files that import fixtures as `from tests.test_x import …` |
 | **Policy non-regression digest** | `sha256 8b22e6c9c5e346cb8f62008325b9b0304ecae9af5e0fe46eec4a6c5aa428059c` |
@@ -111,8 +112,10 @@ equity · trades · research · dashboard · archive
 The owner can, for a watchlist of 20 symbols: read a deterministic multi-timeframe structural fact
 sheet per symbol; see the market regime per role with its evidence; get a swing setup decision with
 the **blocking condition named**; read the evidence by family **with correlation reported rather than
-assumed**; see **what changed since the previous comparable scan**; and — once capital is declared —
-see what a trade would risk. Plus: a system of record for his own trades, a paper-trading simulator, a
+assumed**; see **what changed since the previous comparable scan**; see **where the structural price
+areas around the current price are, per timeframe role, with their exact boundaries, how many
+confirmed levels formed each and which ones** — and whether price is above, below or inside them as
+**geometry only**; and — once capital is declared — see what a trade would risk. Plus: a system of record for his own trades, a paper-trading simulator, a
 valued portfolio, performance statistics, a global market pulse, macro context, a historical backtest
 harness, a research harness and a durable decision archive.
 
@@ -123,10 +126,17 @@ harness, a research harness and a durable decision archive.
   observation that triggered reports 0047 and 0048.**
 - **Roughly half of the technical information FMITS computes never reaches the operator.** See
   [`CAPABILITY_REGISTRY.md`](CAPABILITY_REGISTRY.md) §2.2.
-- **No zones, phases, trendlines, divergence, breakout/retest vocabulary or chart patterns exist.**
-  Zones are now **specified but not built** — [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md)
-  and [`PRICE_ZONE_ENGINE_V1.md`](../design/PRICE_ZONE_ENGINE_V1.md). **FMITS does not understand
-  support and resistance**, and report 0050 says so in those words.
+- **Zones exist; their roles do not.** `fmis.price_zones` builds structural **areas** and shows
+  them, and that is the whole of it: a zone has `position` — `PRICE_ABOVE` / `PRICE_BELOW` /
+  `PRICE_INSIDE`, geometry — and **no role field at all**. **FMITS still does not understand support
+  and resistance**, because that requires an interaction engine (**R3**, **R4**) that does not
+  exist. **A `CLOSE_BREACH` is not a breakout**, and no breakout, acceptance, reclaim, retest or
+  false-breakout vocabulary is implemented anywhere.
+- **A zone has no strength.** Its member count is a size. Six levels in one area is not a stronger
+  area than two, and nothing measures that it is.
+- **`k = 0.50` is declared, not measured** — a resolution control the owner chose inside a measured
+  admissible region, not an optimum. [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) §6.
+- **No phases, trendlines, divergence or chart patterns exist.**
 - **Indicators return the latest scalar only**, so slope, ROC and divergence are not derivable *in
   principle* (review item **R5**, open since 2026-07-24).
 - **The six Tier-2 feature packages are placeholders** — 110 lines, zero math.
@@ -138,11 +148,11 @@ harness, a research harness and a durable decision archive.
 
 - **Layers L0–L5 plus the reached parts of L7 are built.** The deterministic structural chain is
   complete end to end: `CandleSeries → Swings → Relationships → Labels → Sequence State → Structural
-  Trend → Series Context → Level Crossing → BOS → CHoCH → Structural Fact Sheet → Multi-Timeframe
-  Sheet → Regime → Workspace → Decision Context → Daily Run`. Every stage is pure, non-repainting,
+  Trend → Series Context → Level Crossing → **Price Zones** → BOS → CHoCH → Structural Fact Sheet →
+  Multi-Timeframe Sheet → Regime → Workspace → Decision Context → Daily Run`. Every stage is pure, non-repainting,
   exactly prefix-stable, identity-carrying and single-implementation.
 - **L6 and L8+ remain Planned.** The **Composite Feature Layer (Tier 2) is the conspicuous hole.**
-- **30 accepted ADRs.** Index: [`../adr/README.md`](../adr/README.md).
+- **33 accepted ADRs**, the newest being [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md). Index: [`../adr/README.md`](../adr/README.md).
 - **Composition rule** ([ADR-0007](../adr/ADR-0007-application-layer-boundary.md)): a composition root
   may import every engine below it; no engine may import a composition root. Each arrow is a strict
   superset, never a new computation.
@@ -178,8 +188,10 @@ harness, a research harness and a durable decision archive.
 
 | ID | Decision | Blocks |
 |---|---|---|
-| ~~**0047 D1**~~ | **RESOLVED WITH LIMITATIONS** by [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md). Construction, band and temporal reference settled on measurement; **`k` is declared, not measured**, inside `[0.10, 1.00]`. Now blocks only on the owner accepting [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) | TA Slice 5B |
-| ~~**0047 D2**~~ | **RESOLVED** by report 0050. Role from interaction history, vocabulary fixed, *"Support zone"* permitted later only as a label over a derived role and never for `UNTESTED` | TA Slice 5B |
+| ~~**0047 D1**~~ | **CLOSED.** Resolved with limitations by [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md), **accepted by the owner on 2026-09-18** (`k = 0.50` declared, one policy for all roles) and **implemented** by TA Slice 5B | — |
+| ~~**0047 D2**~~ | **CLOSED as a decision, open as an engine.** Role comes from interaction history; the vocabulary is fixed in [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) §8 and deliberately **not in the code**; *"Support zone"* is owner-approved as a future label over a derived role and never for `UNTESTED`. **Nothing derives a role yet** — see R3/R4 below | Zone Interactions |
+| **R3 / R4** | How many closes make acceptance? Within how many bars is a return a retest? **Unmeasured.** Until they are, `ZoneInteraction` and `ZoneReading` must not be specified, and no support/resistance label may be rendered | Zone Interactions · zone roles · breakout vocabulary |
+| **R15** | Is zone evidence independent of structural trend? Zones derive from the **same confirmed pivots**, so `INDEPENDENCE NOT ESTABLISHED` stands | any zone fact reaching evidence voting |
 | **0047 D3** | Where does opportunity state live, and may it name a side? ([ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md)) | Market Opportunity |
 | **0047 D5** | Do the three evidence-status vocabularies converge? *(recommendation: no)* | — |
 | **AP-D2** | The capture contract and migration guarantee | **must be accepted before the first irreplaceable trading record is written** |

@@ -18,9 +18,9 @@ board at all — that is the point of the file.
 
 | Field | Value |
 |---|---|
-| **Last verified against** | **`00c7723`** (`HEAD` = `main` = `origin/main` = remote, tracked tree clean) — TA Slice 5A, [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
-| **Verified on** | 2026-09-17 |
-| **Verification method** | live `src/` inspection + `grep` over the repository + accepted ADRs + the full test suite + a rendered `/swing/SYMBOL` page |
+| **Last verified against** | **TA Slice 5B — Price Zone Foundation & Product Surface**, [report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md) (baseline `693e162`; `HEAD` = `main` = `origin/main` = remote, tracked tree clean) |
+| **Verified on** | 2026-09-18 |
+| **Verification method** | live `src/` inspection + `grep` over the repository + accepted ADRs + the full test suite under `-W error` + the policy digest recomputed outside the suite + **rendered `/swing/SYMBOL` pages for four live markets** on a development instance on port 8799 |
 | **Authority** | **Status index only.** This file is not an ADR, not a test, and not a specification. Where it disagrees with the live code, **the code is right and this file is stale** — fix this file |
 
 ---
@@ -131,7 +131,7 @@ is satisfied by a layer that carried the wrong four hundred events.
 | `features/momentum/` | **`PLACEHOLDER`** | 17 lines, no math, `__all__ = []` | as above; its `TODO` names "momentum divergence flags (price vs. RSI/MACD)" | Indicator Context / Divergence |
 | `features/volatility/` | **`PLACEHOLDER`** | 16 lines, no math, `__all__ = []` | as above | Volatility compression/expansion |
 | `features/market_structure/` | **`PLACEHOLDER`** | 20 lines, no math, `__all__ = []` | as above; its `TODO` names "consolidation vs. expansion state" | Price Phases (§6 step 3) |
-| `features/support_resistance/` | **`PLACEHOLDER`** | 16 lines, no math, `__all__ = []` | as above | TA Slice 5B — Price Zones |
+| `features/support_resistance/` | **`PLACEHOLDER`** | 16 lines, no math, `__all__ = []`. **Still empty after TA Slice 5B, deliberately**: the zone engine is `fmis.price_zones`, a deterministic TA engine over confirmed levels, not a *feature* the `FeatureEngine` computes per bar — and its own name presumes the role the engine refuses to derive | as above | the interaction engine, if a zone reading ever becomes a per-bar feature |
 | `features/pattern_detection/` | **`PLACEHOLDER`** | 23 lines, no math, `__all__ = []` | as above | Simple Patterns, after their primitives |
 
 **110 lines total, zero math.** This is the *entire* Tier-2 layer the Feature Engine's own docstring
@@ -159,15 +159,16 @@ bolded three are not.
 
 | Capability | Status | In approved scope? | What is missing | Prerequisite | Revisit trigger |
 |---|---|---|---|---|---|
-| **Support/resistance zones** | **`PLANNED`** | **Yes** — vision addendum | `grep -ri price_zones\|PriceZone src/` → **0 files** (re-verified 2026-09-18). No implementation exists; what now exists is a **decided contract**: [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) (`Proposed`) and [`PRICE_ZONE_ENGINE_V1.md`](../design/PRICE_ZONE_ENGINE_V1.md) | **0047 D1 is RESOLVED WITH LIMITATIONS** ([report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md)) — construction, band and temporal reference are settled on measurement; **`k` is declared, not measured**, inside `k ∈ [0.10, 1.00]`. Remaining prerequisite is the **owner accepting ADR-0033** | **TA Slice 5B** |
-| Zone interactions (touch/hold/break/reclaim/retest) | **`BLOCKED`** | Yes (implied) | no interaction vocabulary exists, and **V1 deliberately does not add one** — `ACCEPTANCE`, `RECLAIM`, `RETURN_INSIDE` and retest each need a parameter **R3**/**R4** have not answered. **A `CLOSE_BREACH` is not a breakout** | zones · R3 · R4 | after Slice 5B |
-| Zone role (`HELD_FROM_ABOVE`, `BROKEN_UPWARD`, `ROLE_FLIPPED`, …) | **`BLOCKED`** | Yes | **0047 D2 is RESOLVED** (report 0050). Vocabulary fixed — `UNTESTED` · `HELD_FROM_ABOVE` · `HELD_FROM_BELOW` · `BROKEN_UPWARD` · `BROKEN_DOWNWARD` · `ROLE_FLIPPED` · `INDETERMINATE` — with `position` a **separate** field. Derivation still needs the interaction engine. **Measured**: 22 % of zones above the close on 1W have *no interaction history at all*; **39 % (1W) / 50 % (1D)** have had price close on **both** sides, so the position rule is **not well-defined over time** | zone interactions | after Slice 5B |
+| **Structural price areas** (`fmis.price_zones`) | **`IMPLEMENTED`** | **Yes** — vision addendum | Nothing against V1 scope. Bands are **anchored, frozen and causal**, `k = 0.50` **declared** and stamped, and they reach `/swing/SYMBOL`. **They are not called support or resistance** — see the two rows below, which is why this row is deliberately renamed | [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) **Accepted** 2026-09-18 · [`PRICE_ZONE_ENGINE_V1.md`](../design/PRICE_ZONE_ENGINE_V1.md) · [report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md) | product evidence that one shared `k` is unsuitable, or `k` shown to affect an outcome → §6 of the ADR must be re-taken as a **measurement** |
+| **Support/resistance *roles*** | **`BLOCKED`** | **Yes** — vision addendum | The areas exist; **the roles do not**. A zone has `position` (`PRICE_ABOVE` / `PRICE_BELOW` / `PRICE_INSIDE`, geometry only) and **no `role` field at all**. The owner has approved the eventual *"Support zone"* / *"Resistance zone"* **labels** (ADR-0033 acceptance, decision D) — over a derived role, never over position, and never for `UNTESTED` | zone interactions (**R3**, **R4**) | after the interaction engine |
+| Zone interactions (touch/hold/break/reclaim/retest) | **`BLOCKED`** | Yes (implied) | no interaction vocabulary exists, and **Slice 5B deliberately did not add one — verified, not merely intended**: `fmis.price_zones` defines no interaction type — `ACCEPTANCE`, `RECLAIM`, `RETURN_INSIDE` and retest each need a parameter **R3**/**R4** have not answered. **A `CLOSE_BREACH` is not a breakout** | zones · R3 · R4 | after Slice 5B |
+| Zone role (`HELD_FROM_ABOVE`, `BROKEN_UPWARD`, `ROLE_FLIPPED`, …) | **`BLOCKED`** | Yes | **0047 D2 is RESOLVED** (report 0050) and the vocabulary is **deliberately not in the code** — a role vocabulary present in the source is one something will populate, so it lives in ADR-0033 §8 alone. Vocabulary fixed — `UNTESTED` · `HELD_FROM_ABOVE` · `HELD_FROM_BELOW` · `BROKEN_UPWARD` · `BROKEN_DOWNWARD` · `ROLE_FLIPPED` · `INDETERMINATE` — with `position` a **separate** field. Derivation still needs the interaction engine. **Measured**: 22 % of zones above the close on 1W have *no interaction history at all*; **39 % (1W) / 50 % (1D)** have had price close on **both** sides, so the position rule is **not well-defined over time** | zone interactions | after Slice 5B |
 | **Trendlines** | `MISSING` | **Yes** — vision addendum | `grep -ri trendline src/` → **0 files** | Phases first (anchor scoping: 10,153 unconstrained candidates per side per view at 500 bars). **Anchor policy is an open research question — see §7** | Trend Geometry (§6 step 8) |
 | Channels | `MISSING` | Yes (implied) | none | trendlines | Trend Geometry |
 | **Divergences** | `MISSING` | **Yes** — vision addendum and `SPEC` §4.1 | No price/oscillator divergence engine exists. The `divergence` hits under `src/` remain unrelated senses (`exit_divergence` on trade plans, one `TODO`, and the technical-context panel's own sentence **denying** that any is computed) | `compute_series()` — **satisfied** (§2.4). Alignment policy is still open: disposition §H | Divergence (§6 step 6) |
 | Volatility compression / expansion | `MISSING` | Yes | none | `compute_series()` — **satisfied** (§2.4) | §6 step 5 |
-| Breakout / acceptance / rejection / retest | `MISSING` | Yes (implied by S/R) | no vocabulary exists. `close > level` is explicitly **not** an acceptable definition | zones | TA Slice 5B |
-| Impulse / retracement / range / consolidation phases | `MISSING` | Yes | `grep -ri consolidation src/` returns 5 files, all docstrings **denying** the sense (*"`CONTRACTED` is not consolidation"*) plus one `TODO`. Deliberately not built | zones | **Price Phases** (§6 step 3) |
+| Breakout / acceptance / rejection / retest | `MISSING` | Yes (implied by S/R) | no vocabulary exists. `close > level` is explicitly **not** an acceptable definition, and **a `CLOSE_BREACH` is not a breakout** | zones — **satisfied** — plus **R3**, **R4** | Zone Interactions (§6 step 2) |
+| Impulse / retracement / range / consolidation phases | `MISSING` | Yes | `grep -ri consolidation src/` returns docstrings **denying** the sense (*"`CONTRACTED` is not consolidation"*) plus one `TODO`. Deliberately not built | zones — **satisfied** | **Price Phases** (§6 step 3) |
 | EMA dynamics (slope, separation, stack) | `MISSING` | Yes — `SPEC` §4.1 | Derivable now and **deliberately not derived**: TA Slice 5A's brief defers every indicator interpretation | `compute_series()` — **satisfied** (§2.4) | Indicator Context |
 | MACD dynamics (histogram direction, ROC) | `MISSING` | Yes — `SPEC` §4.2 names this explicitly | as above. The three components are now available **per bar**, and none is compared with its predecessor anywhere | `compute_series()` — **satisfied** (§2.4) | Indicator Context |
 | RSI dynamics (slope, location in context) | `MISSING` | Yes — `SPEC` §4.1 | as above | `compute_series()` — **satisfied** (§2.4) | Indicator Context |
@@ -307,7 +308,8 @@ MEMORY GATE                                      ← DONE (report 0048)
 ChatGPT + Dovydas review
     ↓
 0.  TA Slice 5A — Recover Technical Context      ← DONE (report 0049)
-1.  TA Slice 5B — Price Zones & Interactions     ← next approved milestone
+1.  TA Slice 5B — Price Zone Foundation          ← DONE (report 0051)
+1b. Zone Interactions                            ← next, and BLOCKED on R3 / R4
 2.  Price Phases
 3.  Market Opportunity
 4.  Indicator Context
@@ -346,19 +348,39 @@ series access later engines need. Both delivered.
 
 **Stop condition met**, and the slice stopped there. It did **not** continue into 5B.
 
+### TA Slice 5B — Price Zone Foundation & Product Surface *(**DONE**, 2026-09-18 — [report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md))*
+
+**Purpose:** make FMITS understand repeated structural **areas** rather than only isolated exact
+levels, and put them where the owner can read them.
+
+| In scope | Delivered as |
+|---|---|
+| The deterministic zone foundation ADR-0033 decided | `fmis.price_zones` — `ZoneWidthPolicy` · `ZoneMember` · `PriceZone` · `PriceZoneSet` · `ZonePricePosition`, anchored construction with frozen bands |
+| Per-role computation for 1W / 1D / 4H over the existing pipeline | `StructureFacts.zones`, built in `build_structural_facts` beside the levels it groups; **no second market-data path** |
+| Carriage to the operator | `TechnicalContextView.zones`, by reference, plus limitation **TC-6** ([ADR-0032](../adr/ADR-0032-market-technical-context-carriage.md) unchanged) |
+| A real product consumer | The **price zones panel** on `/swing/SYMBOL` |
+| `k` declared, versioned and stamped | `ZONE_WIDTH_POLICY_V1`, `k = 0.50`, **one policy for all three roles**, admissible region **enforced** |
+
+| Explicitly out of scope, and stayed out |
+|---|
+| `ZoneInteraction`, `ZoneReading`, and the role vocabulary **even in code** |
+| Breakout · acceptance · reclaim · retest · false breakout · rejection |
+| Any role derived from position, and the words support / resistance outside a denial |
+| Zone strength, quality, score, rank, confidence or direction |
+| Any Swing **policy** change — the 81-fixture digest is byte-identical |
+| Risk, capital, Scan Memory, evidence voting, `WATCH` / opportunity |
+
+**Stop condition met**, and the slice stopped there.
+
 ### The slices after it, in one line each
 
-- **TA Slice 5B — Price Zones & Interactions** *(the next approved milestone)*. Areas, and what
-  price has actually done at them. **The zone-width policy is no longer an open invention**:
-  [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) resolved
-  **0047 D1 and D2**, and [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md)
-  plus [`PRICE_ZONE_ENGINE_V1.md`](../design/PRICE_ZONE_ENGINE_V1.md) are what the slice implements.
-  It is blocked only on the **owner accepting ADR-0033**, which includes accepting that **`k` is
-  declared rather than measured**. **Do not cluster levels** — single-linkage chains catastrophically
-  and every clustering formulation tested rewrote history; construction is anchored, and the band is
-  frozen at its anchor. **Historical ATR access is no longer a blocker** — §2.4 delivered it, which is
-  what [the 0047 disposition](../reviews/REPORT_0047_REVIEW_DISPOSITION.md) §C required to happen
-  first.
+- **Zone Interactions** *(next, and **blocked**)*. What price has actually done at an area, and the
+  roles that follow from it. **Blocked on R3 and R4** — `ACCEPTANCE`, `RECLAIM`, `RETURN_INSIDE` and
+  retest each need a parameter (*how many closes? within how many bars?*) no measurement has
+  produced, and inventing one is the thing report 0050 exists to have refused. **A `CLOSE_BREACH`
+  is not a breakout.** The foundation it needs is built: bands are frozen and causal, every member
+  keeps its exact `PriceLevel` and its confirmation window, and the full crossing run is already
+  carried per role.
 - **Price Phases.** Impulse / retracement / consolidation / range / compression–expansion primitives
   **with explicit scale semantics**.
 - **Market Opportunity.** Distinguish *nothing interesting* from *a developing directional
@@ -379,9 +401,9 @@ architecture into a choice nobody made. Full reasoning: the
 |---|---|---|---|
 | **A** | Opportunity vs Strategy | They are **conceptually separate**. `Opportunity: WATCH LONG` + `Strategy: WAIT` must remain logically possible, as must `WATCH LONG` + `CANDIDATE`, and `NONE` + `WAIT` | Internal vocabulary; package ownership; whether opportunity may name a side (ADR-0028) |
 | **B** | `MissingConfirmation` vs policy `Blocker` | They are **different questions** and must not be conflated. *"What market event has not happened yet"* ≠ *"why did the strategy stop"* | The type, where it lives, how it renders |
-| **C** | `compute_series()` vs ATR-based zone width | **Satisfied.** `compute_series()` landed in TA Slice 5A ([ADR-0031](../adr/ADR-0031-feature-series-contract.md)), before any zone engine | The zone-width policy itself (**owner decision D1, still open**). Whether zone width should use establishment-time ATR **at all** is also still open — the prerequisite existing is not a recommendation to use it |
+| **C** | `compute_series()` vs ATR-based zone width | **Closed.** `compute_series()` landed in TA Slice 5A ([ADR-0031](../adr/ADR-0031-feature-series-contract.md)) before any zone engine, and TA Slice 5B then used it: **establishment-time ATR** was chosen on measurement (983,916 illegal prefix events for the alternative), the owner declared `k = 0.50`, and `ZoneWidthPolicy` stamps both on every zone | Whether `k = 0.50` is a *good* value. It is **declared, not measured**, and report 0050 found every descriptive metric monotone in it |
 | **D** | Zone evidence independence | **NOT ESTABLISHED.** Describe as *"new / potentially more orthogonal"* | Whether it is actually independent — needs empirical research |
-| **E** | Support / resistance terminology | Role is derived from **interaction history, never from position relative to price**. `below price = support` is **forbidden** — and [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) §25 measured the cost: **39 % (1W) / 50 % (1D)** of zones have had price close on **both** sides since establishment, so the position rule is **not well-defined over time**, not merely sometimes wrong | **Settled by ADR-0033**: user-facing *"Support zone"* / *"Resistance zone"* is permitted **only** as a label over a derived role (`HELD_FROM_ABOVE` / `HELD_FROM_BELOW`), only once the interaction engine exists, and **never for an `UNTESTED` zone**. The three guards stay in force until then |
+| **E** | Support / resistance terminology | **Owner-approved, and deliberately unused.** Role is derived from **interaction history, never from position relative to price**. `below price = support` is **forbidden** — and [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) §25 measured the cost: **39 % (1W) / 50 % (1D)** of zones have had price close on **both** sides since establishment, so the position rule is **not well-defined over time**, not merely sometimes wrong | **Settled by ADR-0033**: user-facing *"Support zone"* / *"Resistance zone"* is permitted **only** as a label over a derived role (`HELD_FROM_ABOVE` / `HELD_FROM_BELOW`), only once the interaction engine exists, and **never for an `UNTESTED` zone**. The three guards stay in force until then |
 | **F** | Price phase segmentation | Phases before trendlines | **Not decided:** whether one exhaustive non-overlapping phase per candle is the model. Markets may contain nested / scale-dependent structure. Segmentation scale, overlap/nesting, and timeframe identity are all open |
 | **G** | Trendline anchors | Phases before trendlines (anchor scoping) | **Not decided, and explicitly NOT approved:** *"anchors must always lie inside exactly one phase"*. Trendlines may legitimately connect structurally meaningful pivots **across** phases |
 | **H** | Divergence alignment | Exact price-pivot indexing is a safe v1. Arbitrary ±N-bar cherry-picking is **never** acceptable | A later, explicitly researched oscillator-pivot alignment policy is **not** ruled out |

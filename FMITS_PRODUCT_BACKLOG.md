@@ -11,10 +11,10 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | **`HEAD` = `main` = `origin/main` = remote = `00c7723`**, tracked tree clean, `0/0` ahead/behind, remote verified with `git ls-remote` after the push |
-| **Verified on** | **2026-09-17** (TA Slice 5A — Recover Technical Context & Feature Series) |
-| **Verification method** | live repository + `git` inspection + live `src/` inspection + accepted ADRs + **the full test suite, re-established** + the policy non-regression digest recomputed outside the suite + a 17-probe adversarial campaign + live dashboard verification |
-| **Previously** | `HEAD` at `66bab74`, verified 2026-09-16 (Memory Gate), and at `dbc4765` before that. Those rows are superseded; §8's per-milestone entries remain point-in-time records and are not revised |
+| **Last verified against** | **`3739d42`** (TA Slice 5B production) plus its documentation commit, on a verified baseline of `HEAD` = `main` = `origin/main` = remote = `693e162`, tracked tree clean, `0/0` ahead/behind |
+| **Verified on** | **2026-09-18** (TA Slice 5B — Price Zone Foundation & Product Surface) |
+| **Verification method** | live repository + `git` inspection + live `src/` inspection + accepted ADRs + **the full test suite under `-W error` on cleared bytecode** + the policy non-regression digest recomputed outside the suite before and after + determinism across processes and hash seeds + measured zone cost + **live `/swing/SYMBOL` pages for four real markets** on a development dashboard |
+| **Previously** | `HEAD` at `00c7723`, verified 2026-09-17 (TA Slice 5A); at `66bab74`, verified 2026-09-16 (Memory Gate); at `dbc4765` before that. Those rows are superseded; §8's per-milestone entries remain point-in-time records and are not revised |
 
 > **Current state lives in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0,
 > and capability status in [`docs/AI_HANDOFF/CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md).**
@@ -82,7 +82,7 @@ before?"* An item that cannot answer it does not belong here.
 > | **Test baseline** | 14,699 passed / 0 failed / 0 skipped / 0 warnings under `-W error`; last actually run 2026-09-07 |
 > | **Policy baseline** | `sha256 8b22e6c9…`, 81 fixtures, 72 `WAIT` / 9 `CANDIDATE`; Reliability Gate 9/9 |
 > | **Product surface** | 25 CLI commands + a 10-page operator dashboard with a dynamic `/swing/SYMBOL` route |
-> | **NOW** | **TA Slice 5B — Price Zones & Interactions** (§5) — ***BLOCKED on owner decision 0047 D1***. TA Slice 5A is **DONE** (§8) |
+> | **NOW** | **None — awaiting the owner's selection.** `DY` — TA Slice 5B is **DONE** (§8). The sequenced next step is **Zone Interactions**, which is **BLOCKED on R3 and R4** and must not be started by picking a threshold |
 >
 > Full detail: [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0.
 
@@ -227,26 +227,38 @@ close, and the inherited limitations — computed from live exchange data.
 
 **Exactly one item, by rule.**
 
-### `DY` — TA Slice 5B: Price Zones & Interactions · **NOW — READY, pending one owner decision** *(named 2026-09-17; unblocked 2026-09-18; not started)*
+### None. `DY` shipped on 2026-09-18 and the board is **awaiting the owner's next selection.**
+
+`DY` — TA Slice 5B is **DONE** and recorded in §8. The next sequenced step (§6.1 step 1b) is
+**Zone Interactions**, and it is deliberately **not** promoted to NOW here, because it is blocked on
+something no amount of implementation effort resolves:
 
 | Field | Value |
 |---|---|
-| **What the owner would get** | Areas rather than lines, and **what price has actually done at them**. The single largest remaining gap between what FMITS shows and how a trader reads a chart |
-| **Status** | **READY.** Both original blockers are resolved by [report 0050](reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md). What remains is one owner **acceptance**, not an open question |
-| **~~The blocker~~ — 0047 D1** | **RESOLVED WITH LIMITATIONS.** 55,728 measured cells over 36 symbols × 3 roles established that **D1 is three decisions, not one**, and that the one report 0047 never discusses — the **grouping geometry** — decides everything: single-linkage clustering, the natural reading of §15.2's *"clustered"*, put **247 of 339 levels into one zone** on BTC 1D. Settled on measurement: construction is **anchored**, the band is **frozen at its anchor**, width is `k × atr_14` read at the anchor's own establishment bar. **`k` is declared, not measured** — every metric is monotone in it, so no optimum exists — and the evidence bounds it to `[0.10, 1.00]`. See [ADR-0033](docs/adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) |
-| **What now remains** | **The owner accepting ADR-0033**, knowingly including that `k` is a declaration, and choosing a value inside `[0.10, 1.00]`. This is an acceptance, not a research question |
-| **~~Second open decision~~ — 0047 D2** | **RESOLVED.** Role from interaction history, never position — now **measured**, not only asserted: **39 % (1W) / 50 % (1D)** of zones have had price close on **both** sides since establishment, so the position rule is **not well-defined over time**. Internal vocabulary fixed; *"Support zone"* permitted later **only** as a label over a derived role and **never** for an `UNTESTED` zone. The three guards stay in force until the interaction engine exists |
-| **What is no longer a blocker** | Establishment-time ATR. `compute_series()` landed in `DX` ([ADR-0031](docs/adr/ADR-0031-feature-series-contract.md)), which is what [the 0047 disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md) §C required to happen first. **The prerequisite existing is not a recommendation to use it** |
-| **Also required before code** | A product consumer. **The non-repainting design exists** ([`PRICE_ZONE_ENGINE_V1.md`](docs/design/PRICE_ZONE_ENGINE_V1.md)) and measured **0** illegal prefix events. **Interaction semantics are deliberately NOT in this slice** — `ACCEPTANCE`, `RECLAIM`, retest and false-breakout each need a parameter **R3**/**R4** have not answered, and **a `CLOSE_BREACH` is not a breakout** |
-| **Explicitly NOT in scope** | Zone evidence claimed as independent — it is **NOT ESTABLISHED** and must be described as *"a new / potentially more orthogonal evidence family"* until research says otherwise |
-| **Authority** | [ADR-0033](docs/adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) and [`PRICE_ZONE_ENGINE_V1.md`](docs/design/PRICE_ZONE_ENGINE_V1.md) are what the slice implements · [report 0050](reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) is the evidence · [report 0047](reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) as modified by [its review disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md), **superseded in three places** named in the design document §2 · [`CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md) §6 |
+| **What the owner would get** | *What price has actually done* at each structural area — held, broken, reclaimed — and therefore the first honest **Support zone** / **Resistance zone** labels, which the owner has already approved as labels over a derived role ([ADR-0033](docs/adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) acceptance, decision D) |
+| **Status** | **BLOCKED on R3 and R4**, and this is a **research** block, not an engineering one |
+| **R3** | *How many closes beyond a band constitute acceptance?* Unmeasured |
+| **R4** | *Within how many bars is a return to a band a retest rather than a coincidence?* Unmeasured |
+| **Why it may not simply be picked** | Choosing either number by intuition is precisely the invented threshold [report 0050](reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) exists to have refused — and that gate's central negative finding is that a representation-only study *cannot* produce such a value, so the study that answers R3/R4 must be an **outcome** study with its question sealed first |
+| **What is already built for it** | The foundation, and it was built to be used this way: bands are frozen and causal, every member keeps its exact `PriceLevel` and its confirmation window, the **full** level-crossing run is already carried per role, and `CrossingKind`'s nine-way classification is a fact the interaction engine can read without re-deriving anything. **A `CLOSE_BREACH` is not a breakout**, and nothing in the repository says otherwise |
+| **Explicitly still NOT permitted** | Any role derived from position · zone strength, quality, score or rank · zone evidence reaching the policy (**R15**, `INDEPENDENCE NOT ESTABLISHED`) |
 
-> **The exactly-one-NOW rule remains satisfied**, as it has been since 2026-09-16 — the first time
-> since `AP` shipped on 2026-08-06. For those six weeks the board recorded the rule as *temporarily
-> unsatisfied* while `AT`–`AV`, `BH`–`BN`, the `BG-D1` line, `BR`–`BV`, `CC`, `CD` and `DR`–`DW` were
-> delivered as explicitly-scoped, owner-directed implementation tasks rather than NOW selections. That
-> history is left in place below and in §8 rather than tidied away — it is the honest record, and it
-> is precisely the drift the Memory Gate exists to stop.
+**The alternative the owner may prefer**: §6.1 step 2, **Price Phases**, is unblocked and needs no
+new research parameter. The board states both and selects neither.
+
+> **On the exactly-one-NOW rule, stated honestly.** The rule was satisfied from 2026-09-16 until
+> `DY` shipped on 2026-09-18, and this board now holds **zero** NOW items rather than one. That is a
+> deliberate and temporary gap of the kind the board has recorded before, not a silent redefinition:
+> the milestone that closed `DY` was scoped to implement the price-zone foundation and was explicitly
+> forbidden to solve **R3**/**R4** by intuition, so it had no honest way to promote its own successor.
+> **Selecting the next NOW item is an outstanding action for the owner**, and §5 above states both
+> live candidates and picks neither.
+>
+> For the six weeks before 2026-09-16 the board recorded the rule as *temporarily unsatisfied* while
+> `AT`–`AV`, `BH`–`BN`, the `BG-D1` line, `BR`–`BV`, `CC`, `CD` and `DR`–`DW` were delivered as
+> explicitly-scoped, owner-directed implementation tasks rather than NOW selections. That history is
+> left in place below and in §8 rather than tidied away — it is the honest record, and it is
+> precisely the drift the Memory Gate exists to stop.
 
 <details>
 <summary><strong>Historical: the six-week NOW gap (2026-08-06 → 2026-09-16), and every owner-directed task delivered during it, as the board recorded them at the time</strong></summary>
@@ -718,7 +730,8 @@ expected to be revised when live implementation reveals new facts.
 | # | Step | Purpose | Gated by |
 |---|---|---|---|
 | **0** | **TA Slice 5A — Recover Technical Context** | Stop discarding computed facts; establish historical series access | **DONE 2026-09-17** — [report 0049](reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) |
-| 1 | **TA Slice 5B — Price Zones & Interactions** | Let FMITS understand *areas* and what price has done at them | **This is NOW (§5) and it is BLOCKED.** Owner decision **D1** (zone-width policy) · **D2** (zone role/naming). `compute_series()` is **no longer a gate** — it exists |
+| **1** | **TA Slice 5B — Price Zone Foundation & Product Surface** | Let FMITS understand structural *areas*, and show them | **DONE 2026-09-18** — [report 0051](reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md). D1 and D2 both closed; `k = 0.50` **declared** by the owner |
+| 1b | **Zone Interactions** | What price has *done* at an area — and the first honest support/resistance roles | **BLOCKED on R3 and R4**, which are research questions, not engineering ones. The zone foundation and the full crossing run are built and waiting |
 | 2 | **Price Phases** | Impulse / retracement / consolidation / range / compression–expansion primitives **with explicit scale semantics** | 1 |
 | 3 | **Market Opportunity** | Distinguish *nothing interesting* from *a developing directional opportunity* **without weakening strategy policy** | 2 · owner decision **D3** (may an opportunity state name a side — [ADR-0028](docs/adr/ADR-0028-directional-interpretation-boundary.md)) |
 | 4 | **Indicator Context** | EMA geometry, MACD dynamics, RSI dynamics | ~~`compute_series()`~~ — **satisfied**. Constrained by the measured family-independence result: more indicators add no independence |
@@ -731,10 +744,11 @@ expected to be revised when live implementation reveals new facts.
 | — | Elliott | **Not scheduled.** `DEFERRED`, hypothesis-level only | — |
 
 **Binding constraints on this sequence** — from [the 0047 review disposition](docs/reviews/REPORT_0047_REVIEW_DISPOSITION.md):
-Opportunity ≠ Strategy · `MissingConfirmation` ≠ policy `Blocker` · `compute_series()` before
-ATR-based zones · zone-evidence independence **not established** · support/resistance role from
-**interaction history, never position** · the phase-segmentation model, trendline-anchor rule and
-divergence-alignment policy are **deliberately not frozen**.
+Opportunity ≠ Strategy · `MissingConfirmation` ≠ policy `Blocker` · ~~`compute_series()` before
+ATR-based zones~~ **(satisfied, and then used — step 1)** · zone-evidence independence **not
+established** · support/resistance role from **interaction history, never position** · the
+phase-segmentation model, trendline-anchor rule and divergence-alignment policy are **deliberately
+not frozen**.
 
 **More indicators add no independence — a new *family* does.** Step 4 is contextual market
 information, **not** three more votes.
@@ -847,6 +861,46 @@ not push". `AT`, previously recorded here uncommitted, is now confirmed committe
 The **complete** milestone history lives in
 [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) and is not duplicated here.
 This section carries the most recent milestones.
+
+### `DY` — TA Slice 5B: Price Zone Foundation & Product Surface · **DONE** *(2026-09-18)*
+
+**A product milestone.** Committed as `3739d42` (production) plus its documentation commit. Full record: [report 0051](reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md).
+
+**What the owner can do now that they could not before.** Open `/swing/SYMBOL` and see **where the
+structural price areas around the current price are** — per timeframe role, with exact boundaries,
+how many confirmed structural levels formed each one, and whether price is above, below or inside
+each as **geometry**. Before this milestone FMITS could show the single nearest exact level on each
+side and nothing about the *areas* those levels form: a trader reading a chart saw one important
+region where FMITS saw three unrelated lines. Each shown band opens to its provenance — the anchor
+level and the swing it came from, the bar the band was written at, the most recent member's bar, the
+width, and the contributing levels in join order.
+
+**One ADR, accepted rather than written.** [ADR-0033](docs/adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md)
+was `Proposed` by the research gate and is now **Accepted**, with the owner's four declarations
+recorded on it: `k = 0.50` is a **declared** V1 representation parameter and not a discovered
+optimum; **one `k` for 1W, 1D and 4H** with no per-role constant; and *"Support zone"* is approved as
+a **future** label over a derived role, which is explicitly **not** permission to build the
+interaction engine.
+
+**What it deliberately did not build.** No `ZoneInteraction`, no `ZoneReading`, no derived role — and
+**no role vocabulary in the code at all**, because a vocabulary present in the source is one
+something will populate. No breakout, acceptance, reclaim, retest or false-breakout semantics; **a
+`CLOSE_BREACH` is still not a breakout**. No zone strength, quality, score, rank or confidence: a
+zone's member count is a size. No role from position, and the words support and resistance appear on
+the page only inside the panel's own denial.
+
+**No policy change.** The 81-fixture non-regression digest is **byte-identical**
+(`8b22e6c9c5e346cb8f62008325b9b0304ecae9af5e0fe46eec4a6c5aa428059c`, 72 `WAIT` / 9 `CANDIDATE`),
+recomputed outside the test suite before and after the change. No zone reaches evidence voting, the
+1W regime gate, Scan Memory or risk, and `~/.fmits` was byte-identical across live verification.
+
+**Three architecture guards fired and all three were obeyed rather than widened away.** The
+level-crossing consumer guard was widened **with a named exemption and a recorded reason**, which is
+exactly the justification-in-an-ADR its own docstring demands. The market-regime guard caught a
+docstring that spelled a package path the package does not import, and **the prose was corrected**.
+The dashboard contract guard — *"`sum`, `min`, `max` and `sorted` are how a presentation layer
+becomes an engine"* — caught the zone selection being sorted in `sections.py`, and the ordering
+**moved onto `PriceZoneSet` itself**, beside the set it orders.
 
 ### `DX` — TA Slice 5A: Recover Technical Context & Feature Series · **DONE** *(2026-09-17)*
 

@@ -57,6 +57,8 @@ from fmis.operator_dashboard.models import (
     CrossingEventRow,
     FeatureReadingRow,
     StructuralLevelRow,
+    PriceZoneGroupRow,
+    PriceZoneRow,
     StructureEventRow,
     SymbolDecisionRow,
     TechnicalContextRow,
@@ -1627,6 +1629,261 @@ def _technical_context_panel(symbol: str, rows: Sequence[TechnicalContextRow]) -
     )
 
 
+#: How a geometric position is printed. **Read them as sentences about the
+#: price**, which is why each begins with it. None of the three is a role: above
+#: is not resistance, below is not support, and inside is not a retest.
+_ZONE_POSITIONS: dict[str, str] = {
+    "price_above": "price is above",
+    "price_below": "price is below",
+    "price_inside": "price is inside",
+}
+
+
+def _levels_phrase(count: int) -> str:
+    """``"1 structural level"`` / ``"7 structural levels"``. A size, never a strength."""
+    return f"{count} structural level" + ("" if count == 1 else "s")
+
+
+def _zone_band(row: PriceZoneRow) -> str:
+    """One band, spelled exactly as the engine holds its two edges."""
+    return f"{_e(_price(row.low))} – {_e(_price(row.high))}"
+
+
+def _zone_cell(row: PriceZoneRow | None, reason: str) -> str:
+    """One band and where price stands relative to it. **Never a role.**
+
+    Deliberately never called support or resistance. `ZonePricePosition` is
+    geometry: report 0050 measured that 39 % of weekly zones and 50 % of daily
+    zones have had price close on **both** sides since they were established, so
+    a role read off position would call one unchanged area support on some days
+    and resistance on others.
+    """
+    if row is None:
+        return _absent(reason)
+    return (
+        f"{_zone_band(row)}"
+        f'<br><span class="sub">'
+        f"{_e(_label(row.position, _ZONE_POSITIONS))} · "
+        f"{_e(_levels_phrase(row.member_count))}</span>"
+    )
+
+
+def _zone_members(row: PriceZoneRow) -> str:
+    """One zone's anchor and the members a page shows, with the true total.
+
+    The anchor is printed in full because it is what the band is centred on; the
+    members follow in join order, bounded, with the count beside them. A zone can
+    hold over a hundred levels and the whole run stays on the `PriceZone` for the
+    engines that need it.
+    """
+    shown = len(row.members)
+    body = _kv(
+        [
+            ("band", _zone_band(row)),
+            ("width", _e(_price(row.width))),
+            (
+                "anchored on",
+                _level_text(row.anchor, "this zone recorded no anchor level"),
+            ),
+            (
+                "established at bar",
+                f"{_e(row.established_index)}"
+                f'<br><span class="sub">the anchor\'s own bar. The band has not '
+                "moved since.</span>",
+            ),
+            (
+                "most recent member at bar",
+                f"{_e(row.latest_member_index)}"
+                '<br><span class="sub">members join; the band does not '
+                "grow.</span>",
+            ),
+            (
+                "structural levels inside",
+                f"{_e(row.member_count)}"
+                f'<br><span class="sub">a count of levels, never a strength. '
+                f"{_e(shown)} shown below, in join order.</span>",
+            ),
+        ]
+    )
+    rows = [
+        "<tr>"
+        f"<td>{_e(_price(member.price))}</td>"
+        f"<td>{_e(member.side)}</td>"
+        f"<td>{_e(_label(member.origin_label, _SWING_LABELS)) if member.origin_label else _absent('no recorded origin')}</td>"
+        f"<td>{_stamp(member.origin_timestamp)}</td>"
+        "</tr>"
+        for member in row.members
+    ]
+    return body + _table(
+        [("Level", ""), ("Side", ""), ("From a", ""), ("Pivot at", "")], rows
+    )
+
+
+def _zone_detail(group: PriceZoneGroupRow) -> str:
+    """One role's zones near the last close, behind a disclosure.
+
+    The headline row above carries the three bands an operator scans — nearest
+    above, containing, nearest below; this is what they open when a role is worth
+    a second look. **Nothing here is computed** — every band, width, anchor and
+    count was produced by `fmis.price_zones` and placed against the last close by
+    that engine's own methods.
+    """
+    title = (
+        f"{_label(group.role, _ROLE_LABELS)} ({group.interval}) — "
+        "structural areas near the last close"
+    )
+    if not group.available:
+        return _details(title, _empty(group.unavailable_reason or ""))
+    header = _kv(
+        [
+            (
+                "last closed price",
+                _e(_price(group.last_close))
+                if group.last_close is not None
+                else _absent("no closed candle carried a price"),
+            ),
+            (
+                "areas on this role",
+                f"{_e(group.zone_count)}"
+                f'<br><span class="sub">{_e(group.above_count)} wholly above the '
+                f"last close · {_e(group.below_count)} wholly below · "
+                f"{_e(group.containing_count)} containing it. A count of areas, "
+                "never a strength.</span>",
+            ),
+            (
+                "structural levels grouped",
+                f"{_e(group.member_count)}"
+                f'<br><span class="sub">{_e(_levels_phrase(group.unassigned_count))} '
+                "formed no area: the width feature had no value at the bar it "
+                "became knowable, and a band is never given a default "
+                "width.</span>",
+            ),
+            (
+                "overlapping band pairs",
+                f"{_e(group.overlap_count)}"
+                '<br><span class="sub">bands overlap by design and are never '
+                "merged; one price may sit inside several areas at once.</span>",
+            ),
+            (
+                "width policy",
+                f"{_e(group.policy_id)}"
+                f'<br><span class="sub">width = '
+                f"{_e(group.width_multiple)} × {_e(group.width_feature)}, read at "
+                "each area's own anchor bar and frozen there. The multiple is a "
+                "<strong>declared</strong> V1 setting, not a measured "
+                "optimum.</span>",
+            ),
+        ]
+    )
+    if not group.zones:
+        return _details(
+            title,
+            header
+            + _empty(
+                group.unavailable_reason
+                or "no structural area lies near the last close on this role"
+            ),
+        )
+    table = _table(
+        [("Band", ""), ("Price", ""), ("Levels", ""), ("Distance to edge", "")],
+        [
+            "<tr>"
+            f"<td>{_zone_band(zone)}</td>"
+            f"<td>{_e(_label(zone.position, _ZONE_POSITIONS))}</td>"
+            f"<td>{_e(zone.member_count)}</td>"
+            f"<td>{_e(_price(zone.distance)) if zone.distance is not None else _absent('no last close to measure from')}</td>"
+            "</tr>"
+            for zone in group.zones
+        ],
+    )
+    return _details(
+        title,
+        header
+        + table
+        + "".join(
+            _details(f"{_zone_band(zone)} — provenance", _zone_members(zone))
+            for zone in group.zones
+        ),
+    )
+
+
+def _price_zone_panel(symbol: str, groups: Sequence[PriceZoneGroupRow]) -> str:
+    """**Where the repeated structural price areas are, per timeframe role.**
+
+    The section TA Slice 5B exists to produce. Before it, `/swing/SYMBOL` could
+    show the single nearest exact level each side of the close and nothing about
+    the *areas* those levels form — a trader reading a chart sees one important
+    region where FMITS saw three unrelated lines.
+
+    **Scannable first, deep second**, on the technical panel's own pattern. One
+    row per role carries the nearest band each side and whether price is inside
+    one; the selection around the close, the counts, the width policy and every
+    contributing level sit behind a per-role disclosure. The whole zone set is
+    never rendered: a real symbol produces twenty to two hundred and fifty bands
+    per role, and the page would become the level flood this section replaces.
+
+    **Nothing here is a role, and the note at the foot says so in the operator's
+    own words.** A band is not support, not resistance, not strong, not weak, not
+    confirmed and not a breakout.
+    """
+    if not groups:
+        return _panel(
+            f"{symbol} — price zones",
+            _empty(
+                "No price zones were carried for this symbol on this refresh. "
+                "The assessment states what it concluded; the structural areas "
+                "behind it are not on this result."
+            ),
+        )
+    table = _table(
+        [
+            ("Role", ""),
+            ("Interval", ""),
+            ("Nearest area above", ""),
+            ("Price inside an area", ""),
+            ("Nearest area below", ""),
+            ("Areas", ""),
+        ],
+        [
+            "<tr>"
+            f"<td>{_e(_label(group.role, _ROLE_LABELS))}"
+            f'<br><span class="sub">{_e(group.role)}</span></td>'
+            f"<td>{_e(group.interval)}</td>"
+            f"<td>{_zone_cell(group.nearest_above, 'no area lies wholly above the last close')}</td>"
+            f"<td>{_zone_cell(group.oldest_containing, 'the last close is not inside any area')}</td>"
+            f"<td>{_zone_cell(group.nearest_below, 'no area lies wholly below the last close')}</td>"
+            f"<td>{_e(group.zone_count)}</td>"
+            "</tr>"
+            if group.available
+            else "<tr>"
+            f"<td>{_e(_label(group.role, _ROLE_LABELS))}"
+            f'<br><span class="sub">{_e(group.role)}</span></td>'
+            f"<td>{_e(group.interval)}</td>"
+            f'<td colspan="4">{_absent(group.unavailable_reason)}</td>'
+            "</tr>"
+            for group in groups
+        ],
+    )
+    return _panel(
+        f"{symbol} — price zones",
+        table
+        + "".join(_zone_detail(group) for group in groups)
+        + '<p class="note">A price zone is a band frozen around the confirmed '
+        "structural level that opened it, half a stated multiple of that bar's "
+        "own ATR either side, and it never moves again — later levels join it, "
+        "and the edges stay where they were written. "
+        "<strong>None of these is support or resistance.</strong> Whether price "
+        "has held at an area or broken through it is a function of what price "
+        "has done there, and this system does not yet derive that; where price "
+        "stands right now is geometry and nothing more. The level count is a "
+        "size, not a strength. Bands overlap on purpose and are never merged. "
+        "The width multiple is <strong>declared, not measured</strong> — the "
+        "research bounded the usable range and deliberately did not pick a best "
+        "value inside it. Nothing in this section reached the decision above "
+        "it, and none of it is a reason to trade.</p>",
+    )
+
+
 def _decision_detail(row: SymbolDecisionRow, risk_note: str = "") -> str:
     """One symbol's decision, in full. Every value is an engine's own.
 
@@ -1721,6 +1978,12 @@ def _decision_detail(row: SymbolDecisionRow, risk_note: str = "") -> str:
         # it rather than below the audit. It sits **after** the decision layer,
         # because a page that answered it first would be an audit page again.
         _technical_context_panel(row.symbol, row.technical),
+        # Directly under the technical context, deliberately. Zones are a
+        # grouping *over* the levels that panel carries, so the page states the
+        # exact facts before the areas they form — and both sit after the
+        # decision layer, because a page that answered them first would be an
+        # audit page again.
+        _price_zone_panel(row.symbol, row.zones),
     ]
 
     factor_table = _table(

@@ -62,6 +62,7 @@ from fmis.market_regime import (
     VolatilityState,
 )
 from fmis.pipeline.multi_timeframe import MultiTimeframeFactSheet, TimeframeRole
+from fmis.price_zones import PriceZoneSet
 from fmis.structural_trend import StructuralTrendType
 from fmis.structure_break import StructureBreak
 
@@ -109,6 +110,14 @@ TECHNICAL_CONTEXT_LIMITATIONS: tuple[tuple[str, str], ...] = (
         "No value on this object reaches the swing policy. It is assembled "
         "after the assessment, from facts the assessment was already reasoned "
         "from, and changes no decision.",
+    ),
+    (
+        "TC-6",
+        "A price zone is a frozen band around the confirmed level that opened "
+        "it, under a declared width policy. It has no role: a zone below the "
+        "last close is not support and one above it is not resistance, for the "
+        "same reason TC-2 gives for a level. Its member count is a size, never "
+        "a strength, and leaving a zone is not a breakout.",
     ),
 )
 
@@ -190,6 +199,12 @@ class TechnicalContextView:
     ``warming_up`` names the features that returned no value for lack of history,
     carried so a surface can say *not enough history yet* rather than showing a
     blank that could equally mean *computed to be nothing*.
+
+    ``zones`` is this role's `PriceZoneSet`, carried by reference like everything
+    else here. `None` means the width policy's feature was not computed for this
+    role, which is stated rather than filled in. **A zone carries no role**: a
+    band below the last close is not support and one above it is not resistance,
+    on exactly the footing TC-2 already states for a level.
     """
 
     role: str
@@ -208,6 +223,7 @@ class TechnicalContextView:
     upper_level_count: int
     lower_level_count: int
     crossings: CrossingHistory
+    zones: PriceZoneSet | None
     breaks: tuple[StructureBreak, ...]
     latest_break: StructureBreak | None
     changes: tuple[ChangeOfCharacter, ...]
@@ -239,6 +255,10 @@ class TechnicalContextView:
             raise TypeError(
                 "crossings must be a CrossingHistory, got "
                 f"{type(self.crossings).__name__}"
+            )
+        if self.zones is not None and not isinstance(self.zones, PriceZoneSet):
+            raise TypeError(
+                f"zones must be a PriceZoneSet or None, got {type(self.zones).__name__}"
             )
 
     def regime_state(
@@ -417,6 +437,7 @@ def technical_context_for_sheet(
             upper_level_count=view.sheet.nearest_levels.upper_count,
             lower_level_count=view.sheet.nearest_levels.lower_count,
             crossings=_crossing_history(view.sheet.structure.crossings),
+            zones=view.sheet.structure.zones,
             breaks=view.sheet.structure.breaks,
             latest_break=view.sheet.structure.latest_break,
             changes=view.sheet.structure.changes,

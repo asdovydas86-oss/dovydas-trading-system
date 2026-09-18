@@ -15,6 +15,7 @@ every deterministic layer the repository has built:
     fmis.structural_trend.derive_structural_trend  trend
     fmis.level_crossing.structural_levels      price levels
     ...derive_level_crossings                  crossing events
+    fmis.price_zones.derive_price_zones        structural price areas
     fmis.structure_break.derive_structure_breaks   break of structure
     fmis.change_of_character.derive_changes_of_character   change of character
 
@@ -72,6 +73,7 @@ from fmis.change_of_character import ChangeOfCharacter, derive_changes_of_charac
 from fmis.data import CandleSeries
 from fmis.features import FeatureRegistry, FeatureSet
 from fmis.features.feature_engine import FeatureEngine
+from fmis.features.series import FeatureSeries
 from fmis.features.types import Feature
 from fmis.level_crossing import (
     LevelCrossingEvent,
@@ -98,6 +100,13 @@ from fmis.pipeline.market_analysis import (
     _fetch_closed,
     _window_of,
     default_features,
+)
+from fmis.price_zones import (
+    ZONE_WIDTH_POLICY_V1,
+    PriceZoneSet,
+    ZoneWidthPolicy,
+    derive_price_zones,
+    zone_width_series,
 )
 from fmis.providers.binance import Transport
 from fmis.structural_trend import StructuralTrendType, derive_structural_trend
@@ -224,6 +233,17 @@ class StructureFacts:
     crossings: tuple[LevelCrossingEvent, ...]
     breaks: tuple[StructureBreak, ...]
     changes: tuple[ChangeOfCharacter, ...]
+    #: The structural **areas** those levels form, under the declared V1 width
+    #: policy (ADR-0033). `None` when the policy's width feature was not computed
+    #: for this sheet — a sheet that states the absence, never one that invents a
+    #: width. Defaulted so every existing construction of this type, including
+    #: the hand-built ones in the test suite, stays valid unchanged.
+    #:
+    #: **Nothing reads this to decide anything.** It is derived from the levels
+    #: the chain already produced, changes no other field on this sheet, and
+    #: reaches no policy — a zone is a description of the market, not a
+    #: permission to trade.
+    zones: PriceZoneSet | None = None
 
     @property
     def latest_break(self) -> StructureBreak | None:
@@ -328,7 +348,10 @@ def _nearest_levels(levels: Sequence[PriceLevel], close: float | None) -> Neares
 
 
 def _structure_of(
-    series: CandleSeries, detection: DetectionSettings
+    series: CandleSeries,
+    detection: DetectionSettings,
+    width_series: FeatureSeries | None = None,
+    zone_policy: ZoneWidthPolicy = ZONE_WIDTH_POLICY_V1,
 ) -> StructureFacts:
     """Run the complete structural chain over one closed series.
 
@@ -336,6 +359,11 @@ def _structure_of(
     synchronise: ``detection.right_bars`` reaches `detect_swings` alone, and the
     confirmation window travels to `derive_structure_breaks` on the levels
     themselves.
+
+    ``width_series`` is the zone width policy's own feature history, supplied by
+    the caller because that is where the feature registry lives. `None` means the
+    policy's feature was not computed for this sheet, and the honest consequence
+    is **no zones at all** — never a substituted width.
     """
     swings = detect_swings(
         series, left_bars=detection.left_bars, right_bars=detection.right_bars
@@ -358,6 +386,11 @@ def _structure_of(
         crossings=crossings,
         breaks=breaks,
         changes=changes,
+        zones=(
+            None
+            if width_series is None
+            else derive_price_zones(levels, width_series, policy=zone_policy)
+        ),
     )
 
 
@@ -435,7 +468,11 @@ def build_structural_facts(
         if result.value is None
     )
 
-    structure = _structure_of(closed, settings)
+    structure = _structure_of(
+        closed,
+        settings,
+        zone_width_series(registry, closed, policy=ZONE_WIDTH_POLICY_V1),
+    )
 
     return StructuralFactSheet(
         symbol=series.symbol,

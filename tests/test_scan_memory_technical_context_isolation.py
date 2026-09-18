@@ -250,3 +250,65 @@ def test_the_record_digest_does_not_move_because_a_context_exists(tmp_path) -> N
     )
 
     assert carried == bare
+
+
+# ---------------------------------------------------------------------------
+# TA Slice 5B — the price zones ride inside the context and reach no further
+# ---------------------------------------------------------------------------
+
+
+def test_a_decision_carrying_zones_projects_the_same_state_as_one_without_them() -> None:
+    """The zones are the largest thing the context has ever carried.
+
+    `PriceZoneSet` holds every band a role produced and every level inside each
+    one, and almost all of it moves on every refresh — a new level joins, a new
+    band opens, the last close moves relative to all of them. If any of it
+    reached a comparison dimension, *what changed since the previous scan* would
+    report every symbol changed, every time, forever.
+
+    The whole-context tests above already cover this, because the zones ride
+    inside the context. This one names the zones specifically, so a future
+    milestone that carried them by some other route fails here rather than
+    silently.
+    """
+    import dataclasses
+
+    sheet = multi()
+    inputs, technical, assessment = setup_composition_for_sheet(sheet)
+    readings = setup_readings_for(sheet, inputs)
+
+    assert all(view.zones is not None for view in technical.views)
+    assert any(view.zones.zone_count > 0 for view in technical.views)
+
+    without_zones = dataclasses.replace(
+        technical,
+        views=tuple(
+            dataclasses.replace(view, zones=None) for view in technical.views
+        ),
+    )
+
+    def decision_for(context):
+        return symbol_decisions(
+            [
+                SetupRunResult(
+                    requested_symbol=sheet.symbol,
+                    assessment=assessment,
+                    readings=readings,
+                    technical=context,
+                )
+            ],
+            reference_time=REFERENCE,
+        )[0]
+
+    with_zones = symbol_state_of(decision_for(technical))
+    no_zones = symbol_state_of(decision_for(without_zones))
+
+    assert with_zones == no_zones
+    assert dimension_values(with_zones) == dimension_values(no_zones)
+
+
+def test_no_comparison_dimension_names_a_zone() -> None:
+    """Asserted on the vocabulary itself, not on one fixture's values."""
+    for dimension in CHANGE_DIMENSIONS:
+        assert "zone" not in dimension.value.lower()
+        assert "zone" not in dimension.name.lower()

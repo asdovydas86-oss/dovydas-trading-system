@@ -21,6 +21,13 @@ reason travelling beside it.
 `sorted()` call anywhere in this module, and a guard asserts it: re-sorting rows
 by risk/reward or evidence count would be this dashboard inventing the ranking
 four engines below it deliberately refused to make.
+
+The price zones obey the same rule and are the case that proves it is load-
+bearing. A real symbol produces twenty to two hundred and fifty bands per
+timeframe role, so something *must* select and order the handful a page shows —
+and the guard caught a first attempt to do it here. The selection now lives on
+`PriceZoneSet` itself (`near`, `nearest_above`, `nearest_below`), beside the set
+it selects from, and this module chooses only **how many**.
 """
 
 from __future__ import annotations
@@ -84,6 +91,8 @@ from fmis.operator_dashboard.models import (
     FeatureReadingRow,
     StructuralLevelRow,
     StructureEventRow,
+    PriceZoneGroupRow,
+    PriceZoneRow,
     TechnicalContextRow,
     TradeRiskPlanRow,
     TransitionRow,
@@ -109,6 +118,7 @@ __all__ = [
     "swing_view",
     "symbol_decision_rows",
     "technical_context_rows",
+    "price_zone_group_rows",
     "swing_snapshot",
     "scan_change_view",
     "portfolio_view",
@@ -820,6 +830,141 @@ def technical_context_rows(technical: Any) -> tuple[TechnicalContextRow, ...]:
     return tuple(rows)
 
 
+#: How many zones one role prints on each side of the last close, and how many
+#: of the zones containing it. A bound, and it is stated on the page beside the
+#: true totals — the same discipline the crossing history uses when it prints two
+#: events out of hundreds. Real symbols produce 20 to 250 zones per role; a page
+#: that rendered all of them would be the raw level flood this section exists to
+#: replace.
+ZONES_SHOWN_PER_SIDE = 3
+
+#: How many member levels one zone prints, in join order, anchor first. The count
+#: printed beside them is the true total; the full membership stays on the
+#: `PriceZone` for the later engines that need it.
+ZONE_MEMBERS_SHOWN = 8
+
+
+def _zone_row(zone: Any, close: float | None) -> PriceZoneRow:
+    """One `PriceZone`, translated field for field, placed against the last close.
+
+    ``position`` and ``distance`` are the engine's own methods' results. This
+    layer performs no arithmetic and derives no role: a band the price sits above
+    is not support and one it sits below is not resistance.
+    """
+    return PriceZoneRow(
+        low=zone.low,
+        high=zone.high,
+        position="" if close is None else zone.price_position(close).value,
+        member_count=zone.member_count,
+        width=zone.width,
+        anchor=_level_row(zone.anchor.level),
+        established_index=zone.established_index,
+        latest_member_index=zone.latest_member_index,
+        distance=None if close is None else zone.distance_from(close),
+        members=tuple(
+            _level_row(member.level)
+            for member in zone.members[:ZONE_MEMBERS_SHOWN]
+        ),
+    )
+
+
+def price_zone_group_rows(technical: Any) -> tuple[PriceZoneGroupRow, ...]:
+    """The per-role price zones, bounded to what a page can honestly show.
+
+    **In the order the roles arrive** — context, setup, execution — the same
+    order `technical_context_rows` uses and the order the policy applies them in.
+    No role is merged with another and nothing is derived from their combination.
+
+    **The selection is the engine's, not this layer's.** `PriceZoneSet.near`
+    returns the bands around a price, high to low; `nearest_above`,
+    `nearest_below` and `zones_containing` name the three the headline row
+    prints. This function chooses only *how many* — `ZONES_SHOWN_PER_SIDE`, a
+    presentation bound — and translates the result field for field. It sorts
+    nothing and compares no two market values, because a sort here would be this
+    layer deciding which area matters, which is the line between a window and an
+    engine.
+
+    **Ordering is presentation, never judgement.** Distance orders the rows and
+    nothing else: nearer is not stronger, more relevant or more likely to hold,
+    and nothing in this repository has measured that it is. The true zone count,
+    member count and side counts are all carried, so a reader always sees that
+    the page is showing a part of the set rather than the set.
+
+    A role whose sheet built no zones at all is present with ``available=False``
+    and the reason, because *this role produced no areas* and *this symbol was
+    never read* are two different statements.
+    """
+    if technical is None:
+        return ()
+    rows: list[PriceZoneGroupRow] = []
+    for view in technical.views:
+        zones = view.zones
+        if zones is None:
+            rows.append(
+                PriceZoneGroupRow(
+                    role=view.role,
+                    interval=view.interval,
+                    available=False,
+                    unavailable_reason=(
+                        "no price-zone set was built for this role; the width "
+                        "policy's own feature was not computed over it, and a "
+                        "band is never given a substitute width"
+                    ),
+                )
+            )
+            continue
+        policy = zones.width_policy
+        close = view.last_close
+        if close is None:
+            selected: tuple[Any, ...] = ()
+            nearest_over_row = nearest_under_row = oldest_inside_row = None
+            above = below = containing = 0
+            reason: str | None = (
+                "no closed candle carried a price for this role, so no band can "
+                "be placed relative to it"
+            )
+        else:
+            reason = None
+            inside = zones.zones_containing(close)
+            above = len(zones.zones_above(close))
+            below = len(zones.zones_below(close))
+            containing = len(inside)
+            selected = zones.near(close, per_side=ZONES_SHOWN_PER_SIDE)
+            # The three the headline row prints. Each is the engine's own
+            # selection; "oldest containing" is element zero of a tuple the
+            # engine returns in creation order, which is the band the membership
+            # rule itself prefers when several contain one price.
+            over = zones.nearest_above(close)
+            under = zones.nearest_below(close)
+            nearest_over_row = None if over is None else _zone_row(over, close)
+            nearest_under_row = None if under is None else _zone_row(under, close)
+            oldest_inside_row = _zone_row(inside[0], close) if inside else None
+        rows.append(
+            PriceZoneGroupRow(
+                role=view.role,
+                interval=view.interval,
+                available=True,
+                policy_id=policy.policy_id,
+                width_feature=policy.feature_name,
+                width_multiple=policy.multiple,
+                last_close=close,
+                zone_count=zones.zone_count,
+                member_count=zones.member_count,
+                unassigned_count=zones.unassigned_count,
+                overlap_count=len(zones.overlapping),
+                above_count=above,
+                below_count=below,
+                containing_count=containing,
+                nearest_above=nearest_over_row,
+                nearest_below=nearest_under_row,
+                oldest_containing=oldest_inside_row,
+                zones=tuple(_zone_row(zone, close) for zone in selected),
+                unavailable_reason=reason,
+            )
+        )
+    return tuple(rows)
+
+
 def symbol_decision_rows(decisions: Any) -> tuple[SymbolDecisionRow, ...]:
     """The workspace's per-symbol decisions, translated field for field.
 
@@ -877,6 +1022,7 @@ def symbol_decision_rows(decisions: Any) -> tuple[SymbolDecisionRow, ...]:
             ),
             plan=_trade_plan_row(decision.plan),
             technical=technical_context_rows(getattr(decision, "technical", None)),
+            zones=price_zone_group_rows(getattr(decision, "technical", None)),
         )
         for decision in decisions
     )

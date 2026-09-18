@@ -427,9 +427,18 @@ def test_no_identifier_in_the_module_names_an_undefined_concept(word: str) -> No
 
 
 #: The sentences that use a refused word precisely to refuse it.
+#:
+#: TA Slice 5B added the third, on TC-6, when price zones joined the carriage: a
+#: band below the last close is not support and one above it is not resistance,
+#: for exactly the reason TC-2 already gives for a level, and leaving a band is
+#: not a breakout. Each is asserted to exist below, so a denial cannot be deleted
+#: to make this scan pass.
 _DENIALS = (
     "Neither is support or resistance",
     "None of them is a breakout, a reversal, a signal or a reason to trade",
+    "a zone below the last close is not support and one above it is not "
+    "resistance, for the same reason TC-2 gives for a level. Its member count "
+    "is a size, never a strength, and leaving a zone is not a breakout",
 )
 
 

@@ -68,6 +68,8 @@ __all__ = [
     "StructureEventRow",
     "FeatureReadingRow",
     "TechnicalContextRow",
+    "PriceZoneRow",
+    "PriceZoneGroupRow",
     "DevelopingEvidenceRow",
     "BlockerRow",
     "NoTradeRow",
@@ -648,6 +650,95 @@ class TechnicalContextRow:
 
 
 @dataclass(frozen=True, slots=True)
+class PriceZoneRow:
+    """One frozen structural price area, arranged for a reader. **Never a role.**
+
+    Carries `fmis.price_zones.PriceZone` field for field, flattened into the
+    primitives a surface prints, plus the two geometric readings a page needs
+    against the last close. Both of those come from the engine's own methods —
+    this layer calls `PriceZone.price_position` and `PriceZone.distance_from`
+    and performs no arithmetic of its own.
+
+    ``position`` is `ZonePricePosition`'s own value and is **geometry**. A band
+    the price sits above is not support, one it sits below is not resistance,
+    one it sits inside is not a retest, and leaving one is not a breakout. There
+    is deliberately no ``role`` field, no ``strength``, no ``score``, no
+    ``rank``, no ``confidence`` and no ``direction``, and a guard test asserts
+    none may be added.
+
+    ``distance`` is the gap to the nearest edge of the band, zero when the price
+    is inside it. It exists so the nearest areas can be printed first and is
+    **presentation ordering, never a ranking**: nearer is not more important.
+
+    ``member_count`` is how many confirmed levels fall inside the band — a
+    **size, never a strength**. Six levels in one area is not a stronger area
+    than two; that reading needs interaction semantics this repository does not
+    have. ``members`` is a **bounded** selection of them, and ``member_count``
+    states the true total beside it, on the same footing the crossing history
+    prints two events out of hundreds.
+    """
+
+    low: float
+    high: float
+    position: str
+    member_count: int
+    width: float
+    anchor: StructuralLevelRow
+    established_index: int
+    latest_member_index: int
+    distance: float | None = None
+    members: tuple[StructuralLevelRow, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PriceZoneGroupRow:
+    """One timeframe role's price zones, and exactly why there are none.
+
+    ``available`` is `False` when the role carried no zone set at all — the
+    width policy's feature was not computed for it — and ``unavailable_reason``
+    says which absence that is. A blank where a band belongs would read as *no
+    structure here*, which is a different statement.
+
+    ``zones`` is the **selection a page shows**, not the whole set:
+    `fmis.operator_dashboard.sections` picks the zones nearest the last close
+    and states how it picked them. ``zone_count`` is the true total, so a reader
+    always sees that the page is showing a part.
+
+    ``policy_id``, ``width_multiple`` and ``width_feature`` are the stamped
+    `ZoneWidthPolicy`'s own values, printed so the bands above them are
+    reproducible from the page. The multiple is a **declared** V1 parameter, not
+    a measured optimum, and the panel says so in those words.
+    """
+
+    role: str
+    interval: str
+    available: bool
+    policy_id: str = ""
+    width_feature: str = ""
+    width_multiple: float | None = None
+    last_close: float | None = None
+    zone_count: int = 0
+    member_count: int = 0
+    unassigned_count: int = 0
+    overlap_count: int = 0
+    above_count: int = 0
+    below_count: int = 0
+    containing_count: int = 0
+    #: The three bands the headline row prints: the nearest one wholly above the
+    #: last close, the nearest one wholly below it, and the **oldest** of the
+    #: bands containing it — oldest because that is the band the membership rule
+    #: itself prefers when several contain one price (ADR-0033 §4). Each is
+    #: `None` when no band qualifies, which the page states rather than blanks.
+    #: **None of the three is a role.** Above is not resistance and below is not
+    #: support.
+    nearest_above: PriceZoneRow | None = None
+    nearest_below: PriceZoneRow | None = None
+    oldest_containing: PriceZoneRow | None = None
+    zones: tuple[PriceZoneRow, ...] = ()
+    unavailable_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class DevelopingEvidenceRow:
     """Which way the readable families point. **Never what the policy decided.**
 
@@ -811,6 +902,12 @@ class SymbolDecisionRow:
     #: order: context, then setup, then execution. Empty when the decision
     #: carried none, which the surface states rather than papers over.
     technical: tuple[TechnicalContextRow, ...] = ()
+    #: One row per timeframe role's price zones, in the same role order. Empty
+    #: when the decision carried no technical context at all; a role that
+    #: carried a context but no zone set is present with ``available=False``,
+    #: because *this role built no areas* and *this symbol was never read* are
+    #: two different statements.
+    zones: tuple[PriceZoneGroupRow, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

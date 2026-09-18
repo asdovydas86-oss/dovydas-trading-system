@@ -1885,6 +1885,28 @@ def test_nothing_below_imports_level_crossing() -> None:
     level, moves no level, and names no direction. The rule this guard actually
     protects — that nothing *below* this package reaches into it, and that no
     consumer re-derives a level — is unchanged.
+
+    Widened for **TA Slice 5B** to admit `fmis.price_zones`, and this one is the
+    case the guard's own instruction anticipated: *"a third consumer appearing
+    anywhere fails this test and has to justify itself in an ADR."* The ADR is
+    [ADR-0033](../docs/adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md),
+    accepted 2026-09-18, and its §5.1 says in terms that every zone member is a
+    `PriceLevel` **from `structural_levels`, and nothing else**. The package sits
+    **above** this one: it reads a level's price and its origin's own
+    `knowable_from`, holds the level **by reference** as a `ZoneMember`, and
+    derives no level, moves no level and reclassifies no crossing —
+    `tests/test_price_zones_architecture.py` asserts it defines none of this
+    package's functions and imports no `Candle`.
+
+    **The direction rule is what makes this safe and it is unchanged**, in both
+    directions and both asserted: this package cannot see `fmis.price_zones`, and
+    neither can `fmis.data`, `fmis.market_structure`, `fmis.structural_trend` or
+    `fmis.series_context` — that guard lives beside the new package and is
+    parameterised over all four. And **no exact semantic moved**: the zone
+    tolerance is scoped to zone membership alone, so `PriceLevel` equality,
+    `classify_comparison` and `CrossingKind`'s exact-equality-is-a-`TOUCH` rule
+    are all untouched, which ADR-0033 §1 states and this file's own tests still
+    prove.
     """
     root = PACKAGE_DIR.parent
     permitted = {
@@ -1896,6 +1918,7 @@ def test_nothing_below_imports_level_crossing() -> None:
         root / "swing_setup",
         root / "setup_observation",
         root / "swing_lab",
+        root / "price_zones",  # TA Slice 5B, ADR-0033 §5.1 — see above
     }
     for py in root.rglob("*.py"):
         if py.parent == PACKAGE_DIR or py.parent in permitted:

@@ -651,11 +651,17 @@ trusted and one that is merely built.
 
 ## 31. Validation performed — proportional, and honestly scoped
 
-**The full suite was not re-run, and this report does not quote a fresh suite result.** `src/` and
-`tests/` are byte-unchanged, so a re-run would measure the same code at the same commit. The
-15,092-test baseline stands **as established by report 0049 at `00c7723`**.
+**The full suite was re-run before the push**, because `CLAUDE.md`'s pre-push checklist names tests
+and an assertion that nothing changed is weaker than a measurement that nothing changed:
 
-What *was* verified:
+> **`15,092 passed · 0 failed · 0 skipped · 0 warnings`** under `-W error`, in **717.54 s**, on
+> cleared bytecode with `PYTHONDONTWRITEBYTECODE=1`.
+
+**Identical to the baseline report 0049 established at `00c7723`** — same count, zero drift. The
+81-fixture policy non-regression test is inside that run, so the digest `8b22e6c9…` is re-verified by
+the suite rather than merely asserted here.
+
+What else was verified:
 
 | Check | Result |
 |---|---|

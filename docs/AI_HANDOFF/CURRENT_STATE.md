@@ -89,7 +89,7 @@ equity · trades · research · dashboard · archive
 |---|---|
 | **Full suite** | **15,092 passed · 0 failed · 0 skipped · 0 warnings** under `-W error` |
 | **Baseline commit** | `00c7723` |
-| **Last actually run** | **2026-09-17**, by [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) (708.10 s), on **cleared bytecode**. Previously 14,699 at `66bab74`, run 2026-09-07 — **+393**, every one new. **Report 0050 did not re-run it and does not quote a fresh result**: `src/` and `tests/` are byte-unchanged, so a re-run would measure the same code at the same commit |
+| **Last actually run** | **2026-09-17**, by [report 0049](../../reports/0049_2026-09-17_TECHNICAL_ANALYSIS_SLICE_5A.md) (708.10 s), on **cleared bytecode**. Previously 14,699 at `66bab74`, run 2026-09-07 — **+393**, every one new. **Re-run by [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) on 2026-09-18** (717.54 s, cleared bytecode): **15,092 / 0 / 0 / 0**, identical to the baseline — `src/` and `tests/` were byte-unchanged and the measurement confirms it |
 | **Targeted adversarial probes** | **17/17 killed**, source restored byte-identically. See §19 of report 0049 — and the stale-bytecode hazard noted in §0.1 above |
 | **Invocation** | `python -m pytest` — a bare `pytest` fails at collection on ~17 files that import fixtures as `from tests.test_x import …` |
 | **Policy non-regression digest** | `sha256 8b22e6c9c5e346cb8f62008325b9b0304ecae9af5e0fe46eec4a6c5aa428059c` |

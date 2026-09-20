@@ -21,16 +21,16 @@ routes you here.
 
 | Field | Value |
 |---|---|
-| **Last verified** | **2026-09-18** |
-| **Verified by** | **TA Slice 5B — Price Zone Foundation & Product Surface** — [report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md) |
-| **Verification method** | live `git` inspection · live `src/` inspection · the full test suite under `-W error` on cleared bytecode · the policy non-regression digest recomputed outside the suite, before and after · determinism re-checked across processes and `PYTHONHASHSEED` values · zone cost measured against the sheet build it rides in · **rendered `/swing/SYMBOL` pages for four live markets** on a development dashboard on port 8799 · read-only inspection of the operator instance |
+| **Last verified** | **2026-09-20** |
+| **Verified by** | **Price Zone Interaction Semantics Research Gate (R3 / R4)** — [report 0052](../../reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md). A **research** gate: `src/` and `tests/` **zero files changed**, full suite **15,416 passed** and unchanged |
+| **Verification method** | live `git` inspection · live `src/` inspection · the full test suite under `-W error` on cleared bytecode · the 81-fixture policy non-regression suite re-run · determinism of the research artifacts byte-checked across processes and `PYTHONHASHSEED` values · 68 adversarial fixtures and 27 real-data invariant/isolation checks · read-only inspection of the operator instance |
 
 ## 0.1 Repository
 
 | Field | Value |
 |---|---|
 | **Branch** | `main` |
-| **`HEAD`** | **`3739d42`** (production code + tests) followed by this milestone's documentation commit; `693e162` was its **baseline** |
+| **`HEAD`** | this milestone's documentation commit, preceded by **`296831a`** (the sealed R3/R4 preregistration); **`527a162`** was its **baseline** |
 | **`main`** | level with `HEAD` |
 | **`origin/main`** | level with local `main` |
 | **Remote `refs/heads/main`** | verified with `git ls-remote` **after the push** |
@@ -38,7 +38,7 @@ routes you here.
 | **Stash** | empty |
 | **Active Git operation** | none |
 | **Tracked tree** | **clean** |
-| **Previously** | `66bab74` (Memory Gate) → `4d77e4d` → `00c7723` (TA Slice 5A) → `96b56ea` → **`c05e870`** (the sealed zone preregistration) → `48f297b` → `693e162` (the zone research gate's last commit) → this milestone |
+| **Previously** | `00c7723` (TA Slice 5A) → `96b56ea` → **`c05e870`** (the sealed zone *parameter* preregistration) → `48f297b` → `693e162` → `3739d42` (TA Slice 5B production) → `527a162` → **`296831a`** (the sealed zone *interaction* preregistration) → this milestone |
 | **Untracked** | the **16 pre-existing research documents** under `docs/design/` and `docs/reviews/` (AP/AQ/BA/BB-era), deliberately left untracked and **not touched by this milestone** |
 
 > **The one operational lesson this session produced, recorded so it is not relearned.** A mutation
@@ -50,6 +50,14 @@ routes you here.
 > later probe. **Always run a mutation campaign with `PYTHONDONTWRITEBYTECODE=1` and clear every
 > `__pycache__` between probes, and never trust a digest of `src/` alone to prove a campaign is
 > over.** Full account: report 0049 §19.
+
+> **The lesson this session produced, recorded so it is not relearned.** A research artifact written
+> with `gzip.open(path, "wt")` is **not reproducible**: gzip stamps the current time into its
+> header, so an identical payload hashes differently on every run. This was caught only because the
+> determinism check *measured* the digest across two subprocesses instead of asserting determinism
+> in prose — three consecutive runs produced three different hashes for byte-identical content.
+> **Write research artifacts through a `GzipFile(..., mtime=0)` writer**, and never let a
+> reproducibility claim rest on anything but a recomputed hash. Full account: report 0052 §10.1.
 
 ## 0.2 Product surfaces
 
@@ -73,6 +81,7 @@ equity · trades · research · dashboard · archive
 
 | Milestone | What it delivered | Report |
 |---|---|---|
+| **Price Zone Interaction Semantics Research Gate — R3 / R4** (2026-09-20) | **The two questions that blocked zone roles are answered, and the answer is mostly no.** A second consecutive close beyond a band marks a distinguishable state (+22 to +25 points on ten-bar persistence, 1D and 4H, primary and holdout) — **but a placebo band that no structural level anchored separates by the same amount**, so the state is **not a zone fact**. R4 is **`NO SUPPORT`**: the return hazard to a real zone is indistinguishable from a placebo's (**0.96–1.02**), so **there is no `RETEST` and no window to choose**. The raw hazard decays seven-fold and alone would have yielded a confident three-bar window; **the placebo decays identically**. Preregistered and pushed at `296831a` **before the harness existed**. **No product capability, and none claimed.** [ADR-0034](../adr/ADR-0034-zone-interaction-evidence-boundary.md) `Proposed` | [0052](../../reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md) |
 | **TA Slice 5B — Price Zone Foundation & Product Surface** (2026-09-18) | **FMITS understands a structural *area*, not only a line.** `fmis.price_zones` groups confirmed `PriceLevel`s into **anchored, frozen, causal** bands — `anchor.price ± k×ATR14/2` read at the anchor's own establishment bar and never moved again — and `/swing/SYMBOL` gained a **price zones** panel showing the nearest area each side of the last close per role, with provenance behind a disclosure. `k = 0.50` is **declared, not measured**, one policy for 1W/1D/4H, stamped on every zone. **No role, no strength, no breakout**: `position` is geometry and the role vocabulary is deliberately absent from the code. **No policy change** — the 81-fixture digest is byte-identical. [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) **Accepted** | [0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md) |
 | **Swing Product Slice 4 — Risk & Trade-Planning Foundation** (2026-09-06) | The risk engine had **no first link and no reader**. `fmis.risk_policy` became the owner's declaration boundary and the only producer of a `RiskBudget`; `/swing/SYMBOL` gained a risk panel. [ADR-0029](../adr/ADR-0029-money-and-numeric-semantics.md), [ADR-0030](../adr/ADR-0030-risk-policy-declaration-boundary.md) | [0046](../../reports/0046_2026-09-06_SWING_RISK_AND_TRADE_PLANNING_SLICE_4.md) |
 | Dashboard Shutdown Reliability Gate (2026-09-06) | A `SIG_IGN` disposition inherited across `exec`. Fixed in the test harness; `src/` deliberately untouched | [0045](../../reports/0045_2026-09-06_DASHBOARD_SHUTDOWN_RELIABILITY_GATE.md) |
@@ -126,12 +135,16 @@ harness, a research harness and a durable decision archive.
   observation that triggered reports 0047 and 0048.**
 - **Roughly half of the technical information FMITS computes never reaches the operator.** See
   [`CAPABILITY_REGISTRY.md`](CAPABILITY_REGISTRY.md) §2.2.
-- **Zones exist; their roles do not.** `fmis.price_zones` builds structural **areas** and shows
-  them, and that is the whole of it: a zone has `position` — `PRICE_ABOVE` / `PRICE_BELOW` /
-  `PRICE_INSIDE`, geometry — and **no role field at all**. **FMITS still does not understand support
-  and resistance**, because that requires an interaction engine (**R3**, **R4**) that does not
-  exist. **A `CLOSE_BREACH` is not a breakout**, and no breakout, acceptance, reclaim, retest or
-  false-breakout vocabulary is implemented anywhere.
+- **Zones exist; their roles do not, and as of 2026-09-20 that is a measured result rather than a
+  gap.** `fmis.price_zones` builds structural **areas** and shows them: a zone has `position` —
+  `PRICE_ABOVE` / `PRICE_BELOW` / `PRICE_INSIDE`, geometry — and **no role field at all**. **FMITS
+  still does not understand support and resistance**, and [report 0052](../../reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md)
+  found that **R4 has no support at all** (a return to a zone is no more likely than a return to a
+  displaced band that no level anchored) and that **R3's persistence state is not attributable to
+  the zone** (a placebo band separates by the same +24 points). **Six of ADR-0033's seven approved
+  role labels are underivable**; only `UNTESTED` is available, and it means nothing has happened.
+  **A `CLOSE_BREACH` is not a breakout**, and no breakout, acceptance, reclaim, retest or
+  false-breakout vocabulary is implemented anywhere — now on evidence, not on caution.
 - **A zone has no strength.** Its member count is a size. Six levels in one area is not a stronger
   area than two, and nothing measures that it is.
 - **`k = 0.50` is declared, not measured** — a resolution control the owner chose inside a measured
@@ -190,7 +203,7 @@ harness, a research harness and a durable decision archive.
 |---|---|---|
 | ~~**0047 D1**~~ | **CLOSED.** Resolved with limitations by [report 0050](../../reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md), **accepted by the owner on 2026-09-18** (`k = 0.50` declared, one policy for all roles) and **implemented** by TA Slice 5B | — |
 | ~~**0047 D2**~~ | **CLOSED as a decision, open as an engine.** Role comes from interaction history; the vocabulary is fixed in [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) §8 and deliberately **not in the code**; *"Support zone"* is owner-approved as a future label over a derived role and never for `UNTESTED`. **Nothing derives a role yet** — see R3/R4 below | Zone Interactions |
-| **R3 / R4** | How many closes make acceptance? Within how many bars is a return a retest? **Unmeasured.** Until they are, `ZoneInteraction` and `ZoneReading` must not be specified, and no support/resistance label may be rendered | Zone Interactions · zone roles · breakout vocabulary |
+| ~~**R3 / R4**~~ | **ANSWERED — mostly in the negative** by [report 0052](../../reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md); binding boundary in [ADR-0034](../adr/ADR-0034-zone-interaction-evidence-boundary.md) (`Proposed`). ⚠ **This row used to read *"How many closes make acceptance? Within how many bars is a return a retest?"* — a lossy paraphrase.** [Report 0047](../../reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) §45 actually asks R3 for a *"distinguishable state **rather than a restatement of a close breach**"* and R4 for a return *"**attributable to the break**"*. The paraphrase reduced both questions to their parameters; run against it, the gate would have returned two numbers it had not earned. **R3:** a second consecutive close beyond a band *does* mark a distinguishable state (+22 to +25 points on ten-bar persistence) — **but a placebo band with no structural level behind it separates by the same amount**, so the state is **not a zone fact** and **must not be called acceptance**. **R4:** `NO SUPPORT` — the return hazard to a real zone is indistinguishable from a placebo's (ratio 0.96–1.02). **There is no `RETEST` and no window to choose.** `ZoneInteraction`, `ZoneReading` and every support/resistance label stay unavailable | Zone Interactions · zone roles · breakout vocabulary — **still blocked, now on evidence** |
 | **R15** | Is zone evidence independent of structural trend? Zones derive from the **same confirmed pivots**, so `INDEPENDENCE NOT ESTABLISHED` stands | any zone fact reaching evidence voting |
 | **0047 D3** | Where does opportunity state live, and may it name a side? ([ADR-0028](../adr/ADR-0028-directional-interpretation-boundary.md)) | Market Opportunity |
 | **0047 D5** | Do the three evidence-status vocabularies converge? *(recommendation: no)* | — |

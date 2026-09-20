@@ -38,3 +38,37 @@ grouping policies and the metrics, and nothing else.
 The preregistration it implements is
 [`ZONE_PARAMETER_RESEARCH_QUESTIONS_V1.md`](../docs/design/ZONE_PARAMETER_RESEARCH_QUESTIONS_V1.md),
 sealed at commit `c05e870` before the first line here was written.
+
+## `zone_interactions/`
+
+The harness behind [report 0052](../reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md),
+which answered research questions **R3** and **R4** — and answered them mostly in the negative.
+
+```
+.venv/bin/python research/zone_interactions/run.py       # events      -> reports/artifacts/0052_zone_interaction_events.json.gz
+.venv/bin/python research/zone_interactions/analyze.py   # every table -> reports/artifacts/0052_zone_interaction_tables.json.gz
+.venv/bin/python research/zone_interactions/posthoc.py   # POST-HOC    -> reports/artifacts/0052_posthoc_placebo_r3.json.gz
+.venv/bin/python research/zone_interactions/fixtures.py  # 68 adversarial assertions
+.venv/bin/python research/zone_interactions/verify.py    # 27 invariant + isolation checks
+```
+
+**No network.** The same committed Milestone CD capture report 0050 used.
+
+**Pure Python, on purpose.** `pyproject.toml` declares `dependencies = []` and the repository has
+kept that property through every milestone. A first draft of `events.py` used NumPy; it was
+rewritten rather than install a numerical library into an environment that has never needed one.
+The cost stays linear because outside episodes are **disjoint** — an `EXIT` requires the previous
+bar to be `INSIDE` — so resolving every return costs one traversal per band, not one per event.
+
+**Every structural fact is produced by production `fmis` code**: `detect_swings` ·
+`compare_swing_sequence` · `label_swing_sequence` · `structural_levels` · `zone_width_series` ·
+`derive_price_zones` · `AverageTrueRange.compute_series`. This package owns the event walk, the
+placebo construction, the metrics and the inference, and nothing else.
+
+**`posthoc.py` is named for what it is.** It runs a control the preregistration did **not**
+require, added after reading the R3 result, and it is labelled `POST-HOC` in the module docstring,
+in the artifact and in every table it reaches.
+
+The preregistration it implements is
+[`ZONE_INTERACTION_RESEARCH_QUESTIONS_V1.md`](../docs/design/ZONE_INTERACTION_RESEARCH_QUESTIONS_V1.md),
+sealed at commit `296831a` before the first line here was written.

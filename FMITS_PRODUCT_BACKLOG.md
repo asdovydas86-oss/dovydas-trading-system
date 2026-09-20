@@ -11,10 +11,10 @@ remains the strategic roadmap and is immutable. This board changes as work moves
 
 | Field | Value |
 |---|---|
-| **Last verified against** | **`3739d42`** (TA Slice 5B production) plus its documentation commit, on a verified baseline of `HEAD` = `main` = `origin/main` = remote = `693e162`, tracked tree clean, `0/0` ahead/behind |
-| **Verified on** | **2026-09-18** (TA Slice 5B — Price Zone Foundation & Product Surface) |
-| **Verification method** | live repository + `git` inspection + live `src/` inspection + accepted ADRs + **the full test suite under `-W error` on cleared bytecode** + the policy non-regression digest recomputed outside the suite before and after + determinism across processes and hash seeds + measured zone cost + **live `/swing/SYMBOL` pages for four real markets** on a development dashboard |
-| **Previously** | `HEAD` at `00c7723`, verified 2026-09-17 (TA Slice 5A); at `66bab74`, verified 2026-09-16 (Memory Gate); at `dbc4765` before that. Those rows are superseded; §8's per-milestone entries remain point-in-time records and are not revised |
+| **Last verified against** | **`296831a`** (the sealed R3/R4 preregistration) plus this milestone's documentation commit, on a verified baseline of `HEAD` = `main` = `origin/main` = remote = **`527a162`**, tracked tree clean, `0/0` ahead/behind |
+| **Verified on** | **2026-09-20** (Price Zone Interaction Semantics Research Gate — R3 / R4) |
+| **Verification method** | live repository + `git` inspection + live `src/` inspection + accepted ADRs + **the full test suite under `-W error` on cleared bytecode** + the 81-fixture policy non-regression suite re-run + determinism of the research artifacts byte-checked across processes and hash seeds + 68 adversarial fixtures + 27 real-data invariant and isolation checks. **`src/` and `tests/`: zero files changed** |
+| **Previously** | `HEAD` at `3739d42` + docs, verified 2026-09-18 (TA Slice 5B); at `00c7723`, 2026-09-17 (TA Slice 5A); at `66bab74`, 2026-09-16 (Memory Gate). Those rows are superseded; §8's per-milestone entries remain point-in-time records and are not revised |
 
 > **Current state lives in [`docs/AI_HANDOFF/CURRENT_STATE.md`](docs/AI_HANDOFF/CURRENT_STATE.md) §0,
 > and capability status in [`docs/AI_HANDOFF/CAPABILITY_REGISTRY.md`](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md).**
@@ -227,24 +227,41 @@ close, and the inherited limitations — computed from live exchange data.
 
 **Exactly one item, by rule.**
 
-### None. `DY` shipped on 2026-09-18 and the board is **awaiting the owner's next selection.**
+### None. The R3/R4 research gate closed on 2026-09-20 and the board is **awaiting the owner's next selection.**
 
-`DY` — TA Slice 5B is **DONE** and recorded in §8. The next sequenced step (§6.1 step 1b) is
-**Zone Interactions**, and it is deliberately **not** promoted to NOW here, because it is blocked on
-something no amount of implementation effort resolves:
+> **`DZ` — Price Zone Interaction Semantics Research Gate (R3/R4) — is DONE** (2026-09-20,
+> [report 0052](reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md)). It was
+> an **owner-directed research task**, shipped **no product capability**, and therefore **does not
+> satisfy the exactly-one-NOW rule**, which remains outstanding — stated here rather than papered
+> over, on the same footing as every other owner-directed task in §8.
+>
+> **It did not unblock Zone Interactions. It closed it.** R4 is `NO SUPPORT` and R3's state is not
+> attributable to the zone, so the milestone below moves from *blocked on unmeasured parameters* to
+> **blocked on measured evidence** — a better place to be blocked, and one that should not be
+> re-litigated by intuition. See [ADR-0034](docs/adr/ADR-0034-zone-interaction-evidence-boundary.md)
+> (`Proposed`), which exists precisely to stop that.
+>
+> **The recommended next milestone is [Price Phases](docs/AI_HANDOFF/CAPABILITY_REGISTRY.md)**
+> (§6.1 step 2): unblocked, needs no new research parameter, and ships user-visible capability.
+
+`DY` — TA Slice 5B is **DONE** and recorded in §8. The next sequenced step (§6.1 step 1b) was
+**Zone Interactions**. It is **not** promoted to NOW, and the reason changed on 2026-09-20 from
+*"nobody has measured the parameters"* to *"the parameters do not exist"*:
 
 | Field | Value |
 |---|---|
 | **What the owner would get** | *What price has actually done* at each structural area — held, broken, reclaimed — and therefore the first honest **Support zone** / **Resistance zone** labels, which the owner has already approved as labels over a derived role ([ADR-0033](docs/adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) acceptance, decision D) |
-| **Status** | **BLOCKED on R3 and R4**, and this is a **research** block, not an engineering one |
-| **R3** | *How many closes beyond a band constitute acceptance?* Unmeasured |
-| **R4** | *Within how many bars is a return to a band a retest rather than a coincidence?* Unmeasured |
+| **Status** | **BLOCKED on evidence** as of 2026-09-20. No longer a gap; a measured negative |
+| **R3** | **Answered.** A second consecutive close beyond a band marks a distinguishable state (+22 to +25 points on ten-bar persistence, 1D and 4H, primary and holdout) — **but a placebo band that no structural level anchored separates by the same amount** (+0.243 vs +0.246). The state is real; **it is not a zone fact**, and must not be called acceptance |
+| **R4** | **Answered: `NO SUPPORT`.** The return hazard to a real zone is indistinguishable from a clean placebo's at every elapsed range on every role (**ratio 0.96–1.02**). **There is no `RETEST` and no window to choose.** The raw hazard decays seven-fold and, read alone, would have produced a confident three-bar window — **the placebo decays identically** |
+| **⚠ The questions were mis-paraphrased on this board** | The two rows above used to read *"how many closes"* and *"within how many bars"*. [Report 0047](reports/0047_2026-09-07_TECHNICAL_ANALYSIS_ARCHITECTURE_GATE.md) §45 actually asked whether the state is **distinguishable** and whether the return is **attributable** — and running the study against the paraphrase would have returned two numbers it had not earned |
 | **Why it may not simply be picked** | Choosing either number by intuition is precisely the invented threshold [report 0050](reports/0050_2026-09-18_PRICE_ZONE_SEMANTICS_RESEARCH_GATE.md) exists to have refused — and that gate's central negative finding is that a representation-only study *cannot* produce such a value, so the study that answers R3/R4 must be an **outcome** study with its question sealed first |
 | **What is already built for it** | The foundation, and it was built to be used this way: bands are frozen and causal, every member keeps its exact `PriceLevel` and its confirmation window, the **full** level-crossing run is already carried per role, and `CrossingKind`'s nine-way classification is a fact the interaction engine can read without re-deriving anything. **A `CLOSE_BREACH` is not a breakout**, and nothing in the repository says otherwise |
 | **Explicitly still NOT permitted** | Any role derived from position · zone strength, quality, score or rank · zone evidence reaching the policy (**R15**, `INDEPENDENCE NOT ESTABLISHED`) |
 
-**The alternative the owner may prefer**: §6.1 step 2, **Price Phases**, is unblocked and needs no
-new research parameter. The board states both and selects neither.
+**The recommendation is now singular**: §6.1 step 2, **Price Phases**, is unblocked, needs no new
+research parameter, and ships user-visible capability. Zone Interactions is no longer a live
+alternative.
 
 > **On the exactly-one-NOW rule, stated honestly.** The rule was satisfied from 2026-09-16 until
 > `DY` shipped on 2026-09-18, and this board now holds **zero** NOW items rather than one. That is a

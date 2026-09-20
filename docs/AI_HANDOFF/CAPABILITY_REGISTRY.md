@@ -160,14 +160,14 @@ bolded three are not.
 | Capability | Status | In approved scope? | What is missing | Prerequisite | Revisit trigger |
 |---|---|---|---|---|---|
 | **Structural price areas** (`fmis.price_zones`) | **`IMPLEMENTED`** | **Yes** — vision addendum | Nothing against V1 scope. Bands are **anchored, frozen and causal**, `k = 0.50` **declared** and stamped, and they reach `/swing/SYMBOL`. **They are not called support or resistance** — see the two rows below, which is why this row is deliberately renamed | [ADR-0033](../adr/ADR-0033-price-zone-semantics-and-the-tolerance-boundary.md) **Accepted** 2026-09-18 · [`PRICE_ZONE_ENGINE_V1.md`](../design/PRICE_ZONE_ENGINE_V1.md) · [report 0051](../../reports/0051_2026-09-18_TECHNICAL_ANALYSIS_SLICE_5B.md) | product evidence that one shared `k` is unsuitable, or `k` shown to affect an outcome → §6 of the ADR must be re-taken as a **measurement** |
-| **Support/resistance *roles*** | **`BLOCKED`** | **Yes** — vision addendum | The areas exist; **the roles do not**. A zone has `position` (`PRICE_ABOVE` / `PRICE_BELOW` / `PRICE_INSIDE`, geometry only) and **no `role` field at all**. The owner has approved the eventual *"Support zone"* / *"Resistance zone"* **labels** (ADR-0033 acceptance, decision D) — over a derived role, never over position, and never for `UNTESTED` | zone interactions (**R3**, **R4**) | after the interaction engine |
-| Zone interactions (touch/hold/break/reclaim/retest) | **`BLOCKED`** | Yes (implied) | no interaction vocabulary exists, and **Slice 5B deliberately did not add one — verified, not merely intended**: `fmis.price_zones` defines no interaction type — `ACCEPTANCE`, `RECLAIM`, `RETURN_INSIDE` and retest each need a parameter **R3**/**R4** have not answered. **A `CLOSE_BREACH` is not a breakout** | zones · R3 · R4 | after Slice 5B |
+| **Support/resistance *roles*** | **`BLOCKED` — on evidence** | **Yes** — vision addendum | The areas exist; **the roles do not, and [report 0052](../../reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md) measured why**. A zone has `position` (geometry only) and **no `role` field at all**. **R4 is `NO SUPPORT`** and **R3's persistence state is not attributable to the zone**, so **six of the seven approved labels are underivable** — only `UNTESTED` is, and it means nothing has happened. The owner's approval of the eventual labels (ADR-0033 decision D) stands and cannot be exercised | a derivation that does not exist; see [ADR-0034](../adr/ADR-0034-zone-interaction-evidence-boundary.md) | **not scheduled** — deferred, not parked |
+| Zone interactions (touch/hold/break/reclaim/retest) | **`BLOCKED` — on evidence** | Yes (implied) | no interaction vocabulary exists. **R3/R4 are now answered and the answer is mostly no** ([report 0052](../../reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md), [ADR-0034](../adr/ADR-0034-zone-interaction-evidence-boundary.md) `Proposed`): **no `RETEST`** (real and placebo return hazards are indistinguishable, 0.96–1.02) and **no `ACCEPTANCE`** (a placebo band separates as well as a real zone). Admissible instead: `EXIT` · `TRAVERSE` · `RETURN_TO_ZONE_AFTER_OUTSIDE_STATE` · `CLOSED_BEYOND_FOR_N_BARS`. **A `CLOSE_BREACH` is not a breakout** | a null-controlled result that does not exist | **not scheduled** |
 | Zone role (`HELD_FROM_ABOVE`, `BROKEN_UPWARD`, `ROLE_FLIPPED`, …) | **`BLOCKED`** | Yes | **0047 D2 is RESOLVED** (report 0050) and the vocabulary is **deliberately not in the code** — a role vocabulary present in the source is one something will populate, so it lives in ADR-0033 §8 alone. Vocabulary fixed — `UNTESTED` · `HELD_FROM_ABOVE` · `HELD_FROM_BELOW` · `BROKEN_UPWARD` · `BROKEN_DOWNWARD` · `ROLE_FLIPPED` · `INDETERMINATE` — with `position` a **separate** field. Derivation still needs the interaction engine. **Measured**: 22 % of zones above the close on 1W have *no interaction history at all*; **39 % (1W) / 50 % (1D)** have had price close on **both** sides, so the position rule is **not well-defined over time** | zone interactions | after Slice 5B |
 | **Trendlines** | `MISSING` | **Yes** — vision addendum | `grep -ri trendline src/` → **0 files** | Phases first (anchor scoping: 10,153 unconstrained candidates per side per view at 500 bars). **Anchor policy is an open research question — see §7** | Trend Geometry (§6 step 8) |
 | Channels | `MISSING` | Yes (implied) | none | trendlines | Trend Geometry |
 | **Divergences** | `MISSING` | **Yes** — vision addendum and `SPEC` §4.1 | No price/oscillator divergence engine exists. The `divergence` hits under `src/` remain unrelated senses (`exit_divergence` on trade plans, one `TODO`, and the technical-context panel's own sentence **denying** that any is computed) | `compute_series()` — **satisfied** (§2.4). Alignment policy is still open: disposition §H | Divergence (§6 step 6) |
 | Volatility compression / expansion | `MISSING` | Yes | none | `compute_series()` — **satisfied** (§2.4) | §6 step 5 |
-| Breakout / acceptance / rejection / retest | `MISSING` | Yes (implied by S/R) | no vocabulary exists. `close > level` is explicitly **not** an acceptable definition, and **a `CLOSE_BREACH` is not a breakout** | zones — **satisfied** — plus **R3**, **R4** | Zone Interactions (§6 step 2) |
+| Breakout / acceptance / rejection / retest | `MISSING` — **and three of the four are now rejected on evidence** | Yes (implied by S/R) | `close > level` is explicitly **not** an acceptable definition, and **a `CLOSE_BREACH` is not a breakout**. [Report 0052](../../reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md) rejects **acceptance** (not attributable to the zone) and **retest** (`NO SUPPORT`); **breakout** was never measured; **rejection** needs R4 | a null-controlled result that does not exist | **not scheduled** |
 | Impulse / retracement / range / consolidation phases | `MISSING` | Yes | `grep -ri consolidation src/` returns docstrings **denying** the sense (*"`CONTRACTED` is not consolidation"*) plus one `TODO`. Deliberately not built | zones — **satisfied** | **Price Phases** (§6 step 3) |
 | EMA dynamics (slope, separation, stack) | `MISSING` | Yes — `SPEC` §4.1 | Derivable now and **deliberately not derived**: TA Slice 5A's brief defers every indicator interpretation | `compute_series()` — **satisfied** (§2.4) | Indicator Context |
 | MACD dynamics (histogram direction, ROC) | `MISSING` | Yes — `SPEC` §4.2 names this explicitly | as above. The three components are now available **per bar**, and none is compared with its predecessor anywhere | `compute_series()` — **satisfied** (§2.4) | Indicator Context |
@@ -309,7 +309,7 @@ ChatGPT + Dovydas review
     ↓
 0.  TA Slice 5A — Recover Technical Context      ← DONE (report 0049)
 1.  TA Slice 5B — Price Zone Foundation          ← DONE (report 0051)
-1b. Zone Interactions                            ← next, and BLOCKED on R3 / R4
+1b. Zone Interactions      ← BLOCKED on evidence (report 0052 / ADR-0034), not scheduled
 2.  Price Phases
 3.  Market Opportunity
 4.  Indicator Context
@@ -374,11 +374,16 @@ levels, and put them where the owner can read them.
 
 ### The slices after it, in one line each
 
-- **Zone Interactions** *(next, and **blocked**)*. What price has actually done at an area, and the
-  roles that follow from it. **Blocked on R3 and R4** — `ACCEPTANCE`, `RECLAIM`, `RETURN_INSIDE` and
-  retest each need a parameter (*how many closes? within how many bars?*) no measurement has
-  produced, and inventing one is the thing report 0050 exists to have refused. **A `CLOSE_BREACH`
-  is not a breakout.** The foundation it needs is built: bands are frozen and causal, every member
+- **Zone Interactions** *(**blocked on evidence**, and no longer "next")*. What price has actually
+  done at an area, and the roles that follow from it. **R3 and R4 have now been measured**
+  ([report 0052](../../reports/0052_2026-09-20_PRICE_ZONE_INTERACTION_SEMANTICS_RESEARCH_GATE.md),
+  [ADR-0034](../adr/ADR-0034-zone-interaction-evidence-boundary.md) `Proposed`) and the answer
+  forecloses most of this slice rather than unblocking it: **retest is `NO SUPPORT`** — a return to
+  a real zone is no likelier than a return to a displaced band no level anchored — and the
+  persistence state R3 *does* identify is **matched exactly by a placebo band**, so it is not a
+  fact about the zone and may not be called acceptance. **The question was never "how many closes?"
+  — that phrasing was a paraphrase, and report 0047 §45 asked whether the state is distinguishable
+  and whether the return is attributable.** **A `CLOSE_BREACH` is not a breakout.** The foundation it needs is built: bands are frozen and causal, every member
   keeps its exact `PriceLevel` and its confirmation window, and the full crossing run is already
   carried per role.
 - **Price Phases.** Impulse / retracement / consolidation / range / compression–expansion primitives

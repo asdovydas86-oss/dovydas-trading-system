@@ -46,13 +46,25 @@ Last four commits:
 
 ---
 
-## 2. Untracked state — the real loss risk
+## 2. Untracked state — the loss risk, now resolved
 
-### 2.1 Sixteen uncommitted research documents — **1.1 MB, ~16,750 lines, never committed**
+### 2.1 Sixteen research documents — **1.1 MB, 15,750 lines, PRESERVED IN GIT 2026-09-21**
 
-These sit in the working tree and **exist nowhere else — not in Git, not on the remote.** They have
-been deliberately preserved untouched by every milestone since 2026-08-19 and are untouched by this
-one. **Deleting the working tree, running `git clean`, or re-cloning the repository destroys them.**
+> **RESOLVED.** These sixteen documents had been untracked since 2026-08-19 and existed nowhere but
+> this working tree. **They are now committed and pushed**, in preservation commit
+> **`d04a409bc52de507d6eb0070564c45d98443fc56`**, and are **no longer an outstanding local-loss
+> risk.** Deleting the working tree or re-cloning no longer destroys them.
+
+They were committed **byte-for-byte unchanged** — not edited, renamed, moved, merged, deduplicated,
+summarised or corrected. Each staged blob was verified `sha256`-identical to its working-tree file
+before the commit.
+
+**Preservation is not approval.** They are classified as historical, unapproved and
+non-authoritative by [`../design/UNAPPROVED_RESEARCH_INDEX_2026-08.md`](../design/UNAPPROVED_RESEARCH_INDEX_2026-08.md),
+committed alongside them, which quotes each document's own disclaimer rather than assigning one and
+records that the authority chain is unchanged: **accepted ADRs bind, §0 of `CURRENT_STATE.md` states
+current state, and the live code wins over every document.** Nothing proposed in any of them is
+promoted by their being tracked.
 
 | Lines | Bytes | Path |
 |---:|---:|---|
@@ -73,10 +85,12 @@ one. **Deleting the working tree, running `git clean`, or re-cloning the reposit
 | 495 | 38,257 | `docs/design/ADR_IMPLEMENTATION_GATE.md` |
 | 495 | 34,284 | `docs/reviews/AP_D1_D2_INVESTIGATION_REVIEW.md` |
 
-**This pause does not commit them, and does not absorb, summarise or supersede them** — that was
-never authorised and their status has always been the owner's call. **It is recorded here as the
-single largest thing that would be lost.** If the machine is being retired or the checkout removed,
-copying this set somewhere durable is the one action that cannot be undone later.
+**They were committed but not absorbed, summarised or superseded** — the index beside them
+deliberately does not reconcile their contradictions or mark any of them obsolete, because an index
+that interprets becomes a document that decides. Before the commit all sixteen were scanned for
+credentials, keys, seed phrases, addresses, personal data and generated runtime data, with **zero
+hits in every category**; content hashes are recorded in the index so a later reader can confirm
+preservation did not alter them.
 
 ### 2.2 Everything else untracked is rebuildable
 
@@ -393,11 +407,12 @@ git rev-parse HEAD                              # expect 1af5590… or later
 git rev-parse --abbrev-ref HEAD                 # expect main
 git fetch origin
 git rev-list --left-right --count origin/main...HEAD    # expect 0  0
-git status --porcelain=v1                       # expect ONLY the 16 untracked ?? docs
+git status --porcelain=v1                       # expect completely clean, nothing untracked
 git stash list                                  # expect empty
 ```
 
-**If the 16 untracked documents in §2.1 are missing, stop and say so before doing anything else.**
+**The sixteen documents in §2.1 are tracked as of `d04a409` and need no special handling.** If
+`git status` reports anything unexpected, stop and say so before doing anything else.
 
 ### 9.2 Rebuild the environment
 
@@ -499,7 +514,7 @@ answer. **Open the `open` line, not the `address` line.** Loopback only. Stop wi
 | Research conclusions (reports 0037–0052) | untouched; no verdict revised |
 | ADR-0033 and its acceptance record | untouched |
 | ADR-0034 | left `Proposed` — **not** promoted to close the milestone |
-| The 16 untracked research documents | untouched, unabsorbed, undeleted |
+| The 16 August-2026 research documents | **contents untouched** — committed byte-for-byte unchanged in `d04a409`, unabsorbed, undeleted, and explicitly **not** approved |
 | `~/.fmits` | read only; nothing written |
 | `FMITS_PRODUCT_CHANGELOG.md` | untouched — a pause ships no capability |
 

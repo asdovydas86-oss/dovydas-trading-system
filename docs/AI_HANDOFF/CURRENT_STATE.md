@@ -19,6 +19,11 @@ routes you here.
 
 # §0. CURRENT STATE
 
+> **⏸ PAUSED 2026-09-21.** FMITS was paused indefinitely by the owner at `1af5590`, clean and fully
+> pushed. §0 below remains accurate as of that commit. The pause record — exact state, cold-start
+> procedure, the 2026-09-21 product diagnostic and the unresolved market-model problem — is
+> **[`FMITS_PROJECT_PAUSE_2026-09-21.md`](FMITS_PROJECT_PAUSE_2026-09-21.md)**.
+
 | Field | Value |
 |---|---|
 | **Last verified** | **2026-09-20** |

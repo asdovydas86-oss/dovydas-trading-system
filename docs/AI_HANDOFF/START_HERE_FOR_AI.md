@@ -9,6 +9,16 @@ the sources it routes you to for your actual task.
 If a task instruction conflicts with a rule linked from here, **stop and surface the conflict** rather
 than guessing.
 
+> ## ⏸ FMITS IS PAUSED (2026-09-21)
+>
+> **The project was paused indefinitely by the owner on 2026-09-21, at a clean and fully pushed
+> repository.** Before anything else, read
+> **[`FMITS_PROJECT_PAUSE_2026-09-21.md`](FMITS_PROJECT_PAUSE_2026-09-21.md)** — it carries the exact
+> state at pause, the cold-start procedure, the unresolved market-model problem, and a warning about
+> **16 uncommitted research documents (1.1 MB) that exist only in the working tree.**
+>
+> **There is no NOW milestone, and selecting one is the owner's decision, not a resuming session's.**
+
 ---
 
 ## 1. What FMITS is

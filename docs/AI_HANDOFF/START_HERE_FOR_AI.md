@@ -14,8 +14,11 @@ than guessing.
 > **The project was paused indefinitely by the owner on 2026-09-21, at a clean and fully pushed
 > repository.** Before anything else, read
 > **[`FMITS_PROJECT_PAUSE_2026-09-21.md`](FMITS_PROJECT_PAUSE_2026-09-21.md)** — it carries the exact
-> state at pause, the cold-start procedure, the unresolved market-model problem, and a warning about
-> **16 uncommitted research documents (1.1 MB) that exist only in the working tree.**
+> state at pause, the cold-start procedure and the unresolved market-model problem. The **16
+> historical research/design documents** were preserved **byte-for-byte** in commit
+> **`d04a409bc52de507d6eb0070564c45d98443fc56`** and are classified by
+> [`../design/UNAPPROVED_RESEARCH_INDEX_2026-08.md`](../design/UNAPPROVED_RESEARCH_INDEX_2026-08.md).
+> **Preservation is not approval and confers no authority.**
 >
 > **There is no NOW milestone, and selecting one is the owner's decision, not a resuming session's.**
 
